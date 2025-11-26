@@ -16,7 +16,7 @@ Write and link decisions to actual components, layers, stack-up, and BOM — all
 
 | Feature | Status |
 |--------|:-----:|
-| Notes panel inside pcbnew | 🟢 In progress |
+| Notes panel inside pcbnew | 🟢 Working |
 | Component-link support | 🔄 Planned |
 | Metadata preview | 🔄 Planned |
 | Stack-up reference | 🔄 Planned |
