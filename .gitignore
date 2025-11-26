@@ -6,3 +6,25 @@ dist/
 build/
 *.egg-info/
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+env/
+ENV/
+.env
+
+# IDEs
+.vscode/
+.idea/
+
+# KiNotes project data (project-local notes)
+.kinotes/
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+
