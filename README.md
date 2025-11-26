@@ -77,3 +77,4 @@ MIT — free for personal & commercial use.
 
 KiNotes by **PCBtools.xyz**
 
+Local Kicad install  di C:\Users\prami\AppData\Roaming\kicad\9.0\scripting\plugins
