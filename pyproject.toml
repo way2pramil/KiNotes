@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kinotes"
+version = "0.1.0"
+description = "Smart PCB Notes linked to your KiCad design"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [ { name = "way2pramil" } ]
+license = { text = "MIT" }
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["KiNotes*"]

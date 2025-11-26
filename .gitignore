@@ -1,2 +1,8 @@
 # Ignore VS Code local history folder
 .history/
+
+# Packaging artifacts
+dist/
+build/
+*.egg-info/
+

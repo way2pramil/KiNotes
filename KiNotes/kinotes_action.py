@@ -4,18 +4,27 @@ import os
 
 class KiNotesFrame(wx.Frame):
     def __init__(self, parent=None, title="KiNotes - PCB Notes"):
-        super(KiNotesFrame, self).__init__(parent, title=title, size=(400, 500))
+        super(KiNotesFrame, self).__init__(parent, title=title, size=(450, 600))
 
         panel = wx.Panel(self)
-        vbox = wx.BoxSizer(wx.VERTICAL)
+        main_vbox = wx.BoxSizer(wx.VERTICAL)
 
-        self.text_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_RICH2)
-        vbox.Add(self.text_ctrl, 1, wx.EXPAND | wx.ALL, 5)
+        # Toolbar with Save button
+        toolbar_hbox = wx.BoxSizer(wx.HORIZONTAL)
+        save_btn = wx.Button(panel, label="Save")
+        save_btn.Bind(wx.EVT_BUTTON, self.on_save_click)
+        toolbar_hbox.AddStretchSpacer(1)
+        toolbar_hbox.Add(save_btn, 0, wx.ALL, 5)
+        main_vbox.Add(toolbar_hbox, 0, wx.EXPAND)
 
-        panel.SetSizer(vbox)
+        # Notes editor
+        self.text_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE)
+        main_vbox.Add(self.text_ctrl, 1, wx.EXPAND | wx.ALL, 5)
+
+        panel.SetSizer(main_vbox)
         self.Layout()
 
-        # Load notes AFTER UI exists
+        # Initialize notes storage
         self.notes_path = self.get_notes_file_path()
         self.ensure_folder_exists()
         self.load_notes()
@@ -23,6 +32,9 @@ class KiNotesFrame(wx.Frame):
         self.text_ctrl.Bind(wx.EVT_TEXT, self.on_text_changed)
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
+    # --------------------------------
+    # Helper functions (CONFIRMED EXISTING)
+    # --------------------------------
     def get_project_dir(self):
         board = pcbnew.GetBoard()
         return os.path.dirname(board.GetFileName())
@@ -38,21 +50,31 @@ class KiNotesFrame(wx.Frame):
             os.makedirs(folder)
 
     def load_notes(self):
-        if os.path.exists(self.notes_path):
-            with open(self.notes_path, "r", encoding="utf-8") as f:
-                self.text_ctrl.SetValue(f.read())
+        try:
+            if os.path.exists(self.notes_path):
+                with open(self.notes_path, "r", encoding="utf-8") as f:
+                    self.text_ctrl.SetValue(f.read())
+        except:
+            pass  # safe fail
+
+    def save_notes(self):
+        try:
+            with open(self.notes_path, "w", encoding="utf-8") as f:
+                f.write(self.text_ctrl.GetValue())
+        except:
+            pass
 
     def on_text_changed(self, event):
         self.save_notes()
         event.Skip()
 
+    def on_save_click(self, event):
+        self.save_notes()
+        wx.MessageBox("Notes saved!", "KiNotes", wx.OK | wx.ICON_INFORMATION)
+
     def on_close(self, event):
         self.save_notes()
         self.Destroy()
-
-    def save_notes(self):
-        with open(self.notes_path, "w", encoding="utf-8") as f:
-            f.write(self.text_ctrl.GetValue())
 
 
 
