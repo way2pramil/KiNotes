@@ -1,14 +1,26 @@
 {
   "name": "KiNotes",
   "author": "PCBtools.xyz",
-  "description": "Smart Notes for KiCad PCB Designers! KiNotes brings real engineering notes **directly inside KiCad**. Write and link decisions to actual components, layers, stack-up, and BOM — all while designing." , 
-  "version": "0.1.0",
+  "description": "Smart Engineering Notes for KiCad 9+. Write Markdown notes with @REF designator linking, import board metadata (BOM, stackup, netlist), export to PDF, and enjoy an iOS-inspired modern UI.",
+  "version": "1.0.0",
   "repository": "https://github.com/way2pramil/KiNotes",
+  "website": "https://pcbtools.xyz",
   "license": "MIT",
   "type": "python-plugin",
   "platforms": [
     "linux",
     "windows",
     "macos"
+  ],
+  "kicad_version": "9.0",
+  "python_version": "3.9",
+  "keywords": [
+    "notes",
+    "markdown",
+    "documentation",
+    "pcb",
+    "engineering",
+    "bom",
+    "stackup"
   ]
 }

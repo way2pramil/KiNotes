@@ -1,0 +1,388 @@
+"""
+KiNotes Metadata Extractor - Extract BOM, Stackup, Netlist from KiCad 9+
+"""
+import os
+from datetime import datetime
+
+try:
+    import pcbnew
+    HAS_PCBNEW = True
+except ImportError:
+    HAS_PCBNEW = False
+    pcbnew = None
+
+
+class MetadataExtractor:
+    """Extract metadata from KiCad PCB for insertion into notes."""
+    
+    def __init__(self):
+        """Initialize the extractor."""
+        self._board = None
+    
+    def _get_board(self):
+        """Get current PCB board."""
+        if HAS_PCBNEW:
+            return pcbnew.GetBoard()
+        return None
+    
+    def extract(self, meta_type):
+        """
+        Extract metadata of specified type.
+        
+        Args:
+            meta_type: One of 'bom', 'stackup', 'board_size', 'diff_pairs',
+                      'netlist', 'layers', 'drill_table', 'design_rules', 'all'
+        
+        Returns:
+            Formatted markdown string
+        """
+        extractors = {
+            'bom': self.extract_bom,
+            'stackup': self.extract_stackup,
+            'board_size': self.extract_board_size,
+            'diff_pairs': self.extract_diff_pairs,
+            'netlist': self.extract_netlist,
+            'layers': self.extract_layers,
+            'drill_table': self.extract_drill_table,
+            'design_rules': self.extract_design_rules,
+            'all': self.extract_all,
+        }
+        
+        extractor = extractors.get(meta_type)
+        if extractor:
+            return extractor()
+        return f"Unknown metadata type: {meta_type}"
+    
+    def extract_bom(self):
+        """Extract Bill of Materials."""
+        board = self._get_board()
+        if not board:
+            return "<!-- Error: No board loaded -->"
+        
+        lines = [
+            "## Bill of Materials",
+            "",
+            "| Ref | Value | Footprint | Qty |",
+            "|-----|-------|-----------|-----|",
+        ]
+        
+        # Group by value and footprint
+        components = {}
+        for fp in board.GetFootprints():
+            ref = fp.GetReference()
+            value = fp.GetValue()
+            footprint = fp.GetFPIDAsString().split(':')[-1] if ':' in fp.GetFPIDAsString() else fp.GetFPIDAsString()
+            
+            key = (value, footprint)
+            if key not in components:
+                components[key] = []
+            components[key].append(ref)
+        
+        # Sort and format
+        for (value, footprint), refs in sorted(components.items()):
+            refs_str = ", ".join(sorted(refs, key=lambda x: (x[0], int(''.join(filter(str.isdigit, x)) or 0))))
+            lines.append(f"| {refs_str} | {value} | {footprint} | {len(refs)} |")
+        
+        lines.extend(["", f"*Total components: {sum(len(r) for r in components.values())}*", ""])
+        return "\n".join(lines)
+    
+    def extract_stackup(self):
+        """Extract layer stackup information."""
+        board = self._get_board()
+        if not board:
+            return "<!-- Error: No board loaded -->"
+        
+        lines = [
+            "## Layer Stackup",
+            "",
+            "| Layer | Type | Thickness |",
+            "|-------|------|-----------|",
+        ]
+        
+        try:
+            # KiCad 9+ stackup API
+            stackup = board.GetDesignSettings().GetStackupDescriptor()
+            
+            for item in stackup.GetList():
+                layer_name = item.GetLayerName() if hasattr(item, 'GetLayerName') else str(item.GetBrdLayerId())
+                layer_type = item.GetTypeName() if hasattr(item, 'GetTypeName') else "Unknown"
+                thickness = f"{item.GetThickness() / 1000000:.3f}mm" if hasattr(item, 'GetThickness') else "N/A"
+                
+                lines.append(f"| {layer_name} | {layer_type} | {thickness} |")
+        except Exception as e:
+            lines.append(f"| (Stackup data not available: {e}) | | |")
+        
+        lines.append("")
+        return "\n".join(lines)
+    
+    def extract_board_size(self):
+        """Extract board dimensions."""
+        board = self._get_board()
+        if not board:
+            return "<!-- Error: No board loaded -->"
+        
+        lines = ["## Board Size", ""]
+        
+        try:
+            # Get board outline bounding box
+            bbox = board.GetBoardEdgesBoundingBox()
+            width_mm = pcbnew.ToMM(bbox.GetWidth())
+            height_mm = pcbnew.ToMM(bbox.GetHeight())
+            
+            # Try to get board area
+            try:
+                area_mm2 = width_mm * height_mm
+            except:
+                area_mm2 = 0
+            
+            lines.extend([
+                f"- **Width:** {width_mm:.2f} mm ({width_mm/25.4:.3f} in)",
+                f"- **Height:** {height_mm:.2f} mm ({height_mm/25.4:.3f} in)",
+                f"- **Area:** {area_mm2:.2f} mm² ({area_mm2/645.16:.3f} in²)",
+            ])
+            
+            # Layer count
+            layer_count = board.GetCopperLayerCount()
+            lines.append(f"- **Copper Layers:** {layer_count}")
+            
+        except Exception as e:
+            lines.append(f"*Error extracting board size: {e}*")
+        
+        lines.append("")
+        return "\n".join(lines)
+    
+    def extract_diff_pairs(self):
+        """Extract differential pair information."""
+        board = self._get_board()
+        if not board:
+            return "<!-- Error: No board loaded -->"
+        
+        lines = [
+            "## Differential Pairs",
+            "",
+        ]
+        
+        try:
+            # Get net classes and look for diff pairs
+            design_settings = board.GetDesignSettings()
+            net_classes = design_settings.GetNetClasses()
+            
+            diff_pairs_found = []
+            
+            # Look for nets ending in + and - or _P and _N
+            nets = {}
+            for net in board.GetNetInfo().NetsByName():
+                net_name = net
+                nets[net_name] = True
+            
+            # Find pairs
+            for net_name in nets:
+                if net_name.endswith('+') or net_name.endswith('_P'):
+                    base = net_name[:-1] if net_name.endswith('+') else net_name[:-2]
+                    pair_suffix = '-' if net_name.endswith('+') else '_N'
+                    pair_name = base + pair_suffix
+                    
+                    if pair_name in nets:
+                        diff_pairs_found.append((net_name, pair_name))
+            
+            if diff_pairs_found:
+                lines.extend([
+                    "| Positive | Negative |",
+                    "|----------|----------|",
+                ])
+                for pos, neg in diff_pairs_found[:20]:  # Limit to 20
+                    lines.append(f"| {pos} | {neg} |")
+                
+                if len(diff_pairs_found) > 20:
+                    lines.append(f"| *...and {len(diff_pairs_found) - 20} more* | |")
+            else:
+                lines.append("*No differential pairs detected*")
+            
+        except Exception as e:
+            lines.append(f"*Error extracting diff pairs: {e}*")
+        
+        lines.append("")
+        return "\n".join(lines)
+    
+    def extract_netlist(self):
+        """Extract netlist summary."""
+        board = self._get_board()
+        if not board:
+            return "<!-- Error: No board loaded -->"
+        
+        lines = [
+            "## Netlist Summary",
+            "",
+        ]
+        
+        try:
+            net_info = board.GetNetInfo()
+            net_count = net_info.GetNetCount()
+            
+            lines.append(f"**Total Nets:** {net_count}")
+            lines.append("")
+            
+            # List significant nets (exclude GND, VCC variations for brevity)
+            lines.extend([
+                "### Key Nets",
+                "",
+                "| Net Name | Pad Count |",
+                "|----------|-----------|",
+            ])
+            
+            nets_with_pads = []
+            for i in range(net_count):
+                net = net_info.GetNetItem(i)
+                if net:
+                    net_name = net.GetNetname()
+                    if net_name and not net_name.startswith("unconnected"):
+                        # Count pads on this net
+                        pad_count = 0
+                        for fp in board.GetFootprints():
+                            for pad in fp.Pads():
+                                if pad.GetNet() and pad.GetNet().GetNetname() == net_name:
+                                    pad_count += 1
+                        if pad_count > 0:
+                            nets_with_pads.append((net_name, pad_count))
+            
+            # Sort by pad count descending
+            nets_with_pads.sort(key=lambda x: -x[1])
+            
+            for net_name, pad_count in nets_with_pads[:15]:
+                lines.append(f"| {net_name} | {pad_count} |")
+            
+            if len(nets_with_pads) > 15:
+                lines.append(f"| *...and {len(nets_with_pads) - 15} more nets* | |")
+            
+        except Exception as e:
+            lines.append(f"*Error extracting netlist: {e}*")
+        
+        lines.append("")
+        return "\n".join(lines)
+    
+    def extract_layers(self):
+        """Extract layer information."""
+        board = self._get_board()
+        if not board:
+            return "<!-- Error: No board loaded -->"
+        
+        lines = [
+            "## Layer Information",
+            "",
+            "| Layer ID | Name | Type |",
+            "|----------|------|------|",
+        ]
+        
+        try:
+            # Get enabled layers
+            enabled_layers = board.GetEnabledLayers()
+            
+            for layer_id in range(pcbnew.PCB_LAYER_ID_COUNT):
+                if enabled_layers.Contains(layer_id):
+                    layer_name = board.GetLayerName(layer_id)
+                    layer_type = "Copper" if pcbnew.IsCopperLayer(layer_id) else "Technical"
+                    lines.append(f"| {layer_id} | {layer_name} | {layer_type} |")
+            
+        except Exception as e:
+            lines.append(f"| Error: {e} | | |")
+        
+        lines.append("")
+        return "\n".join(lines)
+    
+    def extract_drill_table(self):
+        """Extract drill/via information."""
+        board = self._get_board()
+        if not board:
+            return "<!-- Error: No board loaded -->"
+        
+        lines = [
+            "## Drill Table",
+            "",
+            "| Drill Size | Count | Type |",
+            "|------------|-------|------|",
+        ]
+        
+        try:
+            drills = {}
+            
+            # Count vias
+            for track in board.GetTracks():
+                if track.GetClass() == "PCB_VIA":
+                    via = track.Cast_to_PCB_VIA() if hasattr(track, 'Cast_to_PCB_VIA') else track
+                    drill = pcbnew.ToMM(via.GetDrillValue())
+                    key = (drill, "Via")
+                    drills[key] = drills.get(key, 0) + 1
+            
+            # Count pad holes
+            for fp in board.GetFootprints():
+                for pad in fp.Pads():
+                    if pad.GetDrillSize().x > 0:
+                        drill = pcbnew.ToMM(pad.GetDrillSize().x)
+                        key = (drill, "PTH")
+                        drills[key] = drills.get(key, 0) + 1
+            
+            # Sort and display
+            for (drill_size, drill_type), count in sorted(drills.items()):
+                lines.append(f"| {drill_size:.2f} mm | {count} | {drill_type} |")
+            
+            if not drills:
+                lines.append("| *No drills found* | | |")
+            
+        except Exception as e:
+            lines.append(f"| Error: {e} | | |")
+        
+        lines.append("")
+        return "\n".join(lines)
+    
+    def extract_design_rules(self):
+        """Extract design rules."""
+        board = self._get_board()
+        if not board:
+            return "<!-- Error: No board loaded -->"
+        
+        lines = [
+            "## Design Rules",
+            "",
+        ]
+        
+        try:
+            ds = board.GetDesignSettings()
+            
+            lines.extend([
+                "### Clearances",
+                f"- **Min Track Width:** {pcbnew.ToMM(ds.GetTrackMinWidth()):.3f} mm",
+                f"- **Min Clearance:** {pcbnew.ToMM(ds.GetMinClearance()):.3f} mm",
+                f"- **Min Via Diameter:** {pcbnew.ToMM(ds.GetViasMinSize()):.3f} mm",
+                f"- **Min Via Drill:** {pcbnew.ToMM(ds.GetMinThroughDrill()):.3f} mm",
+                "",
+                "### Copper",
+                f"- **Copper Layers:** {board.GetCopperLayerCount()}",
+            ])
+            
+            # Try to get default track width
+            try:
+                lines.append(f"- **Default Track Width:** {pcbnew.ToMM(ds.GetCurrentTrackWidth()):.3f} mm")
+            except:
+                pass
+            
+        except Exception as e:
+            lines.append(f"*Error extracting design rules: {e}*")
+        
+        lines.append("")
+        return "\n".join(lines)
+    
+    def extract_all(self):
+        """Extract all metadata types."""
+        sections = [
+            self.extract_board_size(),
+            self.extract_layers(),
+            self.extract_bom(),
+            self.extract_netlist(),
+            self.extract_diff_pairs(),
+            self.extract_drill_table(),
+            self.extract_design_rules(),
+            self.extract_stackup(),
+        ]
+        
+        header = f"# Board Metadata\n*Extracted: {datetime.now().strftime('%Y-%m-%d %H:%M')}*\n\n"
+        return header + "\n---\n\n".join(sections)
