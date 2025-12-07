@@ -23,7 +23,8 @@ Write design decisions, link components with `@R1` syntax, import board metadata
 
 ### 🔗 PCB Integration (KiCad 9+)
 - **Import Board Metadata** with one-click dropdown:
-  - BOM (Bill of Materials)
+  - **BOM (Interactive)** — IBOM-style dialog with column selection, grouping, and filtering
+  - BOM (Quick Insert)
   - Stackup configuration
   - Board size & parameters
   - Differential pairs
@@ -33,6 +34,13 @@ Write design decisions, link components with `@R1` syntax, import board metadata
   - Design rules
 - **Click `@REF`** → jump to and highlight component in pcbnew
 - **Component metadata preview** — value, footprint, layer, nets
+
+### 📋 IBOM-Style BOM Generator
+- **Column Selection** — Reference, Value, Footprint, Qty, Description, Manufacturer, MPN, Supplier, SPN, Layer, Position, Rotation, DNP
+- **Grouping Options** — By Value+Footprint, Value only, Footprint only, or No grouping
+- **Sort Options** — By Reference, Value, Footprint, or Quantity
+- **Filters** — Exclude DNP, Fiducials, Test Points
+- **Output Formats** — Markdown Table, Simple List, CSV-style
 
 ### 📤 Export
 - **Export to PDF** with PCB project name as filename

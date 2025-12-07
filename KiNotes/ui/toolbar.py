@@ -8,11 +8,12 @@ import os
 class KiNotesToolbar(wx.Panel):
     """iOS-inspired toolbar with icon buttons."""
     
-    def __init__(self, parent, on_save=None, on_export_pdf=None, on_import_metadata=None):
+    def __init__(self, parent, on_save=None, on_export_pdf=None, on_import_metadata=None, on_bom_config=None):
         super().__init__(parent)
         self.on_save = on_save
         self.on_export_pdf = on_export_pdf
         self.on_import_metadata = on_import_metadata
+        self.on_bom_config = on_bom_config  # IBOM-style BOM dialog
         
         self._init_ui()
     
@@ -72,7 +73,9 @@ class KiNotesToolbar(wx.Panel):
         menu = wx.Menu()
         
         items = [
-            ("📋 BOM (Bill of Materials)", "bom"),
+            ("📋 BOM (Interactive...)", "bom_config"),  # IBOM-style dialog
+            ("📋 BOM (Quick Insert)", "bom"),
+            None,  # Separator
             ("📚 Stackup", "stackup"),
             ("📐 Board Size", "board_size"),
             ("⚡ Differential Pairs", "diff_pairs"),
@@ -80,12 +83,17 @@ class KiNotesToolbar(wx.Panel):
             ("🗂️ Layer Information", "layers"),
             ("🔩 Drill Table", "drill_table"),
             ("📏 Design Rules", "design_rules"),
+            None,  # Separator
             ("📝 All Metadata", "all"),
         ]
         
-        for label, meta_type in items:
-            item = menu.Append(wx.ID_ANY, label)
-            self.Bind(wx.EVT_MENU, lambda e, t=meta_type: self._on_metadata_selected(t), item)
+        for item_data in items:
+            if item_data is None:
+                menu.AppendSeparator()
+            else:
+                label, meta_type = item_data
+                item = menu.Append(wx.ID_ANY, label)
+                self.Bind(wx.EVT_MENU, lambda e, t=meta_type: self._on_metadata_selected(t), item)
         
         # Show menu below button
         btn_pos = self.import_btn.GetPosition()
@@ -94,5 +102,9 @@ class KiNotesToolbar(wx.Panel):
         menu.Destroy()
     
     def _on_metadata_selected(self, meta_type):
-        if self.on_import_metadata:
+        if meta_type == 'bom_config' and self.on_bom_config:
+            # Show IBOM-style BOM configuration dialog
+            self.on_bom_config()
+        elif self.on_import_metadata:
             self.on_import_metadata(meta_type)
+

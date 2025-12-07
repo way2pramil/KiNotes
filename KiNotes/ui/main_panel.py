@@ -45,7 +45,8 @@ class KiNotesMainPanel(wx.Panel):
             self,
             on_save=self._on_save,
             on_export_pdf=self._on_export_pdf,
-            on_import_metadata=self._on_import_metadata
+            on_import_metadata=self._on_import_metadata,
+            on_bom_config=self._on_bom_config  # IBOM-style dialog
         )
         main_sizer.Add(self.toolbar, 0, wx.EXPAND)
         
@@ -177,6 +178,23 @@ class KiNotesMainPanel(wx.Panel):
                 self._update_status(f"Imported {meta_type}")
         except Exception as e:
             wx.MessageBox(f"Import failed: {str(e)}", "Import Error", wx.OK | wx.ICON_ERROR)
+    
+    def _on_bom_config(self):
+        """Show IBOM-style BOM configuration dialog."""
+        try:
+            from .bom_dialog import show_bom_dialog
+            
+            bom_text = show_bom_dialog(self)
+            if bom_text:
+                # Insert at cursor position
+                pos = self.text_editor.GetInsertionPoint()
+                current_text = self.text_editor.GetValue()
+                new_text = current_text[:pos] + "\n" + bom_text + "\n" + current_text[pos:]
+                self.text_editor.SetValue(new_text)
+                self.text_editor.SetInsertionPoint(pos + len(bom_text) + 2)
+                self._update_status("BOM inserted")
+        except Exception as e:
+            wx.MessageBox(f"BOM generation failed: {str(e)}", "BOM Error", wx.OK | wx.ICON_ERROR)
     
     def _on_text_click(self, event):
         """Handle clicks in text - check for @designator links."""
