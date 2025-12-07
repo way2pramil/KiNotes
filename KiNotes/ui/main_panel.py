@@ -34,20 +34,26 @@ class KiNotesMainPanel(wx.Panel):
     
     def _init_ui(self):
         """Initialize IBOM-style tabbed UI."""
+        print("KiNotes: Initializing UI...")
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         
         # === TAB BAR (IBOM style) ===
+        print("KiNotes: Creating tab bar...")
         self.tab_bar = self._create_tab_bar()
         main_sizer.Add(self.tab_bar, 0, wx.EXPAND)
         
         # === CONTENT AREA ===
+        print("KiNotes: Creating content panel...")
         self.content_panel = wx.Panel(self)
         self.content_panel.SetBackgroundColour(wx.Colour(255, 255, 255))
         self.content_sizer = wx.BoxSizer(wx.VERTICAL)
         
         # Create all tab panels
+        print("KiNotes: Creating Notes tab...")
         self.notes_panel = self._create_notes_tab(self.content_panel)
+        print("KiNotes: Creating Todo tab...")
         self.todo_panel = self._create_todo_tab(self.content_panel)
+        print("KiNotes: Creating BOM tab...")
         self.bom_panel = self._create_bom_tab(self.content_panel)
         
         self.content_sizer.Add(self.notes_panel, 1, wx.EXPAND)
@@ -58,33 +64,58 @@ class KiNotesMainPanel(wx.Panel):
         main_sizer.Add(self.content_panel, 1, wx.EXPAND)
         
         # === FOOTER ===
+        print("KiNotes: Creating footer...")
         footer = self._create_footer()
         main_sizer.Add(footer, 0, wx.EXPAND)
         
         self.SetSizer(main_sizer)
         
         # Show first tab
+        print("KiNotes: Showing first tab...")
         self._show_tab(0)
+        print("KiNotes: UI initialization complete!")
     
     def _create_tab_bar(self):
-        """Create IBOM-style tab bar."""
+        """Create IBOM-style tab bar with reliable buttons."""
         tab_bar = wx.Panel(self)
-        tab_bar.SetBackgroundColour(wx.Colour(66, 66, 66))  # Dark gray like IBOM
+        tab_bar.SetBackgroundColour(wx.Colour(50, 50, 50))  # Dark background
+        tab_bar.SetMinSize((-1, 36))
+        
         sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.AddSpacer(4)
         
         self.tab_buttons = []
-        tabs = ["Notes", "Todo List", "BOM Tool"]
+        tabs = ["Notes", "Todo", "BOM"]
         
         for idx, label in enumerate(tabs):
-            btn = wx.ToggleButton(tab_bar, label=label, size=(-1, 28))
-            btn.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            btn.Bind(wx.EVT_TOGGLEBUTTON, lambda e, i=idx: self._on_tab_click(i))
+            # Use regular button
+            btn = wx.Button(tab_bar, label=label, size=(70, 28), style=wx.BORDER_NONE)
+            btn.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            btn.Bind(wx.EVT_BUTTON, lambda e, i=idx: self._on_tab_click(i))
             self.tab_buttons.append(btn)
-            sizer.Add(btn, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 2)
+            sizer.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 2)
         
         sizer.AddStretchSpacer()
         tab_bar.SetSizer(sizer)
+        
+        # Force initial styling
+        wx.CallAfter(self._update_tab_styles, 0)
+        
         return tab_bar
+    
+    def _update_tab_styles(self, active_idx):
+        """Update tab button styles."""
+        for i, btn in enumerate(self.tab_buttons):
+            try:
+                if i == active_idx:
+                    btn.SetBackgroundColour(wx.Colour(0, 120, 212))  # Blue active
+                    btn.SetForegroundColour(wx.Colour(255, 255, 255))
+                else:
+                    btn.SetBackgroundColour(wx.Colour(80, 80, 80))  # Gray inactive
+                    btn.SetForegroundColour(wx.Colour(180, 180, 180))
+                btn.Refresh()
+            except:
+                pass
     
     def _on_tab_click(self, idx):
         """Handle tab click."""
@@ -94,30 +125,35 @@ class KiNotesMainPanel(wx.Panel):
         """Show selected tab."""
         self._current_tab = idx
         
-        # Update toggle buttons
-        for i, btn in enumerate(self.tab_buttons):
-            btn.SetValue(i == idx)
-            if i == idx:
-                btn.SetBackgroundColour(wx.Colour(255, 255, 255))
-                btn.SetForegroundColour(wx.Colour(0, 0, 0))
-            else:
-                btn.SetBackgroundColour(wx.Colour(96, 96, 96))
-                btn.SetForegroundColour(wx.Colour(200, 200, 200))
-            btn.Refresh()
+        # Update button styles
+        self._update_tab_styles(idx)
         
-        # Hide all, show selected
+        # Hide all panels
         self.notes_panel.Hide()
         self.todo_panel.Hide()
         self.bom_panel.Hide()
         
+        # Show selected panel
         if idx == 0:
             self.notes_panel.Show()
         elif idx == 1:
             self.todo_panel.Show()
-            self.todo_scroll.FitInside()
+            try:
+                self.todo_scroll.FitInside()
+            except:
+                pass
         elif idx == 2:
             self.bom_panel.Show()
-            self.bom_panel.FitInside()
+            try:
+                self.bom_panel.FitInside()
+            except:
+                pass
+        
+        # Force layout refresh
+        self.content_panel.Layout()
+        self.Layout()
+        self.Refresh()
+        self.Update()
         
         self.content_panel.Layout()
         self.Layout()
