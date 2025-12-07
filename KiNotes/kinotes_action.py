@@ -26,14 +26,26 @@ _plugin_dir = os.path.dirname(os.path.abspath(__file__))
 if _plugin_dir not in sys.path:
     sys.path.insert(0, _plugin_dir)
 
+# Force reload of modules to get latest changes
+import importlib
+try:
+    from ui import main_panel
+    importlib.reload(main_panel)
+except:
+    pass
+
 from core.notes_manager import NotesManager
 from core.designator_linker import DesignatorLinker
 from core.metadata_extractor import MetadataExtractor
 from core.pdf_exporter import PDFExporter
 from ui.main_panel import KiNotesMainPanel
 
+# Plugin version - change this to force reload
+_PLUGIN_VERSION = "1.1.0"
+print(f"KiNotes v{_PLUGIN_VERSION} loaded")
 
-# Global reference to keep panel alive - use list to avoid scope issues
+
+# Global singleton - ensures only ONE window ever
 _kinotes_instance = {'frame': None, 'pane': None}
 
 
@@ -42,10 +54,12 @@ def get_kinotes_frame():
     frame = _kinotes_instance.get('frame')
     if frame is not None:
         try:
-            # Check if frame is still valid
-            if frame and hasattr(frame, 'IsShown'):
+            # Check if frame is still valid and not destroyed
+            if frame and isinstance(frame, wx.Frame):
+                # Try to access a method to ensure it's not a dead object
+                _ = frame.IsShown()
                 return frame
-        except (RuntimeError, wx.PyDeadObjectError):
+        except (RuntimeError, wx.PyDeadObjectError, Exception):
             pass
     _kinotes_instance['frame'] = None
     return None
@@ -54,6 +68,29 @@ def get_kinotes_frame():
 def set_kinotes_frame(frame):
     """Set the KiNotes frame reference."""
     _kinotes_instance['frame'] = frame
+
+
+def close_all_kinotes_windows():
+    """Close any existing KiNotes windows."""
+    # Close tracked frame
+    frame = _kinotes_instance.get('frame')
+    if frame:
+        try:
+            frame.Destroy()
+        except:
+            pass
+    _kinotes_instance['frame'] = None
+    
+    # Also search for any orphaned windows
+    try:
+        for win in wx.GetTopLevelWindows():
+            try:
+                if 'KiNotes' in win.GetTitle():
+                    win.Destroy()
+            except:
+                pass
+    except:
+        pass
 
 
 class KiNotesFrame(wx.MiniFrame):
@@ -325,6 +362,8 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
     
     def Run(self):
         """Run the plugin - ensures only one frame is open."""
+        print("KiNotes: Run() called")
+        
         # Validate environment
         if not self._validate_environment():
             return
@@ -336,6 +375,7 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
         # Check if already open - bring to front if so
         existing_frame = get_kinotes_frame()
         if existing_frame is not None:
+            print("KiNotes: Found existing frame, raising it")
             try:
                 if existing_frame.IsShown():
                     existing_frame.Raise()
@@ -347,16 +387,18 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
                     return
             except (RuntimeError, wx.PyDeadObjectError, AttributeError):
                 # Frame was destroyed, clear reference
+                print("KiNotes: Existing frame invalid, clearing")
                 set_kinotes_frame(None)
         
-        # Try to toggle docked panel first
-        if toggle_kinotes_panel():
-            return
+        # Close any orphaned KiNotes windows before creating new one
+        close_all_kinotes_windows()
         
         # Create new floating window - only one allowed
+        print("KiNotes: Creating new frame")
         new_frame = KiNotesFrame(None, project_dir)
         set_kinotes_frame(new_frame)
         new_frame.Show(True)
+        print("KiNotes: Frame shown")
     
     def _validate_environment(self):
         """Validate environment."""
