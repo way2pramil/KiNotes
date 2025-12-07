@@ -31,8 +31,8 @@ class Colors:
     TAB_INACTIVE = wx.Colour(60, 60, 65)
     
     # Editor
-    EDITOR_BG = wx.Colour(30, 30, 30)
-    EDITOR_TEXT = wx.Colour(212, 212, 212)
+    EDITOR_BG = wx.Colour(0, 0, 0)  # Pure black background
+    EDITOR_TEXT = wx.Colour(255, 255, 255)  # Pure white text for maximum contrast
     
     # Borders
     BORDER = wx.Colour(70, 70, 75)
