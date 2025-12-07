@@ -1,14 +1,14 @@
 """
 KiNotes - Smart Engineering Notes for KiCad 9+
-Main Action Plugin Entry Point
+Main Action Plugin Entry Point with Docking Support
 
 Features:
+- Multi-tab interface (Notes | Todo List | Settings)
 - Markdown-based notes with auto-save
 - @REF designator linking to highlight components
 - Import board metadata (BOM, stackup, netlist, etc.)
 - Export to PDF
-- iOS-inspired UI with KiCad integration
-- Dockable panel or popup window
+- Dockable panel like KiCad Properties
 
 Target: KiCad 9.0+ (Python 3.9+, wxPython 4.2+)
 Author: PCBtools.xyz
@@ -17,6 +17,7 @@ License: MIT
 
 import pcbnew
 import wx
+import wx.aui as aui
 import os
 import sys
 
@@ -30,25 +31,33 @@ from core.designator_linker import DesignatorLinker
 from core.metadata_extractor import MetadataExtractor
 from core.pdf_exporter import PDFExporter
 from ui.main_panel import KiNotesMainPanel
-from ui.styles import KiNotesStyles
 
 
-class KiNotesFrame(wx.Frame):
+# Global reference to keep panel alive
+_kinotes_frame = None
+_kinotes_pane = None
+
+
+class KiNotesFrame(wx.MiniFrame):
     """
-    Main KiNotes window - can be used as popup or docked.
-    iOS-inspired design following KiCad UI patterns.
+    KiNotes floating window with docking capability.
+    Uses MiniFrame for proper floating behavior like KiCad panels.
     """
     
     def __init__(self, parent=None, project_dir=None):
-        # Get project info
         self.project_dir = project_dir or self._get_project_dir()
         project_name = os.path.basename(self.project_dir) if self.project_dir else "KiNotes"
         
+        # MiniFrame style for proper floating/docking
+        style = (wx.CAPTION | wx.CLOSE_BOX | wx.RESIZE_BORDER | 
+                 wx.FRAME_TOOL_WINDOW | wx.FRAME_FLOAT_ON_PARENT |
+                 wx.FRAME_NO_TASKBAR)
+        
         super().__init__(
             parent,
-            title=f"KiNotes - {project_name}",
-            size=(500, 700),
-            style=wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT
+            title=f"KiNotes",
+            size=(420, 650),
+            style=style
         )
         
         # Initialize core modules
@@ -59,9 +68,7 @@ class KiNotesFrame(wx.Frame):
         
         self._init_ui()
         self._bind_events()
-        
-        # Center on screen
-        self.Centre()
+        self._position_window()
     
     def _get_project_dir(self):
         """Get project directory from current board."""
@@ -76,16 +83,18 @@ class KiNotesFrame(wx.Frame):
         return os.getcwd()
     
     def _init_ui(self):
-        """Initialize the main UI."""
-        # Apply styling
-        KiNotesStyles.apply_panel_style(self)
+        """Initialize the UI."""
+        self.SetBackgroundColour(wx.Colour(250, 250, 250))
         
         # Set icon
         icon_path = os.path.join(_plugin_dir, "resources", "icon.png")
         if os.path.exists(icon_path):
-            self.SetIcon(wx.Icon(icon_path))
+            try:
+                self.SetIcon(wx.Icon(icon_path))
+            except:
+                pass
         
-        # Main panel with all features
+        # Main panel with tabs
         self.main_panel = KiNotesMainPanel(
             self,
             self.notes_manager,
@@ -94,51 +103,59 @@ class KiNotesFrame(wx.Frame):
             self.pdf_exporter
         )
         
-        # Layout
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self.main_panel, 1, wx.EXPAND)
         self.SetSizer(sizer)
+        
+        # Set minimum size
+        self.SetMinSize((350, 400))
+    
+    def _position_window(self):
+        """Position window on the right side like Properties panel."""
+        try:
+            # Get screen size
+            display = wx.Display(0)
+            screen_rect = display.GetClientArea()
+            
+            # Position on right side
+            frame_size = self.GetSize()
+            x = screen_rect.GetRight() - frame_size.GetWidth() - 20
+            y = screen_rect.GetTop() + 100
+            
+            self.SetPosition((x, y))
+        except:
+            self.Centre()
     
     def _bind_events(self):
         """Bind window events."""
         self.Bind(wx.EVT_CLOSE, self._on_close)
         self.Bind(wx.EVT_ACTIVATE, self._on_activate)
-        
-        # Auto-save on focus loss (outside click)
-        self.Bind(wx.EVT_KILL_FOCUS, self._on_focus_lost)
     
     def _on_close(self, event):
-        """Handle window close - auto-save."""
+        """Handle close - save and hide."""
+        global _kinotes_frame
         try:
             self.main_panel.force_save()
             self.main_panel.cleanup()
         except:
             pass
+        _kinotes_frame = None
         self.Destroy()
     
     def _on_activate(self, event):
-        """Handle window activation changes."""
+        """Auto-save on deactivation."""
         if not event.GetActive():
-            # Window deactivated - auto-save
             try:
                 self.main_panel.force_save()
             except:
                 pass
         event.Skip()
-    
-    def _on_focus_lost(self, event):
-        """Handle focus loss - auto-save."""
-        try:
-            self.main_panel.force_save()
-        except:
-            pass
-        event.Skip()
 
 
 class KiNotesDockablePanel(wx.Panel):
     """
-    Dockable panel version of KiNotes.
-    Can be docked to left/right like KiCad Properties panel.
+    Dockable panel version for KiCad AUI integration.
+    Can be used with KiCad's AUI manager for docking.
     """
     
     def __init__(self, parent, project_dir=None):
@@ -146,7 +163,7 @@ class KiNotesDockablePanel(wx.Panel):
         
         self.project_dir = project_dir or self._get_project_dir()
         
-        # Initialize core modules
+        # Core modules
         self.notes_manager = NotesManager(self.project_dir)
         self.designator_linker = DesignatorLinker()
         self.metadata_extractor = MetadataExtractor()
@@ -155,22 +172,19 @@ class KiNotesDockablePanel(wx.Panel):
         self._init_ui()
     
     def _get_project_dir(self):
-        """Get project directory from current board."""
+        """Get project directory."""
         try:
             board = pcbnew.GetBoard()
-            if board:
-                filename = board.GetFileName()
-                if filename:
-                    return os.path.dirname(filename)
+            if board and board.GetFileName():
+                return os.path.dirname(board.GetFileName())
         except:
             pass
         return os.getcwd()
     
     def _init_ui(self):
-        """Initialize the dockable panel UI."""
-        KiNotesStyles.apply_panel_style(self)
+        """Initialize UI."""
+        self.SetBackgroundColour(wx.Colour(250, 250, 250))
         
-        # Main panel
         self.main_panel = KiNotesMainPanel(
             self,
             self.notes_manager,
@@ -182,6 +196,96 @@ class KiNotesDockablePanel(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self.main_panel, 1, wx.EXPAND)
         self.SetSizer(sizer)
+    
+    def force_save(self):
+        """Force save all data."""
+        self.main_panel.force_save()
+    
+    def cleanup(self):
+        """Cleanup resources."""
+        self.main_panel.cleanup()
+
+
+def try_dock_to_kicad(panel, project_dir):
+    """
+    Try to dock KiNotes panel to KiCad's AUI manager.
+    Returns True if docking successful, False otherwise.
+    """
+    try:
+        # Get KiCad's main frame
+        main_frame = None
+        for win in wx.GetTopLevelWindows():
+            if 'pcbnew' in win.GetTitle().lower() or 'kicad' in win.GetTitle().lower():
+                main_frame = win
+                break
+        
+        if not main_frame:
+            return False
+        
+        # Try to get AUI manager
+        aui_mgr = None
+        if hasattr(main_frame, 'GetAuiManager'):
+            aui_mgr = main_frame.GetAuiManager()
+        elif hasattr(main_frame, 'm_auiManager'):
+            aui_mgr = main_frame.m_auiManager
+        
+        if not aui_mgr:
+            return False
+        
+        # Create dockable panel
+        dockable = KiNotesDockablePanel(main_frame, project_dir)
+        
+        # Create AUI pane info
+        pane_info = aui.AuiPaneInfo()
+        pane_info.Name("KiNotes")
+        pane_info.Caption("KiNotes")
+        pane_info.Right()  # Dock on right
+        pane_info.Layer(1)
+        pane_info.Position(0)
+        pane_info.CloseButton(True)
+        pane_info.MaximizeButton(False)
+        pane_info.MinimizeButton(False)
+        pane_info.PinButton(True)
+        pane_info.Floatable(True)
+        pane_info.Movable(True)
+        pane_info.Resizable(True)
+        pane_info.BestSize((400, 600))
+        pane_info.MinSize((300, 400))
+        
+        # Add pane
+        aui_mgr.AddPane(dockable, pane_info)
+        aui_mgr.Update()
+        
+        global _kinotes_pane
+        _kinotes_pane = dockable
+        
+        return True
+        
+    except Exception as e:
+        print(f"KiNotes: Docking failed: {e}")
+        return False
+
+
+def toggle_kinotes_panel():
+    """Toggle KiNotes panel visibility."""
+    global _kinotes_pane
+    
+    if _kinotes_pane:
+        try:
+            # Get AUI manager and toggle
+            for win in wx.GetTopLevelWindows():
+                if hasattr(win, 'GetAuiManager'):
+                    aui_mgr = win.GetAuiManager()
+                    if aui_mgr:
+                        pane = aui_mgr.GetPane("KiNotes")
+                        if pane.IsOk():
+                            pane.Show(not pane.IsShown())
+                            aui_mgr.Update()
+                            return True
+        except:
+            pass
+    
+    return False
 
 
 class KiNotesActionPlugin(pcbnew.ActionPlugin):
@@ -194,17 +298,19 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
         """Set plugin defaults."""
         self.name = "KiNotes"
         self.category = "Utilities"
-        self.description = "Smart engineering notes linked to your PCB design"
+        self.description = "Smart engineering notes with tabs: Notes, Todo List, Settings"
         self.show_toolbar_button = True
         self.icon_file_name = os.path.join(_plugin_dir, "resources", "icon.png")
         
-        # For dark mode icon (KiCad 9+)
+        # Dark mode icon
         dark_icon = os.path.join(_plugin_dir, "resources", "icon.png")
         if os.path.exists(dark_icon):
             self.dark_icon_file_name = dark_icon
     
     def Run(self):
-        """Run the plugin - show KiNotes window."""
+        """Run the plugin."""
+        global _kinotes_frame
+        
         # Validate environment
         if not self._validate_environment():
             return
@@ -213,12 +319,33 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
         board = pcbnew.GetBoard()
         project_dir = os.path.dirname(board.GetFileName()) if board else None
         
-        # Show KiNotes window
-        frame = KiNotesFrame(None, project_dir)
-        frame.Show(True)
+        # Check if already open
+        if _kinotes_frame:
+            try:
+                if _kinotes_frame.IsShown():
+                    _kinotes_frame.Raise()
+                    _kinotes_frame.SetFocus()
+                    return
+                else:
+                    _kinotes_frame.Show(True)
+                    return
+            except:
+                _kinotes_frame = None
+        
+        # Try to toggle docked panel first
+        if toggle_kinotes_panel():
+            return
+        
+        # Try docking (disabled for now - use floating)
+        # if try_dock_to_kicad(None, project_dir):
+        #     return
+        
+        # Fall back to floating window
+        _kinotes_frame = KiNotesFrame(None, project_dir)
+        _kinotes_frame.Show(True)
     
     def _validate_environment(self):
-        """Validate that we can run the plugin."""
+        """Validate environment."""
         board = pcbnew.GetBoard()
         
         if not board:
@@ -240,15 +367,14 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
             )
             return False
         
-        # Check for read-only locations
+        # Check read-only
         project_path_lower = project_path.lower()
         if (project_path_lower.startswith("c:\\program files") or 
             "kicad\\demos" in project_path_lower or
             "kicad/demos" in project_path_lower):
             wx.MessageBox(
-                "Read-only project location detected.\n\n"
-                "Please save the PCB project to a writable location "
-                "(e.g., Documents) before using KiNotes.",
+                "Read-only project location.\n\n"
+                "Please save to a writable location.",
                 "KiNotes",
                 wx.OK | wx.ICON_ERROR
             )
@@ -257,5 +383,5 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
         return True
 
 
-# Register the plugin
+# Register plugin
 KiNotesActionPlugin().register()

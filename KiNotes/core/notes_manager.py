@@ -1,5 +1,5 @@
 """
-KiNotes Notes Manager - Load/save notes to .kinotes folder
+KiNotes Notes Manager - Load/save notes, todos, settings to .kinotes folder
 """
 import os
 import json
@@ -7,10 +7,12 @@ from datetime import datetime
 
 
 class NotesManager:
-    """Manages loading and saving notes for a KiCad project."""
+    """Manages loading and saving notes, todos, and settings for a KiCad project."""
     
     NOTES_FOLDER = ".kinotes"
     NOTES_FILE = "notes.md"
+    TODOS_FILE = "todos.json"
+    SETTINGS_FILE = "settings.json"
     META_FILE = "meta.json"
     
     def __init__(self, project_dir):
@@ -18,6 +20,8 @@ class NotesManager:
         self.project_dir = project_dir
         self.notes_dir = os.path.join(project_dir, self.NOTES_FOLDER)
         self.notes_path = os.path.join(self.notes_dir, self.NOTES_FILE)
+        self.todos_path = os.path.join(self.notes_dir, self.TODOS_FILE)
+        self.settings_path = os.path.join(self.notes_dir, self.SETTINGS_FILE)
         self.meta_path = os.path.join(self.notes_dir, self.META_FILE)
         
         self._ensure_folder_exists()
@@ -99,3 +103,67 @@ class NotesManager:
     def get_project_name(self):
         """Return project directory name."""
         return os.path.basename(self.project_dir)
+    
+    # ========== Todo List Management ==========
+    
+    def load_todos(self):
+        """Load todos from JSON file."""
+        try:
+            if os.path.exists(self.todos_path):
+                with open(self.todos_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return []
+        except Exception as e:
+            print(f"KiNotes: Error loading todos: {e}")
+            return []
+    
+    def save_todos(self, todos):
+        """Save todos to JSON file."""
+        try:
+            self._ensure_folder_exists()
+            with open(self.todos_path, "w", encoding="utf-8") as f:
+                json.dump(todos, f, indent=2)
+            return True
+        except Exception as e:
+            print(f"KiNotes: Error saving todos: {e}")
+            return False
+    
+    # ========== Settings Management ==========
+    
+    def load_settings(self):
+        """Load settings from JSON file."""
+        try:
+            if os.path.exists(self.settings_path):
+                with open(self.settings_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return self._get_default_settings()
+        except Exception as e:
+            print(f"KiNotes: Error loading settings: {e}")
+            return self._get_default_settings()
+    
+    def save_settings(self, settings):
+        """Save settings to JSON file."""
+        try:
+            self._ensure_folder_exists()
+            with open(self.settings_path, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=2)
+            return True
+        except Exception as e:
+            print(f"KiNotes: Error saving settings: {e}")
+            return False
+    
+    def _get_default_settings(self):
+        """Return default settings."""
+        return {
+            'autosave_interval': 5,
+            'font_size': 11,
+            'bom_exclude_dnp': True,
+            'bom_exclude_fid': True,
+            'bom_exclude_tp': True,
+            'bom_group': 0,
+            'sort_order': ['C', 'R', 'L', 'D', 'U', 'Y', 'X', 'F', 'SW', 'A', 'J', 'TP'],
+            'blacklist': '',
+            'blacklist_virtual': True,
+            'blacklist_empty': False,
+        }
+
