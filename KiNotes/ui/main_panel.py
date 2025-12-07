@@ -30,6 +30,7 @@ class KiNotesMainPanel(wx.Panel):
         self._modified = False
         self._todo_items = []
         self._todo_id_counter = 0
+        self._current_tab = 0
         
         self.SetMinSize((self.MIN_WIDTH, self.MIN_HEIGHT))
         self.SetBackgroundColour(wx.Colour(248, 249, 250))
@@ -121,6 +122,8 @@ class KiNotesMainPanel(wx.Panel):
     
     def _show_tab(self, idx):
         """Show the selected tab panel."""
+        self._current_tab = idx
+        
         # Update button styles
         for i, btn in enumerate(self.tab_buttons):
             if i == idx:
@@ -131,12 +134,28 @@ class KiNotesMainPanel(wx.Panel):
                 btn.SetForegroundColour(wx.Colour(73, 80, 87))
             btn.Refresh()
         
-        # Show/hide panels
-        self.notes_panel.Show(idx == 0)
-        self.todo_panel.Show(idx == 1)
-        self.settings_panel.Show(idx == 2)
+        # Hide all panels first
+        self.notes_panel.Hide()
+        self.todo_panel.Hide()
+        self.settings_panel.Hide()
         
+        # Show selected panel
+        if idx == 0:
+            self.notes_panel.Show()
+        elif idx == 1:
+            self.todo_panel.Show()
+            # Refresh todo scroll
+            self.todo_scroll.FitInside()
+        elif idx == 2:
+            self.settings_panel.Show()
+            self.settings_panel.FitInside()
+        
+        # Force layout update
         self.content_panel.Layout()
+        self.content_sizer.Layout()
+        self.Layout()
+        self.Refresh()
+        self.Update()
     
     def _create_notes_panel(self, parent):
         """Create the Notes editor panel."""

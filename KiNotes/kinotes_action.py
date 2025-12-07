@@ -33,9 +33,27 @@ from core.pdf_exporter import PDFExporter
 from ui.main_panel import KiNotesMainPanel
 
 
-# Global reference to keep panel alive
-_kinotes_frame = None
-_kinotes_pane = None
+# Global reference to keep panel alive - use list to avoid scope issues
+_kinotes_instance = {'frame': None, 'pane': None}
+
+
+def get_kinotes_frame():
+    """Get existing KiNotes frame if it exists and is valid."""
+    frame = _kinotes_instance.get('frame')
+    if frame is not None:
+        try:
+            # Check if frame is still valid
+            if frame and hasattr(frame, 'IsShown'):
+                return frame
+        except (RuntimeError, wx.PyDeadObjectError):
+            pass
+    _kinotes_instance['frame'] = None
+    return None
+
+
+def set_kinotes_frame(frame):
+    """Set the KiNotes frame reference."""
+    _kinotes_instance['frame'] = frame
 
 
 class KiNotesFrame(wx.MiniFrame):
@@ -133,13 +151,12 @@ class KiNotesFrame(wx.MiniFrame):
     
     def _on_close(self, event):
         """Handle close - save and hide."""
-        global _kinotes_frame
         try:
             self.main_panel.force_save()
             self.main_panel.cleanup()
         except:
             pass
-        _kinotes_frame = None
+        set_kinotes_frame(None)
         self.Destroy()
     
     def _on_activate(self, event):
@@ -256,8 +273,7 @@ def try_dock_to_kicad(panel, project_dir):
         aui_mgr.AddPane(dockable, pane_info)
         aui_mgr.Update()
         
-        global _kinotes_pane
-        _kinotes_pane = dockable
+        _kinotes_instance['pane'] = dockable
         
         return True
         
@@ -268,9 +284,9 @@ def try_dock_to_kicad(panel, project_dir):
 
 def toggle_kinotes_panel():
     """Toggle KiNotes panel visibility."""
-    global _kinotes_pane
+    pane = _kinotes_instance.get('pane')
     
-    if _kinotes_pane:
+    if pane:
         try:
             # Get AUI manager and toggle
             for win in wx.GetTopLevelWindows():
@@ -308,9 +324,7 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
             self.dark_icon_file_name = dark_icon
     
     def Run(self):
-        """Run the plugin."""
-        global _kinotes_frame
-        
+        """Run the plugin - ensures only one frame is open."""
         # Validate environment
         if not self._validate_environment():
             return
@@ -319,30 +333,30 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
         board = pcbnew.GetBoard()
         project_dir = os.path.dirname(board.GetFileName()) if board else None
         
-        # Check if already open
-        if _kinotes_frame:
+        # Check if already open - bring to front if so
+        existing_frame = get_kinotes_frame()
+        if existing_frame is not None:
             try:
-                if _kinotes_frame.IsShown():
-                    _kinotes_frame.Raise()
-                    _kinotes_frame.SetFocus()
+                if existing_frame.IsShown():
+                    existing_frame.Raise()
+                    existing_frame.SetFocus()
                     return
                 else:
-                    _kinotes_frame.Show(True)
+                    existing_frame.Show(True)
+                    existing_frame.Raise()
                     return
-            except:
-                _kinotes_frame = None
+            except (RuntimeError, wx.PyDeadObjectError, AttributeError):
+                # Frame was destroyed, clear reference
+                set_kinotes_frame(None)
         
         # Try to toggle docked panel first
         if toggle_kinotes_panel():
             return
         
-        # Try docking (disabled for now - use floating)
-        # if try_dock_to_kicad(None, project_dir):
-        #     return
-        
-        # Fall back to floating window
-        _kinotes_frame = KiNotesFrame(None, project_dir)
-        _kinotes_frame.Show(True)
+        # Create new floating window - only one allowed
+        new_frame = KiNotesFrame(None, project_dir)
+        set_kinotes_frame(new_frame)
+        new_frame.Show(True)
     
     def _validate_environment(self):
         """Validate environment."""
