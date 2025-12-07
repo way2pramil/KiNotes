@@ -104,10 +104,10 @@ class KiNotesMainPanel(wx.Panel):
         sizer.AddSpacer(8)
         
         self.tab_buttons = []
-        tabs = [("📝 Notes", 0), ("☑ Todo", 1), ("📋 BOM", 2)]
+        tabs = [("  Notes  ", 0), ("  Todo  ", 1), ("  BOM  ", 2)]
         
         for label, idx in tabs:
-            btn = wx.Button(tab_bar, label=label, size=(80, 32), style=wx.BORDER_NONE)
+            btn = wx.Button(tab_bar, label=label, size=(90, 32), style=wx.BORDER_NONE)
             btn.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
             btn.Bind(wx.EVT_BUTTON, lambda e, i=idx: self._on_tab_click(i))
             btn.SetCursor(wx.Cursor(wx.CURSOR_HAND))
@@ -183,21 +183,20 @@ class KiNotesMainPanel(wx.Panel):
         
         # Modern styled buttons
         btn_style = wx.BORDER_NONE
-        btn_size = (70, 28)
         
-        import_btn = wx.Button(toolbar, label="⬇ Import", size=btn_size, style=btn_style)
+        import_btn = wx.Button(toolbar, label="Import", size=(80, 28), style=btn_style)
         import_btn.SetBackgroundColour(Colors.BG_LIGHT)
         import_btn.SetForegroundColour(Colors.TEXT_PRIMARY)
         import_btn.Bind(wx.EVT_BUTTON, self._on_import_click)
-        tb_sizer.Add(import_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        tb_sizer.Add(import_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
         
-        pdf_btn = wx.Button(toolbar, label="📄 PDF", size=(60, 28), style=btn_style)
+        pdf_btn = wx.Button(toolbar, label="PDF", size=(70, 28), style=btn_style)
         pdf_btn.SetBackgroundColour(Colors.BG_LIGHT)
         pdf_btn.SetForegroundColour(Colors.TEXT_PRIMARY)
         pdf_btn.Bind(wx.EVT_BUTTON, lambda e: self._on_export_pdf())
-        tb_sizer.Add(pdf_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        tb_sizer.Add(pdf_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
         
-        save_btn = wx.Button(toolbar, label="💾 Save", size=(60, 28), style=btn_style)
+        save_btn = wx.Button(toolbar, label="Save", size=(70, 28), style=btn_style)
         save_btn.SetBackgroundColour(Colors.SUCCESS)
         save_btn.SetForegroundColour(wx.Colour(255, 255, 255))
         save_btn.Bind(wx.EVT_BUTTON, lambda e: self._on_manual_save())
@@ -275,13 +274,13 @@ class KiNotesMainPanel(wx.Panel):
         tb_sizer = wx.BoxSizer(wx.HORIZONTAL)
         tb_sizer.AddSpacer(8)
         
-        add_btn = wx.Button(toolbar, label="+ Add Task", size=(85, 28), style=wx.BORDER_NONE)
+        add_btn = wx.Button(toolbar, label="+ Add Task", size=(100, 28), style=wx.BORDER_NONE)
         add_btn.SetBackgroundColour(Colors.ACCENT)
         add_btn.SetForegroundColour(wx.Colour(255, 255, 255))
         add_btn.Bind(wx.EVT_BUTTON, self._on_add_todo)
         tb_sizer.Add(add_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
         
-        clear_btn = wx.Button(toolbar, label="Clear Done", size=(80, 28), style=wx.BORDER_NONE)
+        clear_btn = wx.Button(toolbar, label="Clear Done", size=(100, 28), style=wx.BORDER_NONE)
         clear_btn.SetBackgroundColour(Colors.BG_LIGHT)
         clear_btn.SetForegroundColour(Colors.TEXT_PRIMARY)
         clear_btn.Bind(wx.EVT_BUTTON, self._on_clear_done)
