@@ -61,6 +61,23 @@ LIGHT_THEME = {
     "accent_red":   "#FF3B30",  # iOS Red
 }
 
+# Dark Mode Background Colors (Blender-style)
+DARK_BACKGROUND_COLORS = {
+    "Charcoal": "#1C1C1E",
+    "Obsidian": "#0D0D0D",
+    "Midnight": "#121212",
+    "Slate Dark": "#1E1E2E",
+    "Deep Space": "#0F0F1A",
+}
+
+DARK_TEXT_COLORS = {
+    "Pure White": "#FFFFFF",
+    "Soft White": "#E5E5E5",
+    "Silver": "#C0C0C0",
+    "Light Gray": "#A0A0A0",
+    "Neon Blue": "#00D4FF",
+}
+
 
 def hex_to_colour(hex_str):
     """Convert hex color to wx.Colour."""
@@ -90,8 +107,12 @@ class RoundedButton(wx.Panel):
         self.is_hovered = False
         self.is_pressed = False
         self.callback = None
+        self.button_size = size
         
+        # Force size constraints
+        self.SetSize(size)
         self.SetMinSize(size)
+        self.SetMaxSize(size)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         
         self.font = wx.Font(font_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, font_weight)
@@ -109,7 +130,7 @@ class RoundedButton(wx.Panel):
         g = max(0, color.Green() - amount)
         b = max(0, color.Blue() - amount)
         return wx.Colour(r, g, b)
-    
+
     def _on_press(self, event):
         self.is_pressed = True
         self.Refresh()
@@ -119,7 +140,6 @@ class RoundedButton(wx.Panel):
         if self.is_pressed:
             self.is_pressed = False
             self.Refresh()
-            # Check if mouse is still inside before firing callback
             pos = event.GetPosition()
             rect = self.GetClientRect()
             if rect.Contains(pos) and self.callback:
@@ -128,21 +148,45 @@ class RoundedButton(wx.Panel):
     def _on_paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)
         gc = wx.GraphicsContext.Create(dc)
-        w, h = self.GetSize()
-
-        # Determine Color State
+        
+        # Use stored button size or get actual size
+        if hasattr(self, 'button_size') and self.button_size != (-1, -1):
+            w, h = self.button_size
+        else:
+            w, h = self.GetSize()
+        
+        # Ensure minimum dimensions
+        if w <= 0:
+            w = 100
+        if h <= 0:
+            h = 40
+        
+        # Clear background completely
+        parent = self.GetParent()
+        if parent:
+            parent_bg = parent.GetBackgroundColour()
+        else:
+            parent_bg = wx.Colour(255, 255, 255)
+        
+        gc.SetBrush(wx.Brush(parent_bg))
+        gc.SetPen(wx.TRANSPARENT_PEN)
+        gc.DrawRectangle(0, 0, w, h)
+        
+        # Determine button color based on state
         if self.is_pressed:
             bg = self._darken_color(self.bg_color, 40)
         elif self.is_hovered:
             bg = self._darken_color(self.bg_color, 15)
         else:
             bg = self.bg_color
-
+        
+        # Draw rounded button with padding
+        corner = min(self.corner_radius, h // 2)
         gc.SetBrush(wx.Brush(bg))
         gc.SetPen(wx.TRANSPARENT_PEN)
-        gc.DrawRoundedRectangle(0, 0, w, h, self.corner_radius)
+        gc.DrawRoundedRectangle(0, 0, w, h, corner)
         
-        # Draw text
+        # Draw text with icon
         gc.SetFont(self.font, self.fg_color)
         display_text = self.icon + "  " + self.label if self.icon else self.label
         text_w, text_h = gc.GetTextExtent(display_text)[:2]
@@ -183,12 +227,16 @@ class ToggleSwitch(wx.Panel):
         self.label_on = label_on
         self.label_off = label_off
         self.callback = None
+        self.switch_size = size
         
         self.track_color_on = hex_to_colour("#4285F4")
         self.track_color_off = hex_to_colour("#CCCCCC")
         self.knob_color = wx.WHITE
         
+        # Force size constraints
+        self.SetSize(size)
         self.SetMinSize(size)
+        self.SetMaxSize(size)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -199,7 +247,28 @@ class ToggleSwitch(wx.Panel):
         dc = wx.AutoBufferedPaintDC(self)
         gc = wx.GraphicsContext.Create(dc)
         
-        w, h = self.GetSize()
+        # Use stored size if available
+        if hasattr(self, 'switch_size') and self.switch_size != (-1, -1):
+            w, h = self.switch_size
+        else:
+            w, h = self.GetSize()
+        
+        # Ensure minimum dimensions
+        if w <= 0:
+            w = 50
+        if h <= 0:
+            h = 26
+        
+        # Clear background with parent's background color first
+        parent = self.GetParent()
+        if parent:
+            parent_bg = parent.GetBackgroundColour()
+        else:
+            parent_bg = wx.Colour(255, 255, 255)
+        gc.SetBrush(wx.Brush(parent_bg))
+        gc.SetPen(wx.TRANSPARENT_PEN)
+        gc.DrawRectangle(0, 0, w, h)
+        
         track_h = h - 4
         track_y = 2
         knob_size = track_h - 4
@@ -234,35 +303,37 @@ class ToggleSwitch(wx.Panel):
 
 
 # ============================================================
-# ICONS - Beautiful Unicode icons
+# ICONS - Simple ASCII/Unicode icons (cross-platform compatible)
 # ============================================================
 class Icons:
     # Tab icons
-    NOTES = "\U0001F4DD"      # Memo/Note
-    TODO = "\u2611"           # Checkbox with check
-    BOM = "\U0001F4CB"        # Clipboard
+    NOTES = "\u270F"        # 📝 Notes / Pencil
+    TODO = "\u2611"             # ☑️ Checkbox (checked)
+    BOM = "\u2630"              # ☰ Menu/List
     
-    # Action icons  
-    IMPORT = "\u21E9"         # Downwards arrow
-    SAVE = "\U0001F4BE"       # Floppy disk
-    PDF = "\U0001F4C4"        # Document
-    ADD = "\u2795"            # Plus
-    DELETE = "\u2716"         # X mark
-    CLEAR = "\U0001F5D1"      # Wastebasket
-    SETTINGS = "\u2699"       # Gear
-    GENERATE = "\u27A4"       # Arrow
+    # Action icons
+    IMPORT = "\u21E9"           # ⇩ Import (down arrow)
+    SAVE = "\u2713"             # 💾 Save
+    PDF = "\u21B5"              # ↵ Enter-style Export
+    ADD = "+"                   # +
+    DELETE = "\U0001F5D1"       # 🗑 Delete (trash)
+    CLEAR = "\u2716"            # ✖ Clear/Remove
+    SETTINGS = "\u2699"         # ⚙ Settings
+    GENERATE = "\u25B6"         # ▶ Generate / Play
     
     # Theme icons
-    DARK = "\U0001F319"       # Crescent moon
-    LIGHT = "\u2600"          # Sun
+    DARK = "\U0001F319"         # 🌙 Crescent moon
+    LIGHT = "\u2600"            # ☀ Sun
     
     # Import menu icons
-    BOARD = "\U0001F4D0"      # Board/Triangular ruler
-    LAYERS = "\U0001F5C2"     # Layers/Card index
-    NETLIST = "\U0001F517"    # Link
-    RULES = "\U0001F4CF"      # Ruler
-    DRILL = "\U0001F529"      # Nut and bolt
-    ALL = "\U0001F4E6"        # Package
+    BOARD = "\u25A1"            # □ Square board
+    LAYERS = "\u2261"           # ≡ Layers
+    NETLIST = "\u2194"          # ↔ Bidirectional
+    RULES = "\u2263"            # ≣ Rules / tolerance lines
+    DRILL = "\u25CE"            # ◎ Drill/Bullseye
+    ALL = "\u2606"              # ☆ Star
+    GLOBE = "\U0001F310"        # 🌐 Web/Globe
+
 
 
 # ============================================================
@@ -289,6 +360,8 @@ class KiNotesMainPanel(wx.Panel):
         self._dark_mode = False
         self._bg_color_name = "Ivory Paper"
         self._text_color_name = "Carbon Black"
+        self._dark_bg_color_name = "Charcoal"
+        self._dark_text_color_name = "Pure White"
         self._load_color_settings()
         
         self._theme = DARK_THEME if self._dark_mode else LIGHT_THEME
@@ -308,6 +381,8 @@ class KiNotesMainPanel(wx.Panel):
             if settings:
                 self._bg_color_name = settings.get("bg_color", "Ivory Paper")
                 self._text_color_name = settings.get("text_color", "Carbon Black")
+                self._dark_bg_color_name = settings.get("dark_bg_color", "Charcoal")
+                self._dark_text_color_name = settings.get("dark_text_color", "Pure White")
                 self._dark_mode = settings.get("dark_mode", False)
         except:
             pass
@@ -319,6 +394,8 @@ class KiNotesMainPanel(wx.Panel):
             settings.update({
                 "bg_color": self._bg_color_name,
                 "text_color": self._text_color_name,
+                "dark_bg_color": self._dark_bg_color_name,
+                "dark_text_color": self._dark_text_color_name,
                 "dark_mode": self._dark_mode
             })
             self.notes_manager.save_settings(settings)
@@ -327,12 +404,12 @@ class KiNotesMainPanel(wx.Panel):
     
     def _get_editor_bg(self):
         if self._dark_mode:
-            return hex_to_colour(DARK_THEME["bg_editor"])
+            return hex_to_colour(DARK_BACKGROUND_COLORS.get(self._dark_bg_color_name, "#1C1C1E"))
         return hex_to_colour(BACKGROUND_COLORS.get(self._bg_color_name, "#FFFDF5"))
     
     def _get_editor_text(self):
         if self._dark_mode:
-            return hex_to_colour(DARK_THEME["text_primary"])
+            return hex_to_colour(DARK_TEXT_COLORS.get(self._dark_text_color_name, "#FFFFFF"))
         return hex_to_colour(TEXT_COLORS.get(self._text_color_name, "#2B2B2B"))
     
     def _init_ui(self):
@@ -420,17 +497,17 @@ class KiNotesMainPanel(wx.Panel):
         
         sizer.AddStretchSpacer()
         
-        # Settings button - with gear icon
+        # Settings button - centered icon
         self.settings_btn = RoundedButton(
             top_bar,
             label="",
             icon=Icons.SETTINGS,
-            size=(50, 42),
+            size=(44, 42),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
             corner_radius=10,
-            font_size=14,
-            font_weight=wx.FONTWEIGHT_NORMAL
+            font_size=16,
+            font_weight=wx.FONTWEIGHT_BOLD
         )
         self.settings_btn.Bind_Click(self._on_settings_click)
         sizer.Add(self.settings_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 16)
@@ -448,8 +525,8 @@ class KiNotesMainPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.AddSpacer(16)
         
-        # pcbtools.xyz link on the left
-        link_text = wx.StaticText(bottom_bar, label="pcbtools.xyz")
+        # pcbtools.xyz link on the left with globe icon
+        link_text = wx.StaticText(bottom_bar, label="\U0001F310 pcbtools.xyz")
         link_text.SetForegroundColour(hex_to_colour(self._theme["accent_blue"]))
         link_text.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, underline=True))
         link_text.SetCursor(wx.Cursor(wx.CURSOR_HAND))
@@ -523,20 +600,30 @@ class KiNotesMainPanel(wx.Panel):
         self.todo_panel.Hide()
         self.bom_panel.Hide()
         
-        # Show/hide Import button - only visible on Notes tab
-        if idx == 0:
+        # Show/hide buttons based on tab
+        if idx == 0:  # Notes tab
             self.notes_panel.Show()
             self.import_btn.Show()
-        elif idx == 1:
+            self.save_btn.Show()
+            self.pdf_btn.Show()
+        elif idx == 1:  # Todo tab
             self.todo_panel.Show()
             self.import_btn.Hide()
+            self.save_btn.Hide()
+            self.pdf_btn.Hide()
             try:
                 self.todo_scroll.FitInside()
             except:
                 pass
-        elif idx == 2:
+        elif idx == 2:  # BOM tab
             self.bom_panel.Show()
             self.import_btn.Hide()
+            self.save_btn.Show()  # Keep Save for BOM settings
+            self.pdf_btn.Hide()
+            try:
+                self.bom_panel.FitInside()
+            except:
+                pass
             try:
                 self.bom_panel.FitInside()
             except:
@@ -553,9 +640,9 @@ class KiNotesMainPanel(wx.Panel):
     
     def _on_settings_click(self, event):
         """Show color settings dialog with dark mode toggle."""
-        dlg = wx.Dialog(self, title="Editor Colors", size=(420, 480),
+        dlg = wx.Dialog(self, title="Settings", size=(420, 520),
                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        dlg.SetMinSize((380, 450))
+        dlg.SetMinSize((380, 480))
         dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -574,6 +661,7 @@ class KiNotesMainPanel(wx.Panel):
         mode_sizer.AddStretchSpacer()
         
         self._dark_toggle = ToggleSwitch(mode_panel, size=(54, 28), is_on=self._dark_mode)
+        self._dark_toggle.Bind_Change(lambda is_on: self._on_theme_toggle(dlg, sizer, is_on))
         mode_sizer.Add(self._dark_toggle, 0, wx.ALIGN_CENTER_VERTICAL)
         
         mode_panel.SetSizer(mode_sizer)
@@ -587,40 +675,11 @@ class KiNotesMainPanel(wx.Panel):
         
         sizer.AddSpacer(20)
         
-        # Light Mode Colors Section Header
-        light_header = wx.StaticText(dlg, label="Light Theme Colors")
-        light_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        light_header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        sizer.Add(light_header, 0, wx.LEFT, 24)
-        sizer.AddSpacer(12)
-        
-        # Background color
-        bg_label = wx.StaticText(dlg, label="Background:")
-        bg_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        bg_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        sizer.Add(bg_label, 0, wx.LEFT, 24)
-        sizer.AddSpacer(6)
-        
-        bg_choices = list(BACKGROUND_COLORS.keys())
-        self._bg_choice = wx.Choice(dlg, choices=bg_choices)
-        self._bg_choice.SetSelection(bg_choices.index(self._bg_color_name) if self._bg_color_name in bg_choices else 0)
-        sizer.Add(self._bg_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
-        
-        sizer.AddSpacer(16)
-        
-        # Text color
-        txt_label = wx.StaticText(dlg, label="Text:")
-        txt_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        txt_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        sizer.Add(txt_label, 0, wx.LEFT, 24)
-        sizer.AddSpacer(6)
-        
-        txt_choices = list(TEXT_COLORS.keys())
-        self._txt_choice = wx.Choice(dlg, choices=txt_choices)
-        self._txt_choice.SetSelection(txt_choices.index(self._text_color_name) if self._text_color_name in txt_choices else 0)
-        sizer.Add(self._txt_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
-        
-        sizer.AddStretchSpacer()
+        # Colors panel - will be replaced based on theme
+        self._colors_panel = wx.Panel(dlg)
+        self._colors_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        self._rebuild_color_options(self._colors_panel, self._dark_mode)
+        sizer.Add(self._colors_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 0)
         
         # Buttons - unified rounded style with clear Save action
         btn_panel = wx.Panel(dlg)
@@ -628,13 +687,43 @@ class KiNotesMainPanel(wx.Panel):
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         btn_sizer.AddStretchSpacer()
         
-        cancel_btn = wx.Button(dlg, wx.ID_CANCEL, "Cancel", size=(100, 40))
+        # Store result for dialog
+        self._settings_result = None
+        
+        def on_cancel(e):
+            self._settings_result = wx.ID_CANCEL
+            dlg.EndModal(wx.ID_CANCEL)
+        
+        def on_apply(e):
+            self._settings_result = wx.ID_OK
+            dlg.EndModal(wx.ID_OK)
+        
+        cancel_btn = RoundedButton(
+            btn_panel,
+            label="Cancel",
+            icon="\u2715",
+            size=(110, 42),
+            bg_color=self._theme["bg_button"],
+            fg_color=self._theme["text_primary"],
+            corner_radius=10,
+            font_size=11,
+            font_weight=wx.FONTWEIGHT_NORMAL
+        )
+        cancel_btn.Bind_Click(on_cancel)
         btn_sizer.Add(cancel_btn, 0, wx.RIGHT, 12)
         
-        apply_btn = wx.Button(dlg, wx.ID_OK, "Save & Apply", size=(120, 40))
-        apply_btn.SetBackgroundColour(hex_to_colour(self._theme["accent_blue"]))
-        apply_btn.SetForegroundColour(wx.WHITE)
-        apply_btn.SetToolTip("Save settings and apply theme")
+        apply_btn = RoundedButton(
+            btn_panel,
+            label="Save & Apply",
+            icon="\u2713",
+            size=(140, 42),
+            bg_color=self._theme["accent_blue"],
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            font_size=11,
+            font_weight=wx.FONTWEIGHT_BOLD
+        )
+        apply_btn.Bind_Click(on_apply)
         btn_sizer.Add(apply_btn, 0)
         
         btn_panel.SetSizer(btn_sizer)
@@ -643,15 +732,110 @@ class KiNotesMainPanel(wx.Panel):
         dlg.SetSizer(sizer)
         
         if dlg.ShowModal() == wx.ID_OK:
-            self._bg_color_name = bg_choices[self._bg_choice.GetSelection()]
-            self._text_color_name = txt_choices[self._txt_choice.GetSelection()]
             self._dark_mode = self._dark_toggle.GetValue()
+            if self._dark_mode:
+                # Get dark theme color selections
+                dark_bg_choices = list(DARK_BACKGROUND_COLORS.keys())
+                dark_txt_choices = list(DARK_TEXT_COLORS.keys())
+                self._dark_bg_color_name = dark_bg_choices[self._bg_choice.GetSelection()]
+                self._dark_text_color_name = dark_txt_choices[self._txt_choice.GetSelection()]
+            else:
+                # Get light theme color selections
+                bg_choices = list(BACKGROUND_COLORS.keys())
+                txt_choices = list(TEXT_COLORS.keys())
+                self._bg_color_name = bg_choices[self._bg_choice.GetSelection()]
+                self._text_color_name = txt_choices[self._txt_choice.GetSelection()]
             self._theme = DARK_THEME if self._dark_mode else LIGHT_THEME
             self._apply_theme()
             self._apply_editor_colors()
             self._save_color_settings()
         
         dlg.Destroy()
+    
+    def _on_theme_toggle(self, dlg, sizer, is_dark):
+        """Handle theme toggle in settings dialog - rebuild color options."""
+        self._rebuild_color_options(self._colors_panel, is_dark)
+        dlg.Layout()
+    
+    def _rebuild_color_options(self, panel, is_dark):
+        """Rebuild color options based on theme."""
+        # Clear existing children
+        for child in panel.GetChildren():
+            child.Destroy()
+        
+        panel_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        if is_dark:
+            # Dark Theme Colors
+            header = wx.StaticText(panel, label="Dark Theme Colors")
+            header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+            panel_sizer.Add(header, 0, wx.LEFT, 24)
+            panel_sizer.AddSpacer(12)
+            
+            # Background color
+            bg_label = wx.StaticText(panel, label="Background:")
+            bg_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            bg_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+            panel_sizer.Add(bg_label, 0, wx.LEFT, 24)
+            panel_sizer.AddSpacer(6)
+            
+            dark_bg_choices = list(DARK_BACKGROUND_COLORS.keys())
+            self._bg_choice = wx.Choice(panel, choices=dark_bg_choices)
+            dark_bg_name = getattr(self, '_dark_bg_color_name', 'Charcoal')
+            self._bg_choice.SetSelection(dark_bg_choices.index(dark_bg_name) if dark_bg_name in dark_bg_choices else 0)
+            panel_sizer.Add(self._bg_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
+            
+            panel_sizer.AddSpacer(16)
+            
+            # Text color
+            txt_label = wx.StaticText(panel, label="Text:")
+            txt_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            txt_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+            panel_sizer.Add(txt_label, 0, wx.LEFT, 24)
+            panel_sizer.AddSpacer(6)
+            
+            dark_txt_choices = list(DARK_TEXT_COLORS.keys())
+            self._txt_choice = wx.Choice(panel, choices=dark_txt_choices)
+            dark_txt_name = getattr(self, '_dark_text_color_name', 'Pure White')
+            self._txt_choice.SetSelection(dark_txt_choices.index(dark_txt_name) if dark_txt_name in dark_txt_choices else 0)
+            panel_sizer.Add(self._txt_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
+        else:
+            # Light Theme Colors
+            header = wx.StaticText(panel, label="Light Theme Colors")
+            header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+            panel_sizer.Add(header, 0, wx.LEFT, 24)
+            panel_sizer.AddSpacer(12)
+            
+            # Background color
+            bg_label = wx.StaticText(panel, label="Background:")
+            bg_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            bg_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+            panel_sizer.Add(bg_label, 0, wx.LEFT, 24)
+            panel_sizer.AddSpacer(6)
+            
+            bg_choices = list(BACKGROUND_COLORS.keys())
+            self._bg_choice = wx.Choice(panel, choices=bg_choices)
+            self._bg_choice.SetSelection(bg_choices.index(self._bg_color_name) if self._bg_color_name in bg_choices else 0)
+            panel_sizer.Add(self._bg_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
+            
+            panel_sizer.AddSpacer(16)
+            
+            # Text color
+            txt_label = wx.StaticText(panel, label="Text:")
+            txt_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            txt_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+            panel_sizer.Add(txt_label, 0, wx.LEFT, 24)
+            panel_sizer.AddSpacer(6)
+            
+            txt_choices = list(TEXT_COLORS.keys())
+            self._txt_choice = wx.Choice(panel, choices=txt_choices)
+            self._txt_choice.SetSelection(txt_choices.index(self._text_color_name) if self._text_color_name in txt_choices else 0)
+            panel_sizer.Add(self._txt_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
+        
+        panel.SetSizer(panel_sizer)
+        panel.Layout()
     
     def _apply_theme(self):
         """Apply current theme to all UI elements."""
@@ -754,10 +938,10 @@ class KiNotesMainPanel(wx.Panel):
         self.add_todo_btn.Bind_Click(self._on_add_todo)
         tb_sizer.Add(self.add_todo_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
         
-        # Clear done button - unified rounded style
+        # Clear task button - unified rounded style
         self.clear_done_btn = RoundedButton(
             toolbar,
-            label="Clear Done",
+            label="Clear Task",
             icon=Icons.CLEAR,
             size=(140, 42),
             bg_color=self._theme["bg_button"],
@@ -808,11 +992,20 @@ class KiNotesMainPanel(wx.Panel):
         cb.Bind(wx.EVT_CHECKBOX, lambda e, iid=item_id: self._on_todo_toggle(iid))
         item_sizer.Add(cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 14)
         
-        # Text input
+        # Text input with strikethrough support
         txt = wx.TextCtrl(item_panel, value=text, style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER)
         txt.SetBackgroundColour(wx.WHITE if not self._dark_mode else hex_to_colour("#2D2D2D"))
-        txt.SetForegroundColour(hex_to_colour(self._theme["text_secondary"] if done else self._theme["text_primary"]))
-        txt.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        
+        # Apply strikethrough font if done
+        if done:
+            font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+            font.SetStrikethrough(True)
+            txt.SetFont(font)
+            txt.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        else:
+            txt.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            txt.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        
         txt.Bind(wx.EVT_TEXT, lambda e: self._save_todos())
         txt.Bind(wx.EVT_TEXT_ENTER, lambda e: self._on_add_todo(None))
         item_sizer.Add(txt, 1, wx.EXPAND | wx.ALL, 12)
@@ -850,9 +1043,18 @@ class KiNotesMainPanel(wx.Panel):
         for item in self._todo_items:
             if item["id"] == item_id:
                 item["done"] = item["checkbox"].GetValue()
-                item["text"].SetForegroundColour(
-                    hex_to_colour(self._theme["text_secondary"] if item["done"] else self._theme["text_primary"])
-                )
+                
+                # Apply strikethrough when done
+                font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+                if item["done"]:
+                    font.SetStrikethrough(True)
+                    item["text"].SetFont(font)
+                    item["text"].SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+                else:
+                    font.SetStrikethrough(False)
+                    item["text"].SetFont(font)
+                    item["text"].SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+                
                 item["text"].Refresh()
                 break
         self._update_todo_count()
@@ -977,10 +1179,10 @@ class KiNotesMainPanel(wx.Panel):
         self.bom_blacklist.SetHint("e.g. LOGO*, H*")
         sizer.Add(self.bom_blacklist, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 16)
         
-        # Generate button - unified rounded style
+        # Export BOM button - unified rounded style
         self.gen_bom_btn = RoundedButton(
             panel,
-            label="Generate BOM -> Notes",
+            label="Export BOM -> Notes",
             icon=Icons.GENERATE,
             size=(-1, 52),
             bg_color=self._theme["accent_blue"],
