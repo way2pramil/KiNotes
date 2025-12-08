@@ -1058,11 +1058,15 @@ class KiNotesMainPanel(wx.Panel):
             self.import_btn.Show()
             self.save_btn.Show()
             self.pdf_btn.Show()
+            self.export_diary_btn.Hide()
+            self.global_time_label.Hide()
         elif idx == 1:  # Todo tab
             self.todo_panel.Show()
             self.import_btn.Hide()
             self.save_btn.Hide()
             self.pdf_btn.Hide()
+            self.export_diary_btn.Show()
+            self.global_time_label.Show()
             try:
                 self.todo_scroll.FitInside()
             except:
@@ -1072,6 +1076,8 @@ class KiNotesMainPanel(wx.Panel):
             self.import_btn.Hide()
             self.save_btn.Show()  # Keep Save for BOM settings
             self.pdf_btn.Hide()
+            self.export_diary_btn.Hide()
+            self.global_time_label.Hide()
             try:
                 self.bom_panel.FitInside()
             except:
@@ -1082,6 +1088,7 @@ class KiNotesMainPanel(wx.Panel):
                 pass
         
         self.top_bar.Layout()
+        self.bottom_bar.Layout()
         self.content_panel.Layout()
         self.Layout()
         self.Refresh()
@@ -1094,7 +1101,7 @@ class KiNotesMainPanel(wx.Panel):
         """Show color settings dialog with dark mode toggle and time tracking options."""
         dlg = wx.Dialog(self, title="Settings", size=(450, 650),
                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        dlg.SetMinSize((400, 550))
+        dlg.SetMinSize((450, 650))
         dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -1616,15 +1623,15 @@ class KiNotesMainPanel(wx.Panel):
         timer_label = wx.StaticText(item_panel, label="⏱ 00:00:00")
         timer_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
         timer_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        timer_label.SetMinSize((110, -1))
-        item_sizer.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
+        timer_label.SetMinSize((120, -1))  # Increased from 110 to prevent overlap
+        item_sizer.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
         # RTC inline session label - shows last completed session if exists
         # Format: "(10:12 → 10:40 28min)"
         rtc_label = wx.StaticText(item_panel, label="")
         rtc_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
         rtc_label.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        rtc_label.SetMinSize((120, -1))  # Fixed width for stable layout
+        rtc_label.SetMinSize((160, -1))  # Increased from 120 to prevent overlap in KiCad
         
         # Add tooltip for full session history
         if history and len(history) > 0:
@@ -1632,7 +1639,7 @@ class KiNotesMainPanel(wx.Panel):
             if tooltip_text:
                 rtc_label.SetToolTip(tooltip_text)
         
-        item_sizer.Add(rtc_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
+        item_sizer.Add(rtc_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
         # Delete button with icon
         del_btn = wx.Button(item_panel, label=Icons.DELETE, size=(40, 40), style=wx.BORDER_NONE)
@@ -1644,7 +1651,7 @@ class KiNotesMainPanel(wx.Panel):
         del_btn.SetForegroundColour(hex_to_colour(self._theme["accent_red"]))
         del_btn.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         del_btn.Bind(wx.EVT_BUTTON, lambda e, iid=item_id: self._on_delete_todo(iid))
-        item_sizer.Add(del_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 14)
+        item_sizer.Add(del_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
         item_panel.SetSizer(item_sizer)
         
