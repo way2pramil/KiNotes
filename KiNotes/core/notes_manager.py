@@ -165,5 +165,7 @@ class NotesManager:
             'blacklist': '',
             'blacklist_virtual': True,
             'blacklist_empty': False,
+            'background_color': 'Snow Gray',
+            'text_color': 'Carbon Black',
         }
 
