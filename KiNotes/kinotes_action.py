@@ -41,7 +41,7 @@ from core.pdf_exporter import PDFExporter
 from ui.main_panel import KiNotesMainPanel
 
 # Plugin version - change this to force reload
-_PLUGIN_VERSION = "1.1.0"
+_PLUGIN_VERSION = "1.2.0"
 print(f"KiNotes v{_PLUGIN_VERSION} loaded")
 
 
@@ -93,24 +93,21 @@ def close_all_kinotes_windows():
         pass
 
 
-class KiNotesFrame(wx.MiniFrame):
+class KiNotesFrame(wx.Frame):
     """
-    KiNotes floating window with docking capability.
-    Uses MiniFrame for proper floating behavior like KiCad panels.
+    KiNotes floating window - uses regular Frame for visible close button.
     """
     
     def __init__(self, parent=None, project_dir=None):
         self.project_dir = project_dir or self._get_project_dir()
         project_name = os.path.basename(self.project_dir) if self.project_dir else "KiNotes"
         
-        # MiniFrame style for proper floating/docking
-        style = (wx.CAPTION | wx.CLOSE_BOX | wx.RESIZE_BORDER | 
-                 wx.FRAME_TOOL_WINDOW | wx.FRAME_FLOAT_ON_PARENT |
-                 wx.FRAME_NO_TASKBAR)
+        # Use regular Frame style for better close button visibility
+        style = (wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
         
         super().__init__(
             parent,
-            title=f"KiNotes",
+            title="KiNotes",
             size=(840, 900),
             style=style
         )
