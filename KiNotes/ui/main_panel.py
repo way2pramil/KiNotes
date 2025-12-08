@@ -267,7 +267,13 @@ class KiNotesMainPanel(wx.Panel):
         )
         self.text_editor.SetBackgroundColour(Colors.EDITOR_BG)
         self.text_editor.SetForegroundColour(Colors.EDITOR_TEXT)
-        self.text_editor.SetFont(wx.Font(11, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        
+        # Force white text using TextAttr - more reliable than SetForegroundColour
+        font = wx.Font(11, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        text_attr = wx.TextAttr(Colors.EDITOR_TEXT, Colors.EDITOR_BG, font)
+        self.text_editor.SetDefaultStyle(text_attr)
+        self.text_editor.SetFont(font)
+        
         self.text_editor.Bind(wx.EVT_TEXT, self._on_text_changed)
         self.text_editor.Bind(wx.EVT_LEFT_DOWN, self._on_text_click)
         sizer.Add(self.text_editor, 1, wx.EXPAND | wx.ALL, 6)
@@ -906,6 +912,8 @@ class KiNotesMainPanel(wx.Panel):
             content = self.notes_manager.load()
             if content:
                 self.text_editor.SetValue(content)
+                # Re-apply white text style to loaded content
+                self._apply_editor_style()
         except Exception:
             pass
         
@@ -931,6 +939,18 @@ class KiNotesMainPanel(wx.Panel):
             todos = [{'text': item['text'].GetValue(), 'done': item['checkbox'].GetValue()} 
                      for item in self._todo_items]
             self.notes_manager.save_todos(todos)
+        except Exception:
+            pass
+    
+    def _apply_editor_style(self):
+        """Apply white text style to all editor content."""
+        try:
+            font = wx.Font(11, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+            text_attr = wx.TextAttr(Colors.EDITOR_TEXT, Colors.EDITOR_BG, font)
+            # Apply to all existing text
+            self.text_editor.SetStyle(0, self.text_editor.GetLastPosition(), text_attr)
+            # Set as default for new text
+            self.text_editor.SetDefaultStyle(text_attr)
         except Exception:
             pass
     
