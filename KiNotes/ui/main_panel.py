@@ -1390,6 +1390,15 @@ class KiNotesMainPanel(wx.Panel):
         self.bottom_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
         self.content_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         
+        # Apply theme to formatting toolbar
+        try:
+            self.format_toolbar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
+            for btn in self.format_buttons:
+                btn.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
+                btn.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        except:
+            pass
+        
         # Apply theme to all tab panels
         self._apply_theme_to_panel(self.notes_panel)
         self._apply_theme_to_panel(self.todo_panel)
@@ -1462,10 +1471,14 @@ class KiNotesMainPanel(wx.Panel):
     # ============================================================
     
     def _create_notes_tab(self, parent):
-        """Create Notes tab with editor."""
+        """Create Notes tab with formatting toolbar and editor."""
         panel = wx.Panel(parent)
         panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Formatting toolbar
+        self.format_toolbar = self._create_formatting_toolbar(panel)
+        sizer.Add(self.format_toolbar, 0, wx.EXPAND)
         
         # Text editor
         self.text_editor = wx.TextCtrl(
@@ -1483,10 +1496,256 @@ class KiNotesMainPanel(wx.Panel):
         
         self.text_editor.Bind(wx.EVT_TEXT, self._on_text_changed)
         self.text_editor.Bind(wx.EVT_LEFT_DOWN, self._on_text_click)
+        self.text_editor.Bind(wx.EVT_KEY_DOWN, self._on_editor_key_down)
         sizer.Add(self.text_editor, 1, wx.EXPAND | wx.ALL, 12)
         
         panel.SetSizer(sizer)
         return panel
+    
+    def _create_formatting_toolbar(self, parent):
+        """Create compact formatting toolbar for Notes tab."""
+        toolbar = wx.Panel(parent)
+        toolbar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
+        toolbar.SetMinSize((-1, 48))
+        
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.AddSpacer(12)
+        
+        # Formatting buttons with icons and tooltips
+        buttons = [
+            ("B", "Bold (Ctrl+B)", self._on_format_bold, wx.FONTWEIGHT_BOLD),
+            ("I", "Italic (Ctrl+I)", self._on_format_italic, None),
+            ("U", "Underline (Ctrl+U)", self._on_format_underline, None),
+            ("|", None, None, None),  # Separator
+            ("H1", "Heading 1 (Ctrl+1)", self._on_format_h1, None),
+            ("H2", "Heading 2 (Ctrl+2)", self._on_format_h2, None),
+            ("|", None, None, None),  # Separator
+            ("•", "Bullet List (Ctrl+Shift+B)", self._on_format_bullet, None),
+            ("1.", "Numbered List (Ctrl+Shift+N)", self._on_format_numbered, None),
+            ("☐", "Task Checkbox (Ctrl+Shift+X)", self._on_format_checkbox, None),
+            ("|", None, None, None),  # Separator
+            ("—", "Insert Divider (Ctrl+Shift+H)", self._on_format_divider, None),
+            ("🕒", "Insert Timestamp (Alt+T)", self._on_format_timestamp, None),
+        ]
+        
+        self.format_buttons = []
+        
+        for item in buttons:
+            if item[0] == "|":
+                # Vertical separator
+                sep = wx.StaticLine(toolbar, style=wx.LI_VERTICAL, size=(1, 32))
+                sep.SetBackgroundColour(hex_to_colour(self._theme["text_secondary"]))
+                sizer.Add(sep, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, 8)
+            else:
+                label, tooltip, handler, font_weight = item
+                btn = wx.Button(toolbar, label=label, size=(36, 36), style=wx.BORDER_NONE)
+                btn.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
+                btn.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+                
+                # Set font
+                if font_weight:
+                    btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, font_weight))
+                elif label == "I":
+                    btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
+                elif label in ["H1", "H2"]:
+                    btn.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+                else:
+                    btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+                
+                if tooltip:
+                    btn.SetToolTip(tooltip)
+                if handler:
+                    btn.Bind(wx.EVT_BUTTON, handler)
+                
+                btn.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+                self.format_buttons.append(btn)
+                sizer.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        
+        toolbar.SetSizer(sizer)
+        return toolbar
+    
+    # Formatting handlers
+    def _on_format_bold(self, event):
+        """Apply bold formatting."""
+        self._wrap_selection("**", "**")
+    
+    def _on_format_italic(self, event):
+        """Apply italic formatting."""
+        self._wrap_selection("*", "*")
+    
+    def _on_format_underline(self, event):
+        """Apply underline formatting."""
+        self._wrap_selection("<u>", "</u>")
+    
+    def _on_format_h1(self, event):
+        """Apply Heading 1 formatting."""
+        self._apply_line_prefix("# ")
+    
+    def _on_format_h2(self, event):
+        """Apply Heading 2 formatting."""
+        self._apply_line_prefix("## ")
+    
+    def _on_format_bullet(self, event):
+        """Apply bullet list formatting."""
+        self._apply_line_prefix("- ")
+    
+    def _on_format_numbered(self, event):
+        """Apply numbered list formatting."""
+        self._apply_line_prefix("1. ")
+    
+    def _on_format_checkbox(self, event):
+        """Apply task checkbox formatting."""
+        self._apply_line_prefix("- [ ] ")
+    
+    def _on_format_divider(self, event):
+        """Insert horizontal divider."""
+        pos = self.text_editor.GetInsertionPoint()
+        self.text_editor.WriteText("\n---\n")
+        self.text_editor.SetInsertionPoint(pos + 5)
+    
+    def _on_format_timestamp(self, event):
+        """Insert current timestamp."""
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        self.text_editor.WriteText(timestamp)
+    
+    def _wrap_selection(self, prefix, suffix):
+        """Wrap selected text with prefix and suffix."""
+        start, end = self.text_editor.GetSelection()
+        
+        if start == end:
+            # No selection - insert template and select placeholder
+            self.text_editor.WriteText(prefix + "text" + suffix)
+            new_pos = start + len(prefix)
+            self.text_editor.SetSelection(new_pos, new_pos + 4)
+        else:
+            # Wrap selection
+            selected_text = self.text_editor.GetStringSelection()
+            self.text_editor.Replace(start, end, prefix + selected_text + suffix)
+            # Restore selection to wrapped content
+            self.text_editor.SetSelection(start + len(prefix), end + len(prefix))
+    
+    def _apply_line_prefix(self, prefix):
+        """Apply prefix to current line or selected lines."""
+        start, end = self.text_editor.GetSelection()
+        
+        # Get line boundaries
+        line_start = self.text_editor.GetRange(0, start).rfind('\n')
+        line_start = 0 if line_start == -1 else line_start + 1
+        
+        line_end = self.text_editor.GetRange(end, self.text_editor.GetLastPosition()).find('\n')
+        line_end = self.text_editor.GetLastPosition() if line_end == -1 else end + line_end
+        
+        # Get current line content
+        line_content = self.text_editor.GetRange(line_start, line_end)
+        
+        # Remove existing heading/list markers
+        import re
+        cleaned = re.sub(r'^(#{1,6}\s+|- \[ \] |- \[x\] |- |1\. |\d+\. )', '', line_content)
+        
+        # Apply new prefix
+        new_content = prefix + cleaned
+        self.text_editor.Replace(line_start, line_end, new_content)
+        
+        # Restore cursor position
+        self.text_editor.SetInsertionPoint(line_start + len(new_content))
+    
+    def _on_editor_key_down(self, event):
+        """Handle keyboard shortcuts for formatting."""
+        keycode = event.GetKeyCode()
+        ctrl = event.ControlDown()
+        shift = event.ShiftDown()
+        alt = event.AltDown()
+        
+        # Ctrl+B = Bold
+        if ctrl and not shift and keycode == ord('B'):
+            self._on_format_bold(None)
+            return
+        
+        # Ctrl+I = Italic
+        if ctrl and not shift and keycode == ord('I'):
+            self._on_format_italic(None)
+            return
+        
+        # Ctrl+U = Underline
+        if ctrl and not shift and keycode == ord('U'):
+            self._on_format_underline(None)
+            return
+        
+        # Ctrl+1 = H1
+        if ctrl and not shift and keycode == ord('1'):
+            self._on_format_h1(None)
+            return
+        
+        # Ctrl+2 = H2
+        if ctrl and not shift and keycode == ord('2'):
+            self._on_format_h2(None)
+            return
+        
+        # Ctrl+Shift+B = Bullet
+        if ctrl and shift and keycode == ord('B'):
+            self._on_format_bullet(None)
+            return
+        
+        # Ctrl+Shift+N = Numbered
+        if ctrl and shift and keycode == ord('N'):
+            self._on_format_numbered(None)
+            return
+        
+        # Ctrl+Shift+X = Checkbox
+        if ctrl and shift and keycode == ord('X'):
+            self._on_format_checkbox(None)
+            return
+        
+        # Ctrl+Shift+H = Divider
+        if ctrl and shift and keycode == ord('H'):
+            self._on_format_divider(None)
+            return
+        
+        # Alt+T = Timestamp
+        if alt and not ctrl and keycode == ord('T'):
+            self._on_format_timestamp(None)
+            return
+        
+        # Enter key in list - continue list
+        if keycode == wx.WXK_RETURN:
+            self._handle_list_continuation()
+            return
+        
+        event.Skip()
+    
+    def _handle_list_continuation(self):
+        """Auto-continue lists when pressing Enter."""
+        pos = self.text_editor.GetInsertionPoint()
+        
+        # Get current line
+        line_start = self.text_editor.GetRange(0, pos).rfind('\n')
+        line_start = 0 if line_start == -1 else line_start + 1
+        line_content = self.text_editor.GetRange(line_start, pos)
+        
+        import re
+        
+        # Check for list markers
+        bullet_match = re.match(r'^(\s*- )', line_content)
+        checkbox_match = re.match(r'^(\s*- \[ \] )', line_content)
+        numbered_match = re.match(r'^(\s*)(\d+)\. ', line_content)
+        
+        if checkbox_match:
+            # Continue checkbox list
+            indent = checkbox_match.group(1)
+            self.text_editor.WriteText('\n' + indent)
+        elif bullet_match:
+            # Continue bullet list
+            indent = bullet_match.group(1)
+            self.text_editor.WriteText('\n' + indent)
+        elif numbered_match:
+            # Continue numbered list with incremented number
+            indent = numbered_match.group(1)
+            num = int(numbered_match.group(2)) + 1
+            self.text_editor.WriteText(f'\n{indent}{num}. ')
+        else:
+            # Normal enter
+            self.text_editor.WriteText('\n')
     
     # ============================================================
     # TAB 2: TODO LIST

@@ -160,7 +160,7 @@ class KiNotesFrame(wx.Frame):
         self.SetSizer(sizer)
         
         # Set minimum size
-        self.SetMinSize((600, 800))
+        self.SetMinSize((600, 700))
     
     def _position_window(self):
         """Position window on the right side like Properties panel."""
