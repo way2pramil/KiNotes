@@ -214,22 +214,23 @@ class ToggleSwitch(wx.Panel):
 
 
 # ============================================================
-# ICONS - Simple Unicode
+# ICONS - Empty (text only buttons for compatibility)
 # ============================================================
 class Icons:
-    NOTES = "\U0001F4DD"
-    TODO = "\U00002705"
-    BOM = "\U0001F4CB"
-    IMPORT = "\U0001F4E5"
-    SAVE = "\U0001F4BE"
-    PDF = "\U0001F4C4"
-    ADD = "\U00002795"
-    DELETE = "\U00002716"
-    CLEAR = "\U0001F5D1"
-    SETTINGS = "\U00002699"
-    GENERATE = "\U000025B6"
-    DARK = "\U0001F319"
-    LIGHT = "\U00002600"
+    # No icons - use text-only buttons for maximum compatibility
+    NOTES = ""
+    TODO = ""
+    BOM = ""
+    IMPORT = ""
+    SAVE = ""
+    PDF = ""
+    ADD = ""
+    DELETE = ""
+    CLEAR = ""
+    SETTINGS = ""
+    GENERATE = ""
+    DARK = ""
+    LIGHT = ""
 
 
 # ============================================================
@@ -387,16 +388,16 @@ class KiNotesMainPanel(wx.Panel):
         
         sizer.AddStretchSpacer()
         
-        # Settings button - unified style
+        # Settings button - text only for compatibility
         self.settings_btn = RoundedButton(
             top_bar,
-            label="",
-            icon=Icons.SETTINGS,
-            size=(48, 42),
+            label="Settings",
+            icon="",
+            size=(90, 42),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
             corner_radius=10,
-            font_size=16,
+            font_size=11,
             font_weight=wx.FONTWEIGHT_NORMAL
         )
         self.settings_btn.Bind_Click(self._on_settings_click)
@@ -583,7 +584,7 @@ class KiNotesMainPanel(wx.Panel):
         
         sizer.AddStretchSpacer()
         
-        # Buttons - unified rounded style
+        # Buttons - unified rounded style with clear Save action
         btn_panel = wx.Panel(dlg)
         btn_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -592,9 +593,10 @@ class KiNotesMainPanel(wx.Panel):
         cancel_btn = wx.Button(dlg, wx.ID_CANCEL, "Cancel", size=(100, 40))
         btn_sizer.Add(cancel_btn, 0, wx.RIGHT, 12)
         
-        apply_btn = wx.Button(dlg, wx.ID_OK, "Apply", size=(100, 40))
+        apply_btn = wx.Button(dlg, wx.ID_OK, "Save & Apply", size=(120, 40))
         apply_btn.SetBackgroundColour(hex_to_colour(self._theme["accent_blue"]))
         apply_btn.SetForegroundColour(wx.WHITE)
+        apply_btn.SetToolTip("Save settings and apply theme")
         btn_sizer.Add(apply_btn, 0)
         
         btn_panel.SetSizer(btn_sizer)
@@ -778,7 +780,7 @@ class KiNotesMainPanel(wx.Panel):
         item_sizer.Add(txt, 1, wx.EXPAND | wx.ALL, 12)
         
         # Delete button
-        del_btn = wx.Button(item_panel, label=Icons.DELETE, size=(40, 40), style=wx.BORDER_NONE)
+        del_btn = wx.Button(item_panel, label="X", size=(40, 40), style=wx.BORDER_NONE)
         del_btn.SetBackgroundColour(wx.WHITE if not self._dark_mode else hex_to_colour("#2D2D2D"))
         del_btn.SetForegroundColour(hex_to_colour(self._theme["accent_red"]))
         del_btn.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
@@ -1123,11 +1125,16 @@ class KiNotesMainPanel(wx.Panel):
         
         items = [
             ("Board Info", self._import_board_info),
-            ("Component List", self._import_component_list),
-            ("Net Classes", self._import_net_classes),
+            ("Bill of Materials (BOM)", self._import_bom),
             ("Layer Stackup", self._import_stackup),
+            ("Layer Info", self._import_layers),
             (None, None),
+            ("Netlist", self._import_netlist),
+            ("Differential Pairs", self._import_diff_pairs),
             ("Design Rules", self._import_design_rules),
+            ("Drill Table", self._import_drill_table),
+            (None, None),
+            ("Import All", self._import_all),
         ]
         
         for label, handler in items:
@@ -1141,45 +1148,91 @@ class KiNotesMainPanel(wx.Panel):
         self.PopupMenu(menu)
         menu.Destroy()
     
+    def _get_import_header(self, title):
+        """Generate header with title and date for imported content."""
+        date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        return f"## {title}\n**Imported:** {date_str}\n\n"
+    
     def _import_board_info(self, event):
-        """Import board info."""
+        """Import board size/info."""
         try:
-            info = self.metadata_extractor.get_board_info()
-            self._insert_text(info)
-        except:
-            pass
+            header = self._get_import_header("Board Information")
+            info = self.metadata_extractor.extract('board_size')
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing board info: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
     
-    def _import_component_list(self, event):
-        """Import component list."""
+    def _import_bom(self, event):
+        """Import Bill of Materials."""
         try:
-            info = self.metadata_extractor.get_component_summary()
-            self._insert_text(info)
-        except:
-            pass
-    
-    def _import_net_classes(self, event):
-        """Import net classes."""
-        try:
-            info = self.metadata_extractor.get_net_classes()
-            self._insert_text(info)
-        except:
-            pass
+            header = self._get_import_header("Bill of Materials")
+            info = self.metadata_extractor.extract('bom')
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing BOM: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
     
     def _import_stackup(self, event):
         """Import layer stackup."""
         try:
-            info = self.metadata_extractor.get_stackup()
-            self._insert_text(info)
-        except:
-            pass
+            header = self._get_import_header("Layer Stackup")
+            info = self.metadata_extractor.extract('stackup')
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing stackup: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
+    
+    def _import_layers(self, event):
+        """Import layer information."""
+        try:
+            header = self._get_import_header("Layer Information")
+            info = self.metadata_extractor.extract('layers')
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing layers: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
+    
+    def _import_netlist(self, event):
+        """Import netlist summary."""
+        try:
+            header = self._get_import_header("Netlist Summary")
+            info = self.metadata_extractor.extract('netlist')
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing netlist: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
+    
+    def _import_diff_pairs(self, event):
+        """Import differential pairs."""
+        try:
+            header = self._get_import_header("Differential Pairs")
+            info = self.metadata_extractor.extract('diff_pairs')
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing differential pairs: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
     
     def _import_design_rules(self, event):
         """Import design rules."""
         try:
-            info = self.metadata_extractor.get_design_rules()
-            self._insert_text(info)
-        except:
-            pass
+            header = self._get_import_header("Design Rules")
+            info = self.metadata_extractor.extract('design_rules')
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing design rules: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
+    
+    def _import_drill_table(self, event):
+        """Import drill table."""
+        try:
+            header = self._get_import_header("Drill Table")
+            info = self.metadata_extractor.extract('drill_table')
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing drill table: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
+    
+    def _import_all(self, event):
+        """Import all metadata."""
+        try:
+            header = self._get_import_header("Complete Board Metadata")
+            info = self.metadata_extractor.extract('all')
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing all metadata: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
     
     def _insert_text(self, text):
         """Insert text at cursor or end."""
@@ -1194,8 +1247,6 @@ class KiNotesMainPanel(wx.Panel):
             self._show_tab(0)
         except:
             pass
-        
-        return "**Date:** " + datetime.datetime.now().strftime("%Y-%m-%d")
     
     def _on_export_pdf(self):
         """Export notes to PDF."""
