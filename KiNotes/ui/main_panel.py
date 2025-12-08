@@ -30,32 +30,35 @@ TEXT_COLORS = {
 }
 
 # Dark Mode Colors
+# ============================================================
+# IMPROVED APPLE-STYLE THEME
+# ============================================================
 DARK_THEME = {
-    "bg_panel": "#1E1E1E",
-    "bg_toolbar": "#2D2D2D",
-    "bg_button": "#3C3C3C",
-    "bg_button_hover": "#4A4A4A",
-    "bg_editor": "#252526",
-    "text_primary": "#E0E0E0",
-    "text_secondary": "#A0A0A0",
-    "border": "#404040",
-    "accent_blue": "#0078D4",
-    "accent_green": "#4CAF50",
-    "accent_red": "#F44336",
+    "bg_panel":     "#1C1C1E",  # Apple System Gray 6 (Dark)
+    "bg_toolbar":   "#2C2C2E",  # Apple System Gray 5 (Dark) - Slightly lighter for contrast
+    "bg_button":    "#3A3A3C",  # Apple System Gray 4 (Dark)
+    "bg_button_hover": "#48484A",
+    "bg_editor":    "#1C1C1E",  # Matches panel for seamless look
+    "text_primary": "#FFFFFF",  # Pure White
+    "text_secondary": "#98989D",# Apple System Gray (Text)
+    "border":       "#38383A",  # Subtle separators
+    "accent_blue":  "#0A84FF",  # iOS Blue (Dark Mode)
+    "accent_green": "#30D158",  # iOS Green (Dark Mode)
+    "accent_red":   "#FF453A",  # iOS Red (Dark Mode)
 }
 
 LIGHT_THEME = {
-    "bg_panel": "#F5F5F5",
-    "bg_toolbar": "#EBEBEB",
-    "bg_button": "#E1E1E1",
-    "bg_button_hover": "#D2D2D2",
-    "bg_editor": "#FFFDF5",
-    "text_primary": "#202124",
-    "text_secondary": "#5F6368",
-    "border": "#DADCE0",
-    "accent_blue": "#4285F4",
-    "accent_green": "#34A853",
-    "accent_red": "#EA4335",
+    "bg_panel":     "#F2F2F7",  # Apple System Gray 6 (Light) - Not pure white!
+    "bg_toolbar":   "#FFFFFF",  # Pure white cards on light gray bg
+    "bg_button":    "#E5E5EA",  # Apple System Gray 3 (Light)
+    "bg_button_hover": "#D1D1D6",
+    "bg_editor":    "#FFFFFF",
+    "text_primary": "#000000",
+    "text_secondary": "#8E8E93",
+    "border":       "#C6C6C8",
+    "accent_blue":  "#007AFF",  # iOS Blue
+    "accent_green": "#34C759",  # iOS Green
+    "accent_red":   "#FF3B30",  # iOS Red
 }
 
 
@@ -72,7 +75,7 @@ def hex_to_colour(hex_str):
 # ROUNDED BUTTON CLASS - Modern Unified Buttons
 # ============================================================
 class RoundedButton(wx.Panel):
-    """Custom rounded button with hover effects."""
+    """Custom rounded button with hover and press effects."""
     
     def __init__(self, parent, label="", size=(120, 44), bg_color="#4285F4", 
                  fg_color="#FFFFFF", icon="", corner_radius=8, font_size=11,
@@ -83,9 +86,9 @@ class RoundedButton(wx.Panel):
         self.icon = icon
         self.bg_color = hex_to_colour(bg_color) if isinstance(bg_color, str) else bg_color
         self.fg_color = hex_to_colour(fg_color) if isinstance(fg_color, str) else fg_color
-        self.hover_color = self._darken_color(self.bg_color, 20)
         self.corner_radius = corner_radius
         self.is_hovered = False
+        self.is_pressed = False
         self.callback = None
         
         self.SetMinSize(size)
@@ -96,7 +99,8 @@ class RoundedButton(wx.Panel):
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_ENTER_WINDOW, self._on_enter)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
-        self.Bind(wx.EVT_LEFT_DOWN, self._on_click)
+        self.Bind(wx.EVT_LEFT_DOWN, self._on_press)
+        self.Bind(wx.EVT_LEFT_UP, self._on_release)
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
     
     def _darken_color(self, color, amount):
@@ -106,14 +110,34 @@ class RoundedButton(wx.Panel):
         b = max(0, color.Blue() - amount)
         return wx.Colour(r, g, b)
     
+    def _on_press(self, event):
+        self.is_pressed = True
+        self.Refresh()
+        event.Skip()
+
+    def _on_release(self, event):
+        if self.is_pressed:
+            self.is_pressed = False
+            self.Refresh()
+            # Check if mouse is still inside before firing callback
+            pos = event.GetPosition()
+            rect = self.GetClientRect()
+            if rect.Contains(pos) and self.callback:
+                self.callback(event)
+
     def _on_paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)
         gc = wx.GraphicsContext.Create(dc)
-        
         w, h = self.GetSize()
-        
-        # Draw rounded rectangle background
-        bg = self.hover_color if self.is_hovered else self.bg_color
+
+        # Determine Color State
+        if self.is_pressed:
+            bg = self._darken_color(self.bg_color, 40)
+        elif self.is_hovered:
+            bg = self._darken_color(self.bg_color, 15)
+        else:
+            bg = self.bg_color
+
         gc.SetBrush(wx.Brush(bg))
         gc.SetPen(wx.TRANSPARENT_PEN)
         gc.DrawRoundedRectangle(0, 0, w, h, self.corner_radius)
@@ -132,11 +156,8 @@ class RoundedButton(wx.Panel):
     
     def _on_leave(self, event):
         self.is_hovered = False
+        self.is_pressed = False
         self.Refresh()
-    
-    def _on_click(self, event):
-        if self.callback:
-            self.callback(event)
     
     def Bind_Click(self, callback):
         """Bind click callback."""
@@ -146,7 +167,6 @@ class RoundedButton(wx.Panel):
         """Update button colors."""
         self.bg_color = hex_to_colour(bg_color) if isinstance(bg_color, str) else bg_color
         self.fg_color = hex_to_colour(fg_color) if isinstance(fg_color, str) else fg_color
-        self.hover_color = self._darken_color(self.bg_color, 20)
         self.Refresh()
 
 
@@ -684,7 +704,7 @@ class KiNotesMainPanel(wx.Panel):
         # Text editor
         self.text_editor = wx.TextCtrl(
             panel,
-            style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.BORDER_SIMPLE
+            style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.BORDER_NONE
         )
         self.text_editor.SetBackgroundColour(self._get_editor_bg())
         self.text_editor.SetForegroundColour(self._get_editor_text())
