@@ -2,12 +2,16 @@
 KiNotes Main Panel - Modern UI with Dark Theme Toggle
 Tab 1: Notes | Tab 2: Todo List | Tab 3: BOM Tool
 User-selectable background and text colors with dark mode
+Time tracking with per-task stopwatch and work diary export
 """
 import wx
 import wx.lib.scrolledpanel as scrolled
 import os
 import datetime
 import json
+import time
+import re
+import fnmatch
 
 
 # ============================================================
@@ -89,6 +93,162 @@ def hex_to_colour(hex_str):
 
 
 # ============================================================
+# TIME TRACKER - Per-task stopwatch with RTC logging
+# ============================================================
+class TimeTracker:
+    """Manages per-task time tracking with session history and persistence."""
+    
+    def __init__(self):
+        self.enable_time_tracking = True
+        self.time_format_24h = True
+        self.show_work_diary_button = True
+        self.current_running_task_id = None
+        self.task_timers = {}  # {task_id: {"time_spent": seconds, "is_running": bool, ...}}
+    
+    def create_task_timer(self, task_id):
+        """Initialize timer data for a new task."""
+        self.task_timers[task_id] = {
+            "text": "",
+            "done": False,
+            "time_spent": 0,
+            "is_running": False,
+            "last_start_time": None,
+            "history": []  # [{"start": timestamp, "stop": timestamp}, ...]
+        }
+    
+    def start_task(self, task_id):
+        """Start timer for a task. Auto-stop any other running task."""
+        if self.current_running_task_id is not None and self.current_running_task_id != task_id:
+            self.stop_task(self.current_running_task_id)
+        
+        if task_id in self.task_timers:
+            self.task_timers[task_id]["is_running"] = True
+            self.task_timers[task_id]["last_start_time"] = time.time()
+            self.current_running_task_id = task_id
+    
+    def stop_task(self, task_id):
+        """Stop timer for a task and accumulate time_spent."""
+        if task_id in self.task_timers and self.task_timers[task_id]["is_running"]:
+            start = self.task_timers[task_id]["last_start_time"]
+            if start is not None:
+                elapsed = time.time() - start
+                self.task_timers[task_id]["time_spent"] += elapsed
+                
+                # Log session history
+                self.task_timers[task_id]["history"].append({
+                    "start": int(start),
+                    "stop": int(time.time())
+                })
+            
+            self.task_timers[task_id]["is_running"] = False
+            self.task_timers[task_id]["last_start_time"] = None
+            
+            if self.current_running_task_id == task_id:
+                self.current_running_task_id = None
+    
+    def get_task_time_string(self, task_id):
+        """Return formatted time string for a task."""
+        if task_id not in self.task_timers:
+            return "⏱ 00:00:00"
+        
+        data = self.task_timers[task_id]
+        total_seconds = int(data["time_spent"])
+        
+        # Add running time if currently active
+        if data["is_running"] and data["last_start_time"]:
+            total_seconds += int(time.time() - data["last_start_time"])
+        
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        
+        return f"⏱ {hours:02d}:{minutes:02d}:{seconds:02d}"
+    
+    def get_total_time_string(self):
+        """Return total time across all tasks."""
+        total_seconds = 0
+        
+        for data in self.task_timers.values():
+            total_seconds += int(data["time_spent"])
+            
+            # Add running time if currently active
+            if data["is_running"] and data["last_start_time"]:
+                total_seconds += int(time.time() - data["last_start_time"])
+        
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        
+        return f"⏱ Total Time: {hours:02d}:{minutes:02d}:{seconds:02d}"
+    
+    def get_total_seconds(self):
+        """Get total time in seconds."""
+        total_seconds = 0
+        for data in self.task_timers.values():
+            total_seconds += int(data["time_spent"])
+            if data["is_running"] and data["last_start_time"]:
+                total_seconds += int(time.time() - data["last_start_time"])
+        return total_seconds
+    
+    def mark_task_done(self, task_id):
+        """Mark task as done and stop timer."""
+        if task_id in self.task_timers:
+            self.task_timers[task_id]["done"] = True
+            self.stop_task(task_id)
+    
+    def delete_task(self, task_id):
+        """Remove task and subtract from total if running."""
+        if task_id in self.task_timers:
+            self.stop_task(task_id)
+            del self.task_timers[task_id]
+    
+    def export_work_diary(self):
+        """Generate Markdown work diary content."""
+        total_sec = self.get_total_seconds()
+        hours = total_sec // 3600
+        minutes = (total_sec % 3600) // 60
+        
+        lines = [
+            "# Work Log — KiCad Project",
+            f"**Total: {hours}h {minutes}m**",
+            ""
+        ]
+        
+        for task_id, data in self.task_timers.items():
+            if data["history"]:
+                task_sec = int(data["time_spent"])
+                t_hours = task_sec // 3600
+                t_minutes = (task_sec % 3600) // 60
+                
+                lines.append(f"## Task: {data['text']}")
+                
+                for session in data["history"]:
+                    start_dt = datetime.datetime.fromtimestamp(session['start']).strftime("%H:%M")
+                    stop_dt = datetime.datetime.fromtimestamp(session['stop']).strftime("%H:%M")
+                    sess_sec = session['stop'] - session['start']
+                    sess_min = sess_sec // 60
+                    lines.append(f"- Session: {start_dt} → {stop_dt} ({sess_min} min)")
+                
+                lines.append(f"**Total: {t_hours}h {t_minutes}m**")
+                lines.append("")
+        
+        return "\n".join(lines)
+    
+    def to_json_data(self):
+        """Convert timer data to JSON-serializable format."""
+        return {
+            "current_running_task_id": self.current_running_task_id,
+            "task_timers": self.task_timers
+        }
+    
+    def from_json_data(self, data):
+        """Load timer data from JSON."""
+        if data:
+            self.current_running_task_id = data.get("current_running_task_id")
+            self.task_timers = data.get("task_timers", {})
+
+
+
 # ROUNDED BUTTON CLASS - Modern Unified Buttons
 # ============================================================
 class RoundedButton(wx.Panel):
@@ -348,6 +508,10 @@ class KiNotesMainPanel(wx.Panel):
         self._todo_id_counter = 0
         self._current_tab = 0
         
+        # Time tracking system
+        self.time_tracker = TimeTracker()
+        self._timer_update_tick = 0
+        
         # Theme settings
         self._dark_mode = False
         self._bg_color_name = "Ivory Paper"
@@ -476,7 +640,7 @@ class KiNotesMainPanel(wx.Panel):
         self.import_btn = RoundedButton(
             top_bar,
             label="Import",
-            icon=Icons.IMPORT,
+            icon="",
             size=(130, 42),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
@@ -492,14 +656,14 @@ class KiNotesMainPanel(wx.Panel):
         # Settings button - centered icon
         self.settings_btn = RoundedButton(
             top_bar,
-            label="",
-            icon=Icons.SETTINGS,
-            size=(44, 42),
+            label="Settings",
+            icon="",
+            size=(130, 42),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
             corner_radius=10,
-            font_size=16,
-            font_weight=wx.FONTWEIGHT_BOLD
+            font_size=11,
+            font_weight=wx.FONTWEIGHT_NORMAL
         )
         self.settings_btn.Bind_Click(self._on_settings_click)
         sizer.Add(self.settings_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 16)
@@ -525,6 +689,29 @@ class KiNotesMainPanel(wx.Panel):
         link_text.Bind(wx.EVT_LEFT_DOWN, self._on_website_click)
         link_text.SetToolTip("Visit pcbtools.xyz")
         sizer.Add(link_text, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        sizer.AddSpacer(20)
+        
+        # Global time tracker display
+        self.global_time_label = wx.StaticText(bottom_bar, label="⏱ Total Time: 00:00:00")
+        self.global_time_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        self.global_time_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        sizer.Add(self.global_time_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        # Export work diary button
+        self.export_diary_btn = RoundedButton(
+            bottom_bar,
+            label="Export Diary",
+            icon="",
+            size=(130, 48),
+            bg_color=self._theme["bg_button"],
+            fg_color=self._theme["text_primary"],
+            corner_radius=10,
+            font_size=11,
+            font_weight=wx.FONTWEIGHT_NORMAL
+        )
+        self.export_diary_btn.Bind_Click(lambda e: self._on_export_work_diary())
+        sizer.Add(self.export_diary_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 20)
         
         sizer.AddStretchSpacer()
         
@@ -568,6 +755,26 @@ class KiNotesMainPanel(wx.Panel):
             webbrowser.open("https://pcbtools.xyz")
         except:
             pass
+    
+    def _on_export_work_diary(self):
+        """Export work diary to Markdown file."""
+        try:
+            content = self.time_tracker.export_work_diary()
+            timestamp = datetime.datetime.now().strftime("%Y%m%d")
+            filename = f"kinotes_worklog_{timestamp}.md"
+            
+            # Try to save to project directory or Documents
+            try:
+                filepath = os.path.join(os.path.expanduser("~"), "Documents", filename)
+            except:
+                filepath = filename
+            
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            
+            wx.MessageBox(f"Work diary exported to:\n{filepath}", "Export Success", wx.OK | wx.ICON_INFORMATION)
+        except Exception as e:
+            wx.MessageBox(f"Error exporting diary: {str(e)}", "Export Error", wx.OK | wx.ICON_ERROR)
     
     def _update_tab_styles(self, active_idx):
         """Update tab button styles."""
@@ -631,10 +838,10 @@ class KiNotesMainPanel(wx.Panel):
     # ============================================================
     
     def _on_settings_click(self, event):
-        """Show color settings dialog with dark mode toggle."""
-        dlg = wx.Dialog(self, title="Settings", size=(420, 520),
+        """Show color settings dialog with dark mode toggle and time tracking options."""
+        dlg = wx.Dialog(self, title="Settings", size=(450, 650),
                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        dlg.SetMinSize((380, 480))
+        dlg.SetMinSize((400, 550))
         dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -645,7 +852,7 @@ class KiNotesMainPanel(wx.Panel):
         mode_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         mode_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        mode_label = wx.StaticText(mode_panel, label=Icons.DARK + "  Dark Theme")
+        mode_label = wx.StaticText(mode_panel, label= " Theme")
         mode_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         mode_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         mode_sizer.Add(mode_label, 0, wx.ALIGN_CENTER_VERTICAL)
@@ -661,6 +868,54 @@ class KiNotesMainPanel(wx.Panel):
         
         sizer.AddSpacer(24)
         
+        # Separator
+        sep = wx.StaticLine(dlg)
+        sizer.Add(sep, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
+        
+        sizer.AddSpacer(20)
+        
+        # Time Tracking Settings Section
+        time_header = wx.StaticText(dlg, label="⏱ Time Tracking Options")
+        time_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        time_header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        sizer.Add(time_header, 0, wx.LEFT | wx.BOTTOM, 24)
+        
+        # Enable time tracking checkbox
+        time_track_panel = wx.Panel(dlg)
+        time_track_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        time_track_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        self._enable_time_tracking = wx.CheckBox(time_track_panel, label="  Enable Time Tracking")
+        self._enable_time_tracking.SetValue(self.time_tracker.enable_time_tracking)
+        self._enable_time_tracking.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        time_track_sizer.Add(self._enable_time_tracking, 0, wx.ALL, 10)
+        
+        # Time format option
+        format_panel = wx.Panel(time_track_panel)
+        format_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        format_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        format_label = wx.StaticText(format_panel, label="Time Format:")
+        format_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        format_sizer.Add(format_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        
+        self._time_format_choice = wx.Choice(format_panel, choices=["24-hour", "12-hour (AM/PM)"])
+        self._time_format_choice.SetSelection(0 if self.time_tracker.time_format_24h else 1)
+        format_sizer.Add(self._time_format_choice, 1, wx.EXPAND)
+        
+        format_panel.SetSizer(format_sizer)
+        time_track_sizer.Add(format_panel, 0, wx.EXPAND | wx.ALL, 10)
+        
+        # Show work diary button checkbox
+        self._show_work_diary = wx.CheckBox(time_track_panel, label="  Show Work Diary Button")
+        self._show_work_diary.SetValue(self.time_tracker.show_work_diary_button)
+        self._show_work_diary.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        time_track_sizer.Add(self._show_work_diary, 0, wx.ALL, 10)
+        
+        time_track_panel.SetSizer(time_track_sizer)
+        sizer.Add(time_track_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
+        
+        sizer.AddSpacer(20)
         # Separator
         sep = wx.StaticLine(dlg)
         sizer.Add(sep, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
@@ -693,7 +948,7 @@ class KiNotesMainPanel(wx.Panel):
         cancel_btn = RoundedButton(
             btn_panel,
             label="Cancel",
-            icon="\u2715",
+            icon="",
             size=(110, 42),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
@@ -707,7 +962,7 @@ class KiNotesMainPanel(wx.Panel):
         apply_btn = RoundedButton(
             btn_panel,
             label="Save & Apply",
-            icon="\u2713",
+            icon="",
             size=(140, 42),
             bg_color=self._theme["accent_blue"],
             fg_color="#FFFFFF",
@@ -724,6 +979,7 @@ class KiNotesMainPanel(wx.Panel):
         dlg.SetSizer(sizer)
         
         if dlg.ShowModal() == wx.ID_OK:
+            # Update theme
             self._dark_mode = self._dark_toggle.GetValue()
             if self._dark_mode:
                 # Get dark theme color selections
@@ -737,10 +993,23 @@ class KiNotesMainPanel(wx.Panel):
                 txt_choices = list(TEXT_COLORS.keys())
                 self._bg_color_name = bg_choices[self._bg_choice.GetSelection()]
                 self._text_color_name = txt_choices[self._txt_choice.GetSelection()]
+            
+            # Update time tracking settings
+            self.time_tracker.enable_time_tracking = self._enable_time_tracking.GetValue()
+            self.time_tracker.time_format_24h = self._time_format_choice.GetSelection() == 0
+            self.time_tracker.show_work_diary_button = self._show_work_diary.GetValue()
+            
+            # Show/hide export diary button based on setting
+            if self.time_tracker.show_work_diary_button:
+                self.export_diary_btn.Show()
+            else:
+                self.export_diary_btn.Hide()
+            
             self._theme = DARK_THEME if self._dark_mode else LIGHT_THEME
             self._apply_theme()
             self._apply_editor_colors()
             self._save_color_settings()
+            self.Layout()
         
         dlg.Destroy()
     
@@ -921,11 +1190,11 @@ class KiNotesMainPanel(wx.Panel):
             label="Add Task",
             icon="",
             size=(130, 42),
-            bg_color=self._theme["accent_blue"],
-            fg_color="#FFFFFF",
+            bg_color=self._theme["bg_button"],
+            fg_color=self._theme["text_primary"],
             corner_radius=10,
             font_size=11,
-            font_weight=wx.FONTWEIGHT_BOLD
+            font_weight=wx.FONTWEIGHT_NORMAL
         )
         self.add_todo_btn.Bind_Click(self._on_add_todo)
         tb_sizer.Add(self.add_todo_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
@@ -969,10 +1238,21 @@ class KiNotesMainPanel(wx.Panel):
         panel.SetSizer(sizer)
         return panel
     
-    def _add_todo_item(self, text="", done=False):
-        """Add a todo item."""
+    def _add_todo_item(self, text="", done=False, time_spent=0, history=None):
+        """Add a todo item with time tracking."""
         item_id = self._todo_id_counter
         self._todo_id_counter += 1
+        
+        # Initialize timer for this task
+        self.time_tracker.create_task_timer(item_id)
+        if time_spent > 0:
+            self.time_tracker.task_timers[item_id]["time_spent"] = time_spent
+        if history:
+            self.time_tracker.task_timers[item_id]["history"] = history
+        if text:
+            self.time_tracker.task_timers[item_id]["text"] = text
+        if done:
+            self.time_tracker.task_timers[item_id]["done"] = done
         
         item_panel = wx.Panel(self.todo_scroll)
         item_panel.SetBackgroundColour(wx.WHITE if not self._dark_mode else hex_to_colour("#2D2D2D"))
@@ -983,6 +1263,11 @@ class KiNotesMainPanel(wx.Panel):
         cb.SetValue(done)
         cb.Bind(wx.EVT_CHECKBOX, lambda e, iid=item_id: self._on_todo_toggle(iid))
         item_sizer.Add(cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 14)
+        
+        # Timer toggle switch
+        timer_switch = ToggleSwitch(item_panel, size=(32, 18), is_on=False)
+        timer_switch.Bind_Change(lambda is_on, iid=item_id: self._on_timer_toggle(iid, is_on))
+        item_sizer.Add(timer_switch, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
         # Text input with strikethrough support
         txt = wx.TextCtrl(item_panel, value=text, style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER)
@@ -998,9 +1283,16 @@ class KiNotesMainPanel(wx.Panel):
             txt.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
             txt.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         
-        txt.Bind(wx.EVT_TEXT, lambda e: self._save_todos())
+        txt.Bind(wx.EVT_TEXT, lambda e, iid=item_id: self._on_todo_text_change(iid))
         txt.Bind(wx.EVT_TEXT_ENTER, lambda e: self._on_add_todo(None))
         item_sizer.Add(txt, 1, wx.EXPAND | wx.ALL, 12)
+        
+        # Timer label - fixed width display
+        timer_label = wx.StaticText(item_panel, label="⏱ 00:00:00")
+        timer_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        timer_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        timer_label.SetMinSize((110, -1))
+        item_sizer.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
         
         # Delete button with icon
         del_btn = wx.Button(item_panel, label=Icons.DELETE, size=(40, 40), style=wx.BORDER_NONE)
@@ -1016,11 +1308,14 @@ class KiNotesMainPanel(wx.Panel):
             "id": item_id,
             "panel": item_panel,
             "checkbox": cb,
+            "timer_switch": timer_switch,
             "text": txt,
+            "timer_label": timer_label,
             "done": done
         })
         
         self.todo_sizer.Add(item_panel, 0, wx.EXPAND | wx.BOTTOM, 8)
+
         self.todo_scroll.FitInside()
         self.todo_scroll.Layout()
         self._update_todo_count()
@@ -1031,10 +1326,31 @@ class KiNotesMainPanel(wx.Panel):
         txt.SetFocus()
         self._save_todos()
     
+    def _on_timer_toggle(self, item_id, is_on):
+        """Handle timer start/stop."""
+        if is_on:
+            self.time_tracker.start_task(item_id)
+        else:
+            self.time_tracker.stop_task(item_id)
+        self._save_todos()
+    
+    def _on_todo_text_change(self, item_id):
+        """Update timer text data when task text changes."""
+        for item in self._todo_items:
+            if item["id"] == item_id:
+                self.time_tracker.task_timers[item_id]["text"] = item["text"].GetValue()
+                break
+        self._save_todos()
+    
     def _on_todo_toggle(self, item_id):
         for item in self._todo_items:
             if item["id"] == item_id:
                 item["done"] = item["checkbox"].GetValue()
+                
+                # Stop timer if marking as done
+                if item["done"]:
+                    self.time_tracker.mark_task_done(item_id)
+                    item["timer_switch"].SetValue(False)
                 
                 # Apply strikethrough when done
                 font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
@@ -1057,6 +1373,7 @@ class KiNotesMainPanel(wx.Panel):
             if item["id"] == item_id:
                 item["panel"].Destroy()
                 self._todo_items.pop(i)
+                self.time_tracker.delete_task(item_id)
                 break
         self.todo_scroll.FitInside()
         self._update_todo_count()
@@ -1066,6 +1383,7 @@ class KiNotesMainPanel(wx.Panel):
         to_remove = [item for item in self._todo_items if item["done"]]
         for item in to_remove:
             item["panel"].Destroy()
+            self.time_tracker.delete_task(item["id"])
             self._todo_items.remove(item)
         self.todo_scroll.FitInside()
         self._update_todo_count()
@@ -1075,6 +1393,13 @@ class KiNotesMainPanel(wx.Panel):
         total = len(self._todo_items)
         done = sum(1 for item in self._todo_items if item["done"])
         self.todo_count.SetLabel(str(done) + " / " + str(total))
+    
+    def _update_timer_displays(self):
+        """Update all timer labels with current time."""
+        for item in self._todo_items:
+            item_id = item["id"]
+            time_str = self.time_tracker.get_task_time_string(item_id)
+            item["timer_label"].SetLabel(time_str)
     
     # ============================================================
     # TAB 3: BOM TOOL
@@ -1540,23 +1865,36 @@ class KiNotesMainPanel(wx.Panel):
     # ============================================================
     
     def _start_auto_save_timer(self):
-        """Start auto-save timer."""
+        """Start auto-save timer - runs every 1 second for time tracking updates."""
         try:
             self._auto_save_timer = wx.Timer(self)
             self.Bind(wx.EVT_TIMER, self._on_auto_save, self._auto_save_timer)
-            self._auto_save_timer.Start(5000)
+            self._auto_save_timer.Start(1000)  # 1 second for timer updates
         except:
             pass
     
     def _on_auto_save(self, event):
-        """Auto-save if modified."""
-        if self._modified:
-            try:
-                self._save_notes()
-                self._save_todos()
-                self._modified = False
-            except:
-                pass
+        """Auto-save if modified and update timer displays."""
+        # Update timer displays every tick
+        self._timer_update_tick += 1
+        self._update_timer_displays()
+        
+        # Update global timer display
+        try:
+            self.global_time_label.SetLabel(self.time_tracker.get_total_time_string())
+        except:
+            pass
+        
+        # Full save only every 5 ticks (5 seconds)
+        if self._timer_update_tick >= 5 or self._modified:
+            if self._modified:
+                try:
+                    self._save_notes()
+                    self._save_todos()
+                    self._modified = False
+                except:
+                    pass
+            self._timer_update_tick = 0
     
     def _load_all_data(self):
         """Load saved data."""
@@ -1571,7 +1909,14 @@ class KiNotesMainPanel(wx.Panel):
         try:
             todos = self.notes_manager.load_todos()
             for todo in todos:
-                self._add_todo_item(todo.get("text", ""), todo.get("done", False))
+                time_spent = todo.get("time_spent", 0)
+                history = todo.get("history", [])
+                self._add_todo_item(
+                    todo.get("text", ""), 
+                    todo.get("done", False),
+                    time_spent,
+                    history
+                )
         except:
             pass
         
@@ -1585,10 +1930,19 @@ class KiNotesMainPanel(wx.Panel):
             pass
     
     def _save_todos(self):
-        """Save todos."""
+        """Save todos with time tracking data."""
         try:
-            todos = [{"text": item["text"].GetValue(), "done": item["checkbox"].GetValue()} 
-                     for item in self._todo_items]
+            todos = []
+            for item in self._todo_items:
+                item_id = item["id"]
+                timer_data = self.time_tracker.task_timers.get(item_id, {})
+                todos.append({
+                    "text": item["text"].GetValue(),
+                    "done": item["checkbox"].GetValue(),
+                    "time_spent": timer_data.get("time_spent", 0),
+                    "history": timer_data.get("history", []),
+                    "is_running": timer_data.get("is_running", False)
+                })
             self.notes_manager.save_todos(todos)
         except:
             pass
@@ -1599,7 +1953,14 @@ class KiNotesMainPanel(wx.Panel):
         self._save_todos()
     
     def cleanup(self):
-        """Cleanup timer resources."""
+        """Cleanup timer resources and stop running timers."""
+        # Stop any running task timers
+        if self.time_tracker.current_running_task_id is not None:
+            self.time_tracker.stop_task(self.time_tracker.current_running_task_id)
+        
+        # Save any pending data
+        self.force_save()
+        
         try:
             if self._auto_save_timer:
                 self._auto_save_timer.Stop()
