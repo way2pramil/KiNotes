@@ -1098,12 +1098,42 @@ class KiNotesMainPanel(wx.Panel):
         panel.SetSizer(panel_sizer)
         panel.Layout()
     
+    def _apply_theme_to_panel(self, panel):
+        """Apply current theme to a panel and all its children recursively."""
+        if not panel:
+            return
+        
+        try:
+            panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+            
+            # Recursively apply to all children
+            for child in panel.GetChildren():
+                if isinstance(child, wx.Panel):
+                    self._apply_theme_to_panel(child)
+                elif isinstance(child, wx.TextCtrl):
+                    child.SetBackgroundColour(self._get_editor_bg())
+                    child.SetForegroundColour(self._get_editor_text())
+                elif isinstance(child, (wx.Choice, wx.ComboBox)):
+                    child.SetBackgroundColour(hex_to_colour(self._theme["bg_button"]))
+                    child.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+                elif isinstance(child, wx.CheckBox):
+                    child.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+                elif isinstance(child, wx.StaticText):
+                    child.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        except:
+            pass
+    
     def _apply_theme(self):
         """Apply current theme to all UI elements."""
         self.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         self.top_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
         self.bottom_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
         self.content_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        
+        # Apply theme to all tab panels
+        self._apply_theme_to_panel(self.notes_panel)
+        self._apply_theme_to_panel(self.todo_panel)
+        self._apply_theme_to_panel(self.bom_panel)
         
         # Update tab buttons
         for btn in self.tab_buttons:
@@ -1117,6 +1147,37 @@ class KiNotesMainPanel(wx.Panel):
         self.settings_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
         self.save_btn.SetColors(self._theme["accent_green"], "#FFFFFF")
         self.pdf_btn.SetColors(self._theme["accent_blue"], "#FFFFFF")
+        self.export_diary_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
+        
+        # Update global time label
+        try:
+            self.global_time_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        except:
+            pass
+        
+        # Update todo counter
+        try:
+            self.todo_count.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        except:
+            pass
+        
+        # Update all todo items
+        for item in self._todo_items:
+            try:
+                item["panel"].SetBackgroundColour(
+                    hex_to_colour(self._theme["bg_panel"]) if self._dark_mode else wx.WHITE
+                )
+                item["checkbox"].SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+                item["text"].SetBackgroundColour(
+                    hex_to_colour(self._theme["bg_panel"]) if self._dark_mode else wx.WHITE
+                )
+                item["text"].SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+                item["timer_label"].SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+                item["del_btn"].SetBackgroundColour(
+                    hex_to_colour(self._theme["bg_panel"]) if self._dark_mode else wx.WHITE
+                )
+            except:
+                pass
         
         self.Refresh()
         self.Update()
@@ -1255,7 +1316,11 @@ class KiNotesMainPanel(wx.Panel):
             self.time_tracker.task_timers[item_id]["done"] = done
         
         item_panel = wx.Panel(self.todo_scroll)
-        item_panel.SetBackgroundColour(wx.WHITE if not self._dark_mode else hex_to_colour("#2D2D2D"))
+        # Use theme-appropriate background for todo items
+        if self._dark_mode:
+            item_panel.SetBackgroundColour(hex_to_colour("#2D2D2D"))
+        else:
+            item_panel.SetBackgroundColour(wx.WHITE)
         item_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
         # Checkbox
@@ -1271,7 +1336,11 @@ class KiNotesMainPanel(wx.Panel):
         
         # Text input with strikethrough support
         txt = wx.TextCtrl(item_panel, value=text, style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER)
-        txt.SetBackgroundColour(wx.WHITE if not self._dark_mode else hex_to_colour("#2D2D2D"))
+        # Match item panel background
+        if self._dark_mode:
+            txt.SetBackgroundColour(hex_to_colour("#2D2D2D"))
+        else:
+            txt.SetBackgroundColour(wx.WHITE)
         
         # Apply strikethrough font if done
         if done:
@@ -1296,7 +1365,11 @@ class KiNotesMainPanel(wx.Panel):
         
         # Delete button with icon
         del_btn = wx.Button(item_panel, label=Icons.DELETE, size=(40, 40), style=wx.BORDER_NONE)
-        del_btn.SetBackgroundColour(wx.WHITE if not self._dark_mode else hex_to_colour("#2D2D2D"))
+        # Match item panel background
+        if self._dark_mode:
+            del_btn.SetBackgroundColour(hex_to_colour("#2D2D2D"))
+        else:
+            del_btn.SetBackgroundColour(wx.WHITE)
         del_btn.SetForegroundColour(hex_to_colour(self._theme["accent_red"]))
         del_btn.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         del_btn.Bind(wx.EVT_BUTTON, lambda e, iid=item_id: self._on_delete_todo(iid))
@@ -1311,6 +1384,7 @@ class KiNotesMainPanel(wx.Panel):
             "timer_switch": timer_switch,
             "text": txt,
             "timer_label": timer_label,
+            "del_btn": del_btn,
             "done": done
         })
         
@@ -1421,7 +1495,11 @@ class KiNotesMainPanel(wx.Panel):
             sizer.Add(header, 0, wx.LEFT | wx.BOTTOM, 16)
             
             opt_panel = wx.Panel(panel)
-            opt_panel.SetBackgroundColour(wx.WHITE if not self._dark_mode else hex_to_colour("#2D2D2D"))
+            # Use darker shade for section panels in both modes
+            if self._dark_mode:
+                opt_panel.SetBackgroundColour(hex_to_colour("#2D2D2D"))
+            else:
+                opt_panel.SetBackgroundColour(hex_to_colour("#F5F5F5"))
             opt_sizer = wx.BoxSizer(wx.VERTICAL)
             
             widgets = []
@@ -1469,6 +1547,8 @@ class KiNotesMainPanel(wx.Panel):
             "No grouping"
         ])
         self.bom_group_by.SetSelection(0)
+        self.bom_group_by.SetBackgroundColour(hex_to_colour(self._theme["bg_button"]))
+        self.bom_group_by.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         sizer.Add(self.bom_group_by, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 16)
         
         # Sort
@@ -1484,6 +1564,8 @@ class KiNotesMainPanel(wx.Panel):
             "Quantity"
         ])
         self.bom_sort_by.SetSelection(0)
+        self.bom_sort_by.SetBackgroundColour(hex_to_colour(self._theme["bg_button"]))
+        self.bom_sort_by.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         sizer.Add(self.bom_sort_by, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 16)
         
         # Blacklist
@@ -1493,6 +1575,8 @@ class KiNotesMainPanel(wx.Panel):
         sizer.Add(bl_header, 0, wx.LEFT | wx.BOTTOM, 16)
         
         self.bom_blacklist = wx.TextCtrl(panel, style=wx.TE_MULTILINE, size=(-1, 80))
+        self.bom_blacklist.SetBackgroundColour(self._get_editor_bg())
+        self.bom_blacklist.SetForegroundColour(self._get_editor_text())
         self.bom_blacklist.SetHint("e.g. LOGO*, H*")
         sizer.Add(self.bom_blacklist, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 16)
         
