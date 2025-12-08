@@ -448,16 +448,16 @@ class KiNotesMainPanel(wx.Panel):
         # Tab buttons - unified rounded style
         self.tab_buttons = []
         tabs = [
-            (Icons.NOTES, "Notes", 0),
-            (Icons.TODO, "Todo", 1),
-            (Icons.BOM, "BOM", 2)
+            ("Notes", 0),
+            ("Todo", 1),
+            ("BOM", 2)
         ]
         
-        for icon, label, idx in tabs:
+        for label, idx in tabs:
             btn = RoundedButton(
                 top_bar, 
                 label=label,
-                icon=icon,
+                icon="",
                 size=(110, 42),
                 bg_color=self._theme["bg_button"],
                 fg_color=self._theme["text_primary"],
@@ -532,7 +532,7 @@ class KiNotesMainPanel(wx.Panel):
         self.save_btn = RoundedButton(
             bottom_bar,
             label="Save",
-            icon=Icons.SAVE,
+            icon="",
             size=(130, 48),
             bg_color=self._theme["accent_green"],
             fg_color="#FFFFFF",
@@ -547,7 +547,7 @@ class KiNotesMainPanel(wx.Panel):
         self.pdf_btn = RoundedButton(
             bottom_bar,
             label="Export PDF",
-            icon=Icons.PDF,
+            icon="",
             size=(160, 48),
             bg_color=self._theme["accent_blue"],
             fg_color="#FFFFFF",
@@ -919,7 +919,7 @@ class KiNotesMainPanel(wx.Panel):
         self.add_todo_btn = RoundedButton(
             toolbar,
             label="Add Task",
-            icon=Icons.ADD,
+            icon="",
             size=(130, 42),
             bg_color=self._theme["accent_blue"],
             fg_color="#FFFFFF",
@@ -934,7 +934,7 @@ class KiNotesMainPanel(wx.Panel):
         self.clear_done_btn = RoundedButton(
             toolbar,
             label="Clear Task",
-            icon=Icons.CLEAR,
+            icon="",
             size=(140, 42),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
@@ -1175,7 +1175,7 @@ class KiNotesMainPanel(wx.Panel):
         self.gen_bom_btn = RoundedButton(
             panel,
             label="Export BOM -> Notes",
-            icon=Icons.GENERATE,
+            icon="",
             size=(-1, 52),
             bg_color=self._theme["accent_blue"],
             fg_color="#FFFFFF",
