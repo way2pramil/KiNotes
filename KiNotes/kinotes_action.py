@@ -108,7 +108,7 @@ class KiNotesFrame(wx.Frame):
         super().__init__(
             parent,
             title="KiNotes",
-            size=(840, 900),
+            size=(1092, 1170),  # 30% larger (840*1.3, 900*1.3)
             style=style
         )
         

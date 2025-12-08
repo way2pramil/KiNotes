@@ -7,6 +7,7 @@ Time tracking with per-task stopwatch and work diary export
 import wx
 import wx.lib.scrolledpanel as scrolled
 import os
+import sys
 import datetime
 import json
 import time
@@ -480,17 +481,95 @@ class RoundedButton(wx.Panel):
 # ============================================================
 # TOGGLE SWITCH - Dark Mode Toggle
 # ============================================================
-class ToggleSwitch(wx.Panel):
-    """iOS-style toggle switch - KiCad DPI aware."""
+class PlayPauseButton(wx.Panel):
+    """Play/Pause button for timer control - official wxPython compatible."""
     
-    def __init__(self, parent, size=(50, 26), is_on=False, label_on="", label_off=""):
+    def __init__(self, parent, size=(42, 28), is_on=False):
         super().__init__(parent, size=size)
         
         self.is_on = is_on
-        self.label_on = label_on
-        self.label_off = label_off
         self.callback = None
-        self.switch_size = size
+        
+        self.color_running = hex_to_colour("#34C759")  # Green when running
+        self.color_paused = hex_to_colour("#8E8E93")   # Gray when paused
+        self.text_color = wx.WHITE
+        
+        # Use MinSize but let parent control via DPI
+        self.SetMinSize(size)
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+        
+        self.Bind(wx.EVT_PAINT, self._on_paint)
+        self.Bind(wx.EVT_LEFT_DOWN, self._on_click)
+        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+    
+    def _on_paint(self, event):
+        dc = wx.AutoBufferedPaintDC(self)
+        gc = wx.GraphicsContext.Create(dc)
+        
+        # Use actual rendered size (respects DPI)
+        w, h = self.GetSize()
+        
+        # Ensure minimum dimensions
+        if w <= 0 or h <= 0:
+            return
+        
+        # Clear background with parent's background color
+        parent = self.GetParent()
+        if parent:
+            parent_bg = parent.GetBackgroundColour()
+        else:
+            parent_bg = wx.Colour(255, 255, 255)
+        gc.SetBrush(wx.Brush(parent_bg))
+        gc.SetPen(wx.TRANSPARENT_PEN)
+        gc.DrawRectangle(0, 0, w, h)
+        
+        # Draw rounded rectangle button
+        bg_color = self.color_running if self.is_on else self.color_paused
+        gc.SetBrush(wx.Brush(bg_color))
+        gc.SetPen(wx.TRANSPARENT_PEN)
+        corner_radius = h // 3
+        gc.DrawRoundedRectangle(0, 0, w, h, corner_radius)
+        
+        # Draw icon: ▶ (play) or ❚❚ (pause)
+        icon = "❚❚" if self.is_on else "▶"
+        
+        # Calculate text metrics
+        dc.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        text_w, text_h = dc.GetTextExtent(icon)
+        
+        # Center text
+        text_x = (w - text_w) / 2
+        text_y = (h - text_h) / 2
+        
+        # Draw icon
+        gc.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), self.text_color)
+        gc.DrawText(icon, text_x, text_y)
+    
+    def _on_click(self, event):
+        self.is_on = not self.is_on
+        self.Refresh()
+        if self.callback:
+            self.callback(self.is_on)
+    
+    def SetValue(self, value):
+        self.is_on = value
+        self.Refresh()
+    
+    def GetValue(self):
+        return self.is_on
+    
+    def Bind_Change(self, callback):
+        self.callback = callback
+
+
+class ToggleSwitch(wx.Panel):
+    """Simple toggle switch for settings - iOS-style."""
+    
+    def __init__(self, parent, size=(50, 26), is_on=False):
+        super().__init__(parent, size=size)
+        
+        self.is_on = is_on
+        self.callback = None
         
         self.track_color_on = hex_to_colour("#4285F4")
         self.track_color_off = hex_to_colour("#CCCCCC")
@@ -797,6 +876,17 @@ class KiNotesMainPanel(wx.Panel):
         
         sizer.AddSpacer(20)
         
+        # Open work logs folder link
+        folder_text = wx.StaticText(bottom_bar, label="📁 Work Logs")
+        folder_text.SetForegroundColour(hex_to_colour(self._theme["accent_blue"]))
+        folder_text.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, underline=True))
+        folder_text.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+        folder_text.Bind(wx.EVT_LEFT_DOWN, self._on_open_work_logs_folder)
+        folder_text.SetToolTip("Open work logs folder (.kinotes)")
+        sizer.Add(folder_text, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        sizer.AddSpacer(20)
+        
         # Global time tracker display
         self.global_time_label = wx.StaticText(bottom_bar, label="⏱ Total Time: 00:00:00")
         self.global_time_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
@@ -808,7 +898,7 @@ class KiNotesMainPanel(wx.Panel):
             bottom_bar,
             label="Export Diary",
             icon="",
-            size=(130, 48),
+            size=(180, 48),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
             corner_radius=10,
@@ -840,7 +930,7 @@ class KiNotesMainPanel(wx.Panel):
             bottom_bar,
             label="Export PDF",
             icon="",
-            size=(160, 48),
+            size=(170, 48),
             bg_color=self._theme["accent_blue"],
             fg_color="#FFFFFF",
             corner_radius=10,
@@ -861,18 +951,56 @@ class KiNotesMainPanel(wx.Panel):
         except:
             pass
     
+    def _get_work_diary_path(self):
+        """
+        Get the work diary file path in .kinotes directory.
+        Uses project name (or generic name) and date/time.
+        Creates .kinotes directory if it doesn't exist.
+        Handles duplicate files by appending -01, -02, etc.
+        """
+        # Try to get KiCad project directory, fallback to home directory
+        try:
+            import pcbnew
+            board = pcbnew.GetBoard()
+            if board and board.GetFileName():
+                project_dir = os.path.dirname(board.GetFileName())
+                project_name = os.path.splitext(os.path.basename(board.GetFileName()))[0]
+            else:
+                project_dir = os.path.expanduser("~")
+                project_name = "kinotes"
+        except:
+            # Standalone mode: use home directory
+            project_dir = os.path.expanduser("~")
+            project_name = "kinotes"
+        
+        # Create .kinotes subdirectory
+        kinotes_dir = os.path.join(project_dir, ".kinotes")
+        os.makedirs(kinotes_dir, exist_ok=True)
+        
+        # Generate filename with date and time
+        # Format: <project_title>_worklog_<YYYYMMDD_HHMMSS>.md
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_filename = f"{project_name}_worklog_{timestamp}.md"
+        base_path = os.path.join(kinotes_dir, base_filename)
+        
+        # Handle duplicate files by appending -01, -02, etc.
+        filepath = base_path
+        counter = 0
+        
+        # If exact file already exists (rare but possible), add counter
+        while os.path.exists(filepath) and counter < 100:
+            counter += 1
+            # Insert counter before .md extension
+            name_without_ext = base_path[:-3]  # Remove .md
+            filepath = f"{name_without_ext}-{counter:02d}.md"
+        
+        return filepath, kinotes_dir
+    
     def _on_export_work_diary(self):
-        """Export work diary to Markdown file."""
+        """Export work diary to .kinotes directory with smart naming."""
         try:
             content = self.time_tracker.export_work_diary()
-            timestamp = datetime.datetime.now().strftime("%Y%m%d")
-            filename = f"kinotes_worklog_{timestamp}.md"
-            
-            # Try to save to project directory or Documents
-            try:
-                filepath = os.path.join(os.path.expanduser("~"), "Documents", filename)
-            except:
-                filepath = filename
+            filepath, kinotes_dir = self._get_work_diary_path()
             
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
@@ -880,6 +1008,26 @@ class KiNotesMainPanel(wx.Panel):
             wx.MessageBox(f"Work diary exported to:\n{filepath}", "Export Success", wx.OK | wx.ICON_INFORMATION)
         except Exception as e:
             wx.MessageBox(f"Error exporting diary: {str(e)}", "Export Error", wx.OK | wx.ICON_ERROR)
+    
+    def _on_open_work_logs_folder(self, event):
+        """Open the .kinotes work logs folder in file explorer."""
+        try:
+            _, kinotes_dir = self._get_work_diary_path()
+            
+            # Windows
+            if sys.platform.startswith("win"):
+                import subprocess
+                subprocess.Popen(f'explorer "{kinotes_dir}"')
+            # Mac
+            elif sys.platform == "darwin":
+                import subprocess
+                subprocess.Popen(["open", kinotes_dir])
+            # Linux
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", kinotes_dir])
+        except Exception as e:
+            wx.MessageBox(f"Error opening folder: {str(e)}", "Error", wx.OK | wx.ICON_ERROR)
     
     def _update_tab_styles(self, active_idx):
         """Update tab button styles."""
@@ -1068,7 +1216,7 @@ class KiNotesMainPanel(wx.Panel):
             btn_panel,
             label="Save & Apply",
             icon="",
-            size=(140, 42),
+            size=(220, 42),
             bg_color=self._theme["accent_blue"],
             fg_color="#FFFFFF",
             corner_radius=10,
@@ -1434,10 +1582,13 @@ class KiNotesMainPanel(wx.Panel):
         cb.Bind(wx.EVT_CHECKBOX, lambda e, iid=item_id: self._on_todo_toggle(iid))
         item_sizer.Add(cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 14)
         
-        # Timer toggle switch
-        timer_switch = ToggleSwitch(item_panel, size=(32, 18), is_on=False)
-        timer_switch.Bind_Change(lambda is_on, iid=item_id: self._on_timer_toggle(iid, is_on))
-        item_sizer.Add(timer_switch, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        # Spacing between checkbox and timer button
+        item_sizer.AddSpacer(12)
+        
+        # Timer play/pause button
+        timer_btn = PlayPauseButton(item_panel, size=(42, 28), is_on=False)
+        timer_btn.Bind_Change(lambda is_on, iid=item_id: self._on_timer_toggle(iid, is_on))
+        item_sizer.Add(timer_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
         # Text input with strikethrough support
         txt = wx.TextCtrl(item_panel, value=text, style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER)
@@ -1473,6 +1624,7 @@ class KiNotesMainPanel(wx.Panel):
         rtc_label = wx.StaticText(item_panel, label="")
         rtc_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
         rtc_label.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        rtc_label.SetMinSize((120, -1))  # Fixed width for stable layout
         
         # Add tooltip for full session history
         if history and len(history) > 0:
@@ -1500,7 +1652,7 @@ class KiNotesMainPanel(wx.Panel):
             "id": item_id,
             "panel": item_panel,
             "checkbox": cb,
-            "timer_switch": timer_switch,
+            "timer_switch": timer_btn,
             "text": txt,
             "timer_label": timer_label,
             "rtc_label": rtc_label,

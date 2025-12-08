@@ -48,8 +48,8 @@ class MockPdfExporter:
 
 class DebugFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title="KiNotes Debug", size=(840, 900))
-        self.SetMinSize((600, 700))
+        super().__init__(None, title="KiNotes Debug", size=(1092, 1170))  # 30% larger
+        self.SetMinSize((780, 910))  # 30% larger minimum
         
         # Create the main panel with mock dependencies
         self.panel = KiNotesMainPanel(
