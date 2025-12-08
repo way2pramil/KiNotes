@@ -234,6 +234,111 @@ class TimeTracker:
         
         return "\n".join(lines)
     
+    def get_last_session_string(self, task_id, format_24h=True):
+        """
+        Get last completed session as inline display string.
+        Only returns string if session exists and is completed (not running).
+        Format: "10:12 → 10:40 (28min)"
+        Returns: "" if no sessions or task is running
+        """
+        if task_id not in self.task_timers:
+            return ""
+        
+        data = self.task_timers[task_id]
+        history = data.get("history", [])
+        
+        # Only show if task has completed sessions and is NOT running
+        if not history or data.get("is_running", False):
+            return ""
+        
+        # Get last session
+        last_session = history[-1]
+        start_ts = last_session.get("start", 0)
+        stop_ts = last_session.get("stop", 0)
+        
+        if not start_ts or not stop_ts:
+            return ""
+        
+        # Format times based on format_24h
+        if format_24h:
+            start_time = datetime.datetime.fromtimestamp(start_ts).strftime("%H:%M")
+            stop_time = datetime.datetime.fromtimestamp(stop_ts).strftime("%H:%M")
+        else:
+            start_time = datetime.datetime.fromtimestamp(start_ts).strftime("%I:%M %p")
+            stop_time = datetime.datetime.fromtimestamp(stop_ts).strftime("%I:%M %p")
+        
+        # Calculate duration
+        duration = stop_ts - start_ts
+        if duration < 60:
+            duration_str = f"{duration}s"
+        elif duration < 3600:
+            minutes = duration // 60
+            duration_str = f"{minutes}m"
+        else:
+            hours = duration // 3600
+            minutes = (duration % 3600) // 60
+            duration_str = f"{hours}h {minutes}m" if minutes else f"{hours}h"
+        
+        return f"({start_time} → {stop_time} {duration_str})"
+    
+    def get_session_history_tooltip(self, task_id, format_24h=True):
+        """
+        Generate full session history for tooltip display.
+        Returns formatted list of all sessions with total.
+        """
+        if task_id not in self.task_timers:
+            return ""
+        
+        data = self.task_timers[task_id]
+        history = data.get("history", [])
+        
+        if not history:
+            return ""
+        
+        lines = []
+        total_seconds = 0
+        
+        for session in history:
+            start_ts = session.get("start", 0)
+            stop_ts = session.get("stop", 0)
+            
+            if not start_ts or not stop_ts:
+                continue
+            
+            if format_24h:
+                start_time = datetime.datetime.fromtimestamp(start_ts).strftime("%H:%M")
+                stop_time = datetime.datetime.fromtimestamp(stop_ts).strftime("%H:%M")
+            else:
+                start_time = datetime.datetime.fromtimestamp(start_ts).strftime("%I:%M %p")
+                stop_time = datetime.datetime.fromtimestamp(stop_ts).strftime("%I:%M %p")
+            
+            duration = stop_ts - start_ts
+            total_seconds += duration
+            
+            if duration < 60:
+                duration_str = f"{duration}s"
+            elif duration < 3600:
+                minutes = duration // 60
+                duration_str = f"{minutes}m"
+            else:
+                hours = duration // 3600
+                minutes = (duration % 3600) // 60
+                duration_str = f"{hours}h {minutes}m" if minutes else f"{hours}h"
+            
+            lines.append(f"• {start_time} → {stop_time} ({duration_str})")
+        
+        # Add total
+        if total_seconds > 0:
+            t_hours = total_seconds // 3600
+            t_minutes = (total_seconds % 3600) // 60
+            total_str = f"{t_hours}h {t_minutes}m" if t_minutes else f"{t_hours}h"
+            
+            header = f"Work Sessions ({len(history)})"
+            lines.insert(0, header)
+            lines.append(f"Total: {total_str}")
+        
+        return "\n".join(lines)
+    
     def to_json_data(self):
         """Convert timer data to JSON-serializable format."""
         return {
@@ -1361,7 +1466,21 @@ class KiNotesMainPanel(wx.Panel):
         timer_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
         timer_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         timer_label.SetMinSize((110, -1))
-        item_sizer.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        item_sizer.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
+        
+        # RTC inline session label - shows last completed session if exists
+        # Format: "(10:12 → 10:40 28min)"
+        rtc_label = wx.StaticText(item_panel, label="")
+        rtc_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        rtc_label.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        
+        # Add tooltip for full session history
+        if history and len(history) > 0:
+            tooltip_text = self.time_tracker.get_session_history_tooltip(item_id, self.time_tracker.time_format_24h)
+            if tooltip_text:
+                rtc_label.SetToolTip(tooltip_text)
+        
+        item_sizer.Add(rtc_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
         
         # Delete button with icon
         del_btn = wx.Button(item_panel, label=Icons.DELETE, size=(40, 40), style=wx.BORDER_NONE)
@@ -1373,7 +1492,7 @@ class KiNotesMainPanel(wx.Panel):
         del_btn.SetForegroundColour(hex_to_colour(self._theme["accent_red"]))
         del_btn.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         del_btn.Bind(wx.EVT_BUTTON, lambda e, iid=item_id: self._on_delete_todo(iid))
-        item_sizer.Add(del_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        item_sizer.Add(del_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 14)
         
         item_panel.SetSizer(item_sizer)
         
@@ -1384,6 +1503,7 @@ class KiNotesMainPanel(wx.Panel):
             "timer_switch": timer_switch,
             "text": txt,
             "timer_label": timer_label,
+            "rtc_label": rtc_label,
             "del_btn": del_btn,
             "done": done
         })
@@ -1401,11 +1521,30 @@ class KiNotesMainPanel(wx.Panel):
         self._save_todos()
     
     def _on_timer_toggle(self, item_id, is_on):
-        """Handle timer start/stop."""
+        """
+        Handle timer start/stop for a task.
+        If turning ON: auto-stop any other running task + update its toggle switch.
+        If turning OFF: normal pause + log session.
+        """
         if is_on:
+            # Starting new task timer
+            prev_running = self.time_tracker.current_running_task_id
+            
+            # This will auto-stop any other running task
             self.time_tracker.start_task(item_id)
+            
+            # If we just auto-stopped another task, update its toggle switch UI
+            if prev_running is not None and prev_running != item_id:
+                for item in self._todo_items:
+                    if item["id"] == prev_running:
+                        item["timer_switch"].SetValue(False)
+                        break
         else:
+            # Stopping current task timer
             self.time_tracker.stop_task(item_id)
+        
+        # Force immediate UI refresh of timer displays
+        self._update_timer_displays()
         self._save_todos()
     
     def _on_todo_text_change(self, item_id):
@@ -1469,11 +1608,26 @@ class KiNotesMainPanel(wx.Panel):
         self.todo_count.SetLabel(str(done) + " / " + str(total))
     
     def _update_timer_displays(self):
-        """Update all timer labels with current time."""
+        """Update all timer labels and RTC inline displays with current state."""
         for item in self._todo_items:
             item_id = item["id"]
+            
+            # Update live timer display
             time_str = self.time_tracker.get_task_time_string(item_id)
             item["timer_label"].SetLabel(time_str)
+            
+            # Update RTC inline session display (only when task is not running)
+            rtc_str = self.time_tracker.get_last_session_string(item_id, self.time_tracker.time_format_24h)
+            item["rtc_label"].SetLabel(rtc_str)
+            
+            # Update tooltip if history exists
+            task_data = self.time_tracker.task_timers.get(item_id, {})
+            history = task_data.get("history", [])
+            if history and len(history) > 0:
+                tooltip_text = self.time_tracker.get_session_history_tooltip(item_id, self.time_tracker.time_format_24h)
+                if tooltip_text:
+                    item["rtc_label"].SetToolTip(tooltip_text)
+
     
     # ============================================================
     # TAB 3: BOM TOOL
