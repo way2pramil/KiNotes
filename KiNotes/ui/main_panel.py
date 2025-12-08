@@ -214,23 +214,35 @@ class ToggleSwitch(wx.Panel):
 
 
 # ============================================================
-# ICONS - Empty (text only buttons for compatibility)
+# ICONS - Beautiful Unicode icons
 # ============================================================
 class Icons:
-    # No icons - use text-only buttons for maximum compatibility
-    NOTES = ""
-    TODO = ""
-    BOM = ""
-    IMPORT = ""
-    SAVE = ""
-    PDF = ""
-    ADD = ""
-    DELETE = ""
-    CLEAR = ""
-    SETTINGS = ""
-    GENERATE = ""
-    DARK = ""
-    LIGHT = ""
+    # Tab icons
+    NOTES = "\U0001F4DD"      # Memo/Note
+    TODO = "\u2611"           # Checkbox with check
+    BOM = "\U0001F4CB"        # Clipboard
+    
+    # Action icons  
+    IMPORT = "\u21E9"         # Downwards arrow
+    SAVE = "\U0001F4BE"       # Floppy disk
+    PDF = "\U0001F4C4"        # Document
+    ADD = "\u2795"            # Plus
+    DELETE = "\u2716"         # X mark
+    CLEAR = "\U0001F5D1"      # Wastebasket
+    SETTINGS = "\u2699"       # Gear
+    GENERATE = "\u27A4"       # Arrow
+    
+    # Theme icons
+    DARK = "\U0001F319"       # Crescent moon
+    LIGHT = "\u2600"          # Sun
+    
+    # Import menu icons
+    BOARD = "\U0001F4D0"      # Board/Triangular ruler
+    LAYERS = "\U0001F5C2"     # Layers/Card index
+    NETLIST = "\U0001F517"    # Link
+    RULES = "\U0001F4CF"      # Ruler
+    DRILL = "\U0001F529"      # Nut and bolt
+    ALL = "\U0001F4E6"        # Package
 
 
 # ============================================================
@@ -376,7 +388,7 @@ class KiNotesMainPanel(wx.Panel):
             top_bar,
             label="Import",
             icon=Icons.IMPORT,
-            size=(120, 42),
+            size=(130, 42),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
             corner_radius=10,
@@ -388,16 +400,16 @@ class KiNotesMainPanel(wx.Panel):
         
         sizer.AddStretchSpacer()
         
-        # Settings button - text only for compatibility
+        # Settings button - with gear icon
         self.settings_btn = RoundedButton(
             top_bar,
-            label="Settings",
-            icon="",
-            size=(90, 42),
+            label="",
+            icon=Icons.SETTINGS,
+            size=(50, 42),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
             corner_radius=10,
-            font_size=11,
+            font_size=14,
             font_weight=wx.FONTWEIGHT_NORMAL
         )
         self.settings_btn.Bind_Click(self._on_settings_click)
@@ -491,21 +503,26 @@ class KiNotesMainPanel(wx.Panel):
         self.todo_panel.Hide()
         self.bom_panel.Hide()
         
+        # Show/hide Import button - only visible on Notes tab
         if idx == 0:
             self.notes_panel.Show()
+            self.import_btn.Show()
         elif idx == 1:
             self.todo_panel.Show()
+            self.import_btn.Hide()
             try:
                 self.todo_scroll.FitInside()
             except:
                 pass
         elif idx == 2:
             self.bom_panel.Show()
+            self.import_btn.Hide()
             try:
                 self.bom_panel.FitInside()
             except:
                 pass
         
+        self.top_bar.Layout()
         self.content_panel.Layout()
         self.Layout()
         self.Refresh()
@@ -516,8 +533,9 @@ class KiNotesMainPanel(wx.Panel):
     
     def _on_settings_click(self, event):
         """Show color settings dialog with dark mode toggle."""
-        dlg = wx.Dialog(self, title="Editor Colors", size=(400, 380),
-                       style=wx.DEFAULT_DIALOG_STYLE)
+        dlg = wx.Dialog(self, title="Editor Colors", size=(420, 480),
+                       style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        dlg.SetMinSize((380, 450))
         dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -528,10 +546,10 @@ class KiNotesMainPanel(wx.Panel):
         mode_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         mode_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        mode_icon = wx.StaticText(mode_panel, label=Icons.DARK + "  Dark Theme")
-        mode_icon.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        mode_icon.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        mode_sizer.Add(mode_icon, 0, wx.ALIGN_CENTER_VERTICAL)
+        mode_label = wx.StaticText(mode_panel, label=Icons.DARK + "  Dark Theme")
+        mode_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        mode_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        mode_sizer.Add(mode_label, 0, wx.ALIGN_CENTER_VERTICAL)
         
         mode_sizer.AddStretchSpacer()
         
@@ -779,11 +797,11 @@ class KiNotesMainPanel(wx.Panel):
         txt.Bind(wx.EVT_TEXT_ENTER, lambda e: self._on_add_todo(None))
         item_sizer.Add(txt, 1, wx.EXPAND | wx.ALL, 12)
         
-        # Delete button
-        del_btn = wx.Button(item_panel, label="X", size=(40, 40), style=wx.BORDER_NONE)
+        # Delete button with icon
+        del_btn = wx.Button(item_panel, label=Icons.DELETE, size=(40, 40), style=wx.BORDER_NONE)
         del_btn.SetBackgroundColour(wx.WHITE if not self._dark_mode else hex_to_colour("#2D2D2D"))
         del_btn.SetForegroundColour(hex_to_colour(self._theme["accent_red"]))
-        del_btn.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        del_btn.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         del_btn.Bind(wx.EVT_BUTTON, lambda e, iid=item_id: self._on_delete_todo(iid))
         item_sizer.Add(del_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
         
@@ -1124,17 +1142,17 @@ class KiNotesMainPanel(wx.Panel):
         menu = wx.Menu()
         
         items = [
-            ("Board Info", self._import_board_info),
-            ("Bill of Materials (BOM)", self._import_bom),
-            ("Layer Stackup", self._import_stackup),
-            ("Layer Info", self._import_layers),
+            (Icons.BOARD + "  Board Info", self._import_board_info),
+            (Icons.BOM + "  Bill of Materials (BOM)", self._import_bom),
+            (Icons.LAYERS + "  Layer Stackup", self._import_stackup),
+            (Icons.LAYERS + "  Layer Info", self._import_layers),
             (None, None),
-            ("Netlist", self._import_netlist),
-            ("Differential Pairs", self._import_diff_pairs),
-            ("Design Rules", self._import_design_rules),
-            ("Drill Table", self._import_drill_table),
+            (Icons.NETLIST + "  Netlist", self._import_netlist),
+            (Icons.NETLIST + "  Differential Pairs", self._import_diff_pairs),
+            (Icons.RULES + "  Design Rules", self._import_design_rules),
+            (Icons.DRILL + "  Drill Table", self._import_drill_table),
             (None, None),
-            ("Import All", self._import_all),
+            (Icons.ALL + "  Import All", self._import_all),
         ]
         
         for label, handler in items:
