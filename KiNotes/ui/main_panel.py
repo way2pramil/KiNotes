@@ -92,7 +92,7 @@ def hex_to_colour(hex_str):
 # ROUNDED BUTTON CLASS - Modern Unified Buttons
 # ============================================================
 class RoundedButton(wx.Panel):
-    """Custom rounded button with hover and press effects."""
+    """Custom rounded button with hover and press effects - KiCad DPI aware."""
     
     def __init__(self, parent, label="", size=(120, 44), bg_color="#4285F4", 
                  fg_color="#FFFFFF", icon="", corner_radius=8, font_size=11,
@@ -108,11 +108,11 @@ class RoundedButton(wx.Panel):
         self.is_pressed = False
         self.callback = None
         self.button_size = size
+        self.base_font_size = font_size
+        self.font_weight = font_weight
         
-        # Force size constraints
-        self.SetSize(size)
+        # Don't force max size - let parent control height via DPI
         self.SetMinSize(size)
-        self.SetMaxSize(size)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         
         self.font = wx.Font(font_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, font_weight)
@@ -122,6 +122,7 @@ class RoundedButton(wx.Panel):
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_press)
         self.Bind(wx.EVT_LEFT_UP, self._on_release)
+        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
     
     def _darken_color(self, color, amount):
@@ -149,17 +150,12 @@ class RoundedButton(wx.Panel):
         dc = wx.AutoBufferedPaintDC(self)
         gc = wx.GraphicsContext.Create(dc)
         
-        # Use stored button size or get actual size
-        if hasattr(self, 'button_size') and self.button_size != (-1, -1):
-            w, h = self.button_size
-        else:
-            w, h = self.GetSize()
+        # Use actual rendered size (respects KiCad DPI scaling)
+        w, h = self.GetSize()
         
         # Ensure minimum dimensions
-        if w <= 0:
-            w = 100
-        if h <= 0:
-            h = 40
+        if w <= 0 or h <= 0:
+            return
         
         # Clear background completely
         parent = self.GetParent()
@@ -180,16 +176,18 @@ class RoundedButton(wx.Panel):
         else:
             bg = self.bg_color
         
-        # Draw rounded button with padding
-        corner = min(self.corner_radius, h // 2)
+        # Draw rounded button - scale corner radius to height
+        corner = min(self.corner_radius, h // 3)
         gc.SetBrush(wx.Brush(bg))
         gc.SetPen(wx.TRANSPARENT_PEN)
         gc.DrawRoundedRectangle(0, 0, w, h, corner)
         
-        # Draw text with icon
+        # Draw text with icon - scale font dynamically
         gc.SetFont(self.font, self.fg_color)
         display_text = self.icon + "  " + self.label if self.icon else self.label
         text_w, text_h = gc.GetTextExtent(display_text)[:2]
+        
+        # Add padding compensation
         x = (w - text_w) / 2
         y = (h - text_h) / 2
         gc.DrawText(display_text, x, y)
@@ -218,7 +216,7 @@ class RoundedButton(wx.Panel):
 # TOGGLE SWITCH - Dark Mode Toggle
 # ============================================================
 class ToggleSwitch(wx.Panel):
-    """iOS-style toggle switch."""
+    """iOS-style toggle switch - KiCad DPI aware."""
     
     def __init__(self, parent, size=(50, 26), is_on=False, label_on="", label_off=""):
         super().__init__(parent, size=size)
@@ -233,10 +231,8 @@ class ToggleSwitch(wx.Panel):
         self.track_color_off = hex_to_colour("#CCCCCC")
         self.knob_color = wx.WHITE
         
-        # Force size constraints
-        self.SetSize(size)
+        # Use MinSize but let parent control via DPI
         self.SetMinSize(size)
-        self.SetMaxSize(size)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -247,19 +243,14 @@ class ToggleSwitch(wx.Panel):
         dc = wx.AutoBufferedPaintDC(self)
         gc = wx.GraphicsContext.Create(dc)
         
-        # Use stored size if available
-        if hasattr(self, 'switch_size') and self.switch_size != (-1, -1):
-            w, h = self.switch_size
-        else:
-            w, h = self.GetSize()
+        # Use actual rendered size (respects DPI)
+        w, h = self.GetSize()
         
         # Ensure minimum dimensions
-        if w <= 0:
-            w = 50
-        if h <= 0:
-            h = 26
+        if w <= 0 or h <= 0:
+            return
         
-        # Clear background with parent's background color first
+        # Clear background with parent's background color
         parent = self.GetParent()
         if parent:
             parent_bg = parent.GetBackgroundColour()
@@ -269,9 +260,10 @@ class ToggleSwitch(wx.Panel):
         gc.SetPen(wx.TRANSPARENT_PEN)
         gc.DrawRectangle(0, 0, w, h)
         
-        track_h = h - 4
-        track_y = 2
-        knob_size = track_h - 4
+        # Scale track to height
+        track_h = max(h - 4, 4)
+        track_y = (h - track_h) / 2
+        knob_size = max(track_h - 4, 2)
         
         # Draw track
         track_color = self.track_color_on if self.is_on else self.track_color_off
@@ -448,7 +440,7 @@ class KiNotesMainPanel(wx.Panel):
         """Create top bar with tabs + Import button on same line."""
         top_bar = wx.Panel(self)
         top_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
-        top_bar.SetMinSize((-1, 60))
+        top_bar.SetMinSize((-1, 70))
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.AddSpacer(16)
