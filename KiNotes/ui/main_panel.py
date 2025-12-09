@@ -3,9 +3,11 @@ KiNotes Main Panel - Modern UI with Dark Theme Toggle
 Tab 1: Notes | Tab 2: Todo List | Tab 3: BOM Tool
 User-selectable background and text colors with dark mode
 Time tracking with per-task stopwatch and work diary export
+Dual-Mode Note Editor: Visual (WYSIWYG) or Markdown
 """
 import wx
 import wx.lib.scrolledpanel as scrolled
+import wx.richtext as rt
 import os
 import sys
 import datetime
@@ -13,6 +15,14 @@ import json
 import time
 import re
 import fnmatch
+
+# Visual Note Editor for WYSIWYG mode
+try:
+    from .visual_editor import VisualNoteEditor
+    from .markdown_converter import MarkdownToRichText, RichTextToMarkdown
+    VISUAL_EDITOR_AVAILABLE = True
+except ImportError:
+    VISUAL_EDITOR_AVAILABLE = False
 
 
 # ============================================================
@@ -702,6 +712,7 @@ class KiNotesMainPanel(wx.Panel):
         self._text_color_name = "Carbon Black"
         self._dark_bg_color_name = "Charcoal"
         self._dark_text_color_name = "Pure White"
+        self._use_visual_editor = VISUAL_EDITOR_AVAILABLE  # Default: Visual Editor if available
         self._load_color_settings()
         
         self._theme = DARK_THEME if self._dark_mode else LIGHT_THEME
@@ -712,10 +723,12 @@ class KiNotesMainPanel(wx.Panel):
             self._load_all_data()
             self._start_auto_save_timer()
         except Exception as e:
+            import traceback
             print("KiNotes UI init error: " + str(e))
+            traceback.print_exc()
     
     def _load_color_settings(self):
-        """Load saved color settings."""
+        """Load saved color and editor settings."""
         try:
             settings = self.notes_manager.load_settings()
             if settings:
@@ -724,11 +737,16 @@ class KiNotesMainPanel(wx.Panel):
                 self._dark_bg_color_name = settings.get("dark_bg_color", "Charcoal")
                 self._dark_text_color_name = settings.get("dark_text_color", "Pure White")
                 self._dark_mode = settings.get("dark_mode", False)
+                # Visual Editor setting - default True if available
+                self._use_visual_editor = settings.get("use_visual_editor", VISUAL_EDITOR_AVAILABLE)
+                # Only use visual if available
+                if self._use_visual_editor and not VISUAL_EDITOR_AVAILABLE:
+                    self._use_visual_editor = False
         except:
             pass
-    
+
     def _save_color_settings(self):
-        """Save color settings."""
+        """Save color and editor settings."""
         try:
             settings = self.notes_manager.load_settings() or {}
             settings.update({
@@ -736,12 +754,13 @@ class KiNotesMainPanel(wx.Panel):
                 "text_color": self._text_color_name,
                 "dark_bg_color": self._dark_bg_color_name,
                 "dark_text_color": self._dark_text_color_name,
-                "dark_mode": self._dark_mode
+                "dark_mode": self._dark_mode,
+                "use_visual_editor": self._use_visual_editor
             })
             self.notes_manager.save_settings(settings)
         except:
             pass
-    
+
     def _get_editor_bg(self):
         if self._dark_mode:
             return hex_to_colour(DARK_BACKGROUND_COLORS.get(self._dark_bg_color_name, "#1C1C1E"))
@@ -885,20 +904,20 @@ class KiNotesMainPanel(wx.Panel):
         folder_text.SetToolTip("Open work logs folder (.kinotes)")
         sizer.Add(folder_text, 0, wx.ALIGN_CENTER_VERTICAL)
         
-        sizer.AddSpacer(20)
+        sizer.AddStretchSpacer()
         
-        # Global time tracker display
-        self.global_time_label = wx.StaticText(bottom_bar, label="⏱ Total Time: 00:00:00")
+        # Global time tracker display - right side before buttons
+        self.global_time_label = wx.StaticText(bottom_bar, label="⏱ Total: 00:00:00")
         self.global_time_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
         self.global_time_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        sizer.Add(self.global_time_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(self.global_time_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
         
-        # Export work diary button
+        # Export work diary button - right side before Save/PDF
         self.export_diary_btn = RoundedButton(
             bottom_bar,
             label="Export Diary",
             icon="",
-            size=(180, 48),
+            size=(170, 48),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
             corner_radius=10,
@@ -906,9 +925,7 @@ class KiNotesMainPanel(wx.Panel):
             font_weight=wx.FONTWEIGHT_NORMAL
         )
         self.export_diary_btn.Bind_Click(lambda e: self._on_export_work_diary())
-        sizer.Add(self.export_diary_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 20)
-        
-        sizer.AddStretchSpacer()
+        sizer.Add(self.export_diary_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
         
         # Save button - unified rounded style
         self.save_btn = RoundedButton(
@@ -1098,11 +1115,14 @@ class KiNotesMainPanel(wx.Panel):
     # ============================================================
     
     def _on_settings_click(self, event):
-        """Show color settings dialog with dark mode toggle and time tracking options."""
-        dlg = wx.Dialog(self, title="Settings", size=(450, 650),
+        """Show color settings dialog with Light/Dark theme buttons and time tracking options."""
+        dlg = wx.Dialog(self, title="Settings", size=(650, 900),
                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        dlg.SetMinSize((450, 650))
+        dlg.SetMinSize((650, 900))
         dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        
+        # Initialize selected theme state
+        self._selected_theme_dark = self._dark_mode
         
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.AddSpacer(24)
@@ -1112,21 +1132,59 @@ class KiNotesMainPanel(wx.Panel):
         mode_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         mode_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        mode_label = wx.StaticText(mode_panel, label= "Select Theme")
+        mode_label = wx.StaticText(mode_panel, label="Select Theme")
         mode_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         mode_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         mode_sizer.Add(mode_label, 0, wx.ALIGN_CENTER_VERTICAL)
         
         mode_sizer.AddStretchSpacer()
         
-        self._dark_toggle = ToggleSwitch(mode_panel, size=(54, 28), is_on=self._dark_mode)
-        self._dark_toggle.Bind_Change(lambda is_on: self._on_theme_toggle(dlg, sizer, is_on))
-        mode_sizer.Add(self._dark_toggle, 0, wx.ALIGN_CENTER_VERTICAL)
+        # Light button
+        light_bg = self._theme["bg_button"] if self._dark_mode else self._theme["accent_blue"]
+        light_fg = self._theme["text_primary"] if self._dark_mode else "#FFFFFF"
+        self._light_btn = RoundedButton(
+            mode_panel,
+            label="Light",
+            icon="",
+            size=(90, 36),
+            bg_color=light_bg,
+            fg_color=light_fg,
+            corner_radius=8,
+            font_size=11,
+            font_weight=wx.FONTWEIGHT_BOLD if not self._dark_mode else wx.FONTWEIGHT_NORMAL
+        )
+        self._light_btn.Bind_Click(lambda e: self._on_theme_select(dlg, sizer, False))
+        mode_sizer.Add(self._light_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        
+        # Dark button
+        dark_bg = self._theme["accent_blue"] if self._dark_mode else self._theme["bg_button"]
+        dark_fg = "#FFFFFF" if self._dark_mode else self._theme["text_primary"]
+        self._dark_btn = RoundedButton(
+            mode_panel,
+            label="Dark",
+            icon="",
+            size=(90, 36),
+            bg_color=dark_bg,
+            fg_color=dark_fg,
+            corner_radius=8,
+            font_size=11,
+            font_weight=wx.FONTWEIGHT_BOLD if self._dark_mode else wx.FONTWEIGHT_NORMAL
+        )
+        self._dark_btn.Bind_Click(lambda e: self._on_theme_select(dlg, sizer, True))
+        mode_sizer.Add(self._dark_btn, 0, wx.ALIGN_CENTER_VERTICAL)
         
         mode_panel.SetSizer(mode_sizer)
         sizer.Add(mode_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
         
-        sizer.AddSpacer(24)
+        sizer.AddSpacer(16)
+        
+        # Colors panel - immediately below theme selection
+        self._colors_panel = wx.Panel(dlg)
+        self._colors_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        self._rebuild_color_options(self._colors_panel, self._dark_mode)
+        sizer.Add(self._colors_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 0)
+        
+        sizer.AddSpacer(20)
         
         # Separator
         sep = wx.StaticLine(dlg)
@@ -1176,17 +1234,46 @@ class KiNotesMainPanel(wx.Panel):
         sizer.Add(time_track_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
         
         sizer.AddSpacer(20)
+        
         # Separator
-        sep = wx.StaticLine(dlg)
-        sizer.Add(sep, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
+        sep2 = wx.StaticLine(dlg)
+        sizer.Add(sep2, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
         
         sizer.AddSpacer(20)
         
-        # Colors panel - will be replaced based on theme
-        self._colors_panel = wx.Panel(dlg)
-        self._colors_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        self._rebuild_color_options(self._colors_panel, self._dark_mode)
-        sizer.Add(self._colors_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 0)
+        # Editor Mode Settings Section
+        editor_header = wx.StaticText(dlg, label="📝 Editor Mode")
+        editor_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        editor_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        sizer.Add(editor_header, 0, wx.LEFT | wx.BOTTOM, 24)
+        
+        editor_panel = wx.Panel(dlg)
+        editor_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        editor_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Visual Editor Mode (Default) checkbox - unchecked means Markdown mode
+        self._markdown_mode_checkbox = wx.CheckBox(editor_panel, label="  Use Markdown Editor (Power User Mode)")
+        self._markdown_mode_checkbox.SetValue(not self._use_visual_editor)
+        self._markdown_mode_checkbox.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        editor_sizer.Add(self._markdown_mode_checkbox, 0, wx.ALL, 10)
+        
+        # Disable if visual editor not available
+        if not VISUAL_EDITOR_AVAILABLE:
+            self._markdown_mode_checkbox.SetValue(True)
+            self._markdown_mode_checkbox.Enable(False)
+            unavail_label = wx.StaticText(editor_panel, label="      (Visual Editor not available)")
+            unavail_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+            editor_sizer.Add(unavail_label, 0, wx.LEFT | wx.BOTTOM, 10)
+        else:
+            hint_label = wx.StaticText(editor_panel, 
+                label="      Visual Editor: WYSIWYG formatting with toolbar\n      Markdown Editor: Raw markdown with syntax")
+            hint_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+            editor_sizer.Add(hint_label, 0, wx.LEFT | wx.BOTTOM, 10)
+        
+        editor_panel.SetSizer(editor_sizer)
+        sizer.Add(editor_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
+        
+        sizer.AddStretchSpacer()
         
         # Buttons - unified rounded style with clear Save action
         btn_panel = wx.Panel(dlg)
@@ -1239,8 +1326,8 @@ class KiNotesMainPanel(wx.Panel):
         dlg.SetSizer(sizer)
         
         if dlg.ShowModal() == wx.ID_OK:
-            # Update theme
-            self._dark_mode = self._dark_toggle.GetValue()
+            # Update theme - check which button is highlighted (dark_btn has accent = dark selected)
+            self._dark_mode = hasattr(self, '_selected_theme_dark') and self._selected_theme_dark
             if self._dark_mode:
                 # Get dark theme color selections
                 dark_bg_choices = list(DARK_BACKGROUND_COLORS.keys())
@@ -1265,6 +1352,19 @@ class KiNotesMainPanel(wx.Panel):
             else:
                 self.export_diary_btn.Hide()
             
+            # Update editor mode setting
+            old_visual_editor = self._use_visual_editor
+            new_use_markdown = self._markdown_mode_checkbox.GetValue()
+            self._use_visual_editor = not new_use_markdown
+            
+            # Check if editor mode changed - requires restart notification
+            if old_visual_editor != self._use_visual_editor:
+                wx.MessageBox(
+                    "Editor mode change will take effect after restarting KiNotes.",
+                    "Restart Required",
+                    wx.OK | wx.ICON_INFORMATION
+                )
+            
             self._theme = DARK_THEME if self._dark_mode else LIGHT_THEME
             self._apply_theme()
             self._apply_editor_colors()
@@ -1272,6 +1372,25 @@ class KiNotesMainPanel(wx.Panel):
             self.Layout()
         
         dlg.Destroy()
+    
+    def _on_theme_select(self, dlg, sizer, is_dark):
+        """Handle theme button selection in settings dialog."""
+        # Track the selected theme
+        self._selected_theme_dark = is_dark
+        
+        # Update button appearances
+        if is_dark:
+            # Dark selected - highlight dark button
+            self._dark_btn.SetColors(self._theme["accent_blue"], "#FFFFFF")
+            self._light_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
+        else:
+            # Light selected - highlight light button
+            self._light_btn.SetColors(self._theme["accent_blue"], "#FFFFFF")
+            self._dark_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
+        
+        # Rebuild color options for selected theme
+        self._rebuild_color_options(self._colors_panel, is_dark)
+        dlg.Layout()
     
     def _on_theme_toggle(self, dlg, sizer, is_dark):
         """Handle theme toggle in settings dialog - rebuild color options."""
@@ -1290,7 +1409,7 @@ class KiNotesMainPanel(wx.Panel):
             # Dark Theme Colors
             header = wx.StaticText(panel, label="Dark Theme Colors")
             header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-            header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+            header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
             panel_sizer.Add(header, 0, wx.LEFT, 24)
             panel_sizer.AddSpacer(12)
             
@@ -1452,31 +1571,98 @@ class KiNotesMainPanel(wx.Panel):
         self.Update()
     
     def _apply_editor_colors(self):
-        """Apply selected colors to editor."""
-        bg = self._get_editor_bg()
-        fg = self._get_editor_text()
-        
-        self.text_editor.SetBackgroundColour(bg)
-        self.text_editor.SetForegroundColour(fg)
-        
-        # Apply to all text
-        font = self.text_editor.GetFont()
-        text_attr = wx.TextAttr(fg, bg, font)
-        self.text_editor.SetDefaultStyle(text_attr)
-        self.text_editor.SetStyle(0, self.text_editor.GetLastPosition(), text_attr)
-        self.text_editor.Refresh()
+        """Apply selected colors to editor (supports both Visual and Markdown modes)."""
+        try:
+            bg = self._get_editor_bg()
+            fg = self._get_editor_text()
+            
+            # Apply to Visual Editor if active
+            if self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor:
+                # Update dark mode first (sets base theme)
+                self.visual_editor.update_dark_mode(self._dark_mode, force_refresh=True)
+                # Then apply custom colors on top
+                self.visual_editor.set_custom_colors(bg, fg)
+                if self.visual_editor.IsShown():
+                    self.visual_editor.Refresh()
+                return
+            
+            # Apply to Markdown Editor if active
+            if hasattr(self, 'text_editor') and self.text_editor:
+                self.text_editor.SetBackgroundColour(bg)
+                self.text_editor.SetForegroundColour(fg)
+                
+                # Apply to all text
+                font = self.text_editor.GetFont()
+                text_attr = wx.TextAttr(fg, bg, font)
+                self.text_editor.SetDefaultStyle(text_attr)
+                self.text_editor.SetStyle(0, self.text_editor.GetLastPosition(), text_attr)
+                if self.text_editor.IsShown():
+                    self.text_editor.Refresh()
+        except Exception:
+            # Silently handle editor color update errors
+            pass
     
     # ============================================================
-    # TAB 1: NOTES
+    # TAB 1: NOTES (Dual-Mode: Visual WYSIWYG or Markdown)
     # ============================================================
     
     def _create_notes_tab(self, parent):
-        """Create Notes tab with formatting toolbar and editor."""
+        """Create Notes tab with dual-mode editor support (Visual/Markdown)."""
         panel = wx.Panel(parent)
         panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         sizer = wx.BoxSizer(wx.VERTICAL)
         
-        # Formatting toolbar
+        # Store reference to notes panel sizer for editor switching
+        self._notes_panel = panel
+        self._notes_sizer = sizer
+        
+        # Create the appropriate editor based on settings
+        if self._use_visual_editor and VISUAL_EDITOR_AVAILABLE:
+            # Visual WYSIWYG Editor (Default)
+            self._create_visual_editor(panel, sizer)
+        else:
+            # Markdown Text Editor (Fallback/Power User Mode)
+            self._create_markdown_editor(panel, sizer)
+        
+        panel.SetSizer(sizer)
+        return panel
+    
+    def _create_visual_editor(self, panel, sizer):
+        """Create Visual WYSIWYG Note Editor."""
+        try:
+            # Visual Editor comes with its own toolbar
+            self.visual_editor = VisualNoteEditor(
+                panel,
+                dark_mode=self._dark_mode,
+                style=wx.BORDER_NONE
+            )
+            print("[KiNotes] Visual editor created successfully")
+            
+            # Apply user's custom colors immediately after creation
+            bg = self._get_editor_bg()
+            fg = self._get_editor_text()
+            self.visual_editor.set_custom_colors(bg, fg)
+            print(f"[KiNotes] Custom colors applied: bg={bg}, fg={fg}")
+            
+            # Reference for unified API
+            self.text_editor = None  # Not using markdown editor
+            self.format_toolbar = None  # Visual editor has integrated toolbar
+            
+            # Bind text change event for auto-save
+            self.visual_editor.editor.Bind(wx.EVT_TEXT, self._on_text_changed)
+            
+            sizer.Add(self.visual_editor, 1, wx.EXPAND | wx.ALL, 0)
+            print("[KiNotes] Visual editor added to sizer")
+        except Exception as e:
+            import traceback
+            print(f"[KiNotes ERROR] Failed to create visual editor: {e}")
+            traceback.print_exc()
+            # Fall back to markdown editor
+            self._create_markdown_editor(panel, sizer)
+    
+    def _create_markdown_editor(self, panel, sizer):
+        """Create Markdown Text Editor (Power User Mode)."""
+        # Formatting toolbar for Markdown mode
         self.format_toolbar = self._create_formatting_toolbar(panel)
         sizer.Add(self.format_toolbar, 0, wx.EXPAND)
         
@@ -1499,8 +1685,23 @@ class KiNotesMainPanel(wx.Panel):
         self.text_editor.Bind(wx.EVT_KEY_DOWN, self._on_editor_key_down)
         sizer.Add(self.text_editor, 1, wx.EXPAND | wx.ALL, 12)
         
-        panel.SetSizer(sizer)
-        return panel
+        # Reference for unified API
+        self.visual_editor = None  # Not using visual editor
+    
+    def _get_note_content(self):
+        """Get note content from active editor (unified API)."""
+        if self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor:
+            return self.visual_editor.GetValue()
+        elif hasattr(self, 'text_editor') and self.text_editor:
+            return self.text_editor.GetValue()
+        return ""
+    
+    def _set_note_content(self, content):
+        """Set note content in active editor (unified API)."""
+        if self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor:
+            self.visual_editor.SetValue(content)
+        elif hasattr(self, 'text_editor') and self.text_editor:
+            self.text_editor.SetValue(content)
     
     def _create_formatting_toolbar(self, parent):
         """Create compact formatting toolbar for Notes tab."""
@@ -1854,7 +2055,7 @@ class KiNotesMainPanel(wx.Panel):
         # Timer play/pause button
         timer_btn = PlayPauseButton(item_panel, size=(42, 28), is_on=False)
         timer_btn.Bind_Change(lambda is_on, iid=item_id: self._on_timer_toggle(iid, is_on))
-        item_sizer.Add(timer_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        item_sizer.Add(timer_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 15)
         
         # Text input with strikethrough support
         txt = wx.TextCtrl(item_panel, value=text, style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER)
@@ -1877,14 +2078,16 @@ class KiNotesMainPanel(wx.Panel):
         txt.Bind(wx.EVT_TEXT, lambda e, iid=item_id: self._on_todo_text_change(iid))
         txt.Bind(wx.EVT_TEXT_ENTER, lambda e: self._on_add_todo(None))
         item_sizer.Add(txt, 1, wx.EXPAND | wx.ALL, 12)
-        
+        # Spacing between checkbox and timer button
+        item_sizer.AddSpacer(12)
         # Timer label - fixed width display
         timer_label = wx.StaticText(item_panel, label="⏱ 00:00:00")
         timer_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
         timer_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         timer_label.SetMinSize((120, -1))  # Increased from 110 to prevent overlap
-        item_sizer.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        
+        item_sizer.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 15)
+        # Spacing between Timer label and session label
+        item_sizer.AddSpacer(12)
         # RTC inline session label - shows last completed session if exists
         # Format: "(10:12 → 10:40 28min)"
         rtc_label = wx.StaticText(item_panel, label="")
@@ -1898,8 +2101,8 @@ class KiNotesMainPanel(wx.Panel):
             if tooltip_text:
                 rtc_label.SetToolTip(tooltip_text)
         
-        item_sizer.Add(rtc_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        
+        item_sizer.Add(rtc_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 35)
+        item_sizer.AddSpacer(12)
         # Delete button with icon
         del_btn = wx.Button(item_panel, label=Icons.DELETE, size=(40, 40), style=wx.BORDER_NONE)
         # Match item panel background
@@ -2175,12 +2378,13 @@ class KiNotesMainPanel(wx.Panel):
         try:
             bom_text = self._generate_bom_text()
             if bom_text:
-                current = self.text_editor.GetValue()
+                current = self._get_note_content()
                 if current and not current.endswith("\n"):
                     current += "\n"
                 current += "\n" + bom_text
-                self.text_editor.SetValue(current)
-                self.text_editor.SetInsertionPointEnd()
+                self._set_note_content(current)
+                if self.text_editor:
+                    self.text_editor.SetInsertionPointEnd()
                 self._apply_editor_colors()
                 self._show_tab(0)
         except Exception as e:
@@ -2336,19 +2540,35 @@ class KiNotesMainPanel(wx.Panel):
         """Handle import button click."""
         menu = wx.Menu()
         
-        items = [
-            (Icons.BOARD + "  Board Info", self._import_board_info),
-            (Icons.BOM + "  Bill of Materials (BOM)", self._import_bom),
-            (Icons.LAYERS + "  Layer Stackup", self._import_stackup),
-            (Icons.LAYERS + "  Layer Info", self._import_layers),
-            (None, None),
-            (Icons.NETLIST + "  Netlist", self._import_netlist),
-            (Icons.NETLIST + "  Differential Pairs", self._import_diff_pairs),
-            (Icons.RULES + "  Design Rules", self._import_design_rules),
-            (Icons.DRILL + "  Drill Table", self._import_drill_table),
-            (None, None),
-            (Icons.ALL + "  Import All", self._import_all),
-        ]
+        # Check if we're in Visual Editor mode
+        # Table-based imports (BOM, Netlist, Layers, Stackup, Drill) are disabled
+        # in Visual Editor mode as they don't render properly yet
+        is_visual_mode = self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor
+        
+        if is_visual_mode:
+            # Limited menu for Visual Editor - only non-table imports
+            items = [
+                (Icons.BOARD + "  Board Info", self._import_board_info),
+                (Icons.NETLIST + "  Differential Pairs", self._import_diff_pairs),
+                (Icons.RULES + "  Design Rules", self._import_design_rules),
+                (None, None),
+                ("⚠️  Table imports (BOM, Layers, etc.) require Markdown mode", None),
+            ]
+        else:
+            # Full menu for Markdown mode
+            items = [
+                (Icons.BOARD + "  Board Info", self._import_board_info),
+                (Icons.BOM + "  Bill of Materials (BOM)", self._import_bom),
+                (Icons.LAYERS + "  Layer Stackup", self._import_stackup),
+                (Icons.LAYERS + "  Layer Info", self._import_layers),
+                (None, None),
+                (Icons.NETLIST + "  Netlist", self._import_netlist),
+                (Icons.NETLIST + "  Differential Pairs", self._import_diff_pairs),
+                (Icons.RULES + "  Design Rules", self._import_design_rules),
+                (Icons.DRILL + "  Drill Table", self._import_drill_table),
+                (None, None),
+                (Icons.ALL + "  Import All", self._import_all),
+            ]
         
         for label, handler in items:
             if label is None:
@@ -2357,6 +2577,9 @@ class KiNotesMainPanel(wx.Panel):
                 item = menu.Append(wx.ID_ANY, label)
                 if handler:
                     menu.Bind(wx.EVT_MENU, handler, item)
+                else:
+                    # Disabled item (info text)
+                    item.Enable(False)
         
         self.PopupMenu(menu)
         menu.Destroy()
@@ -2370,7 +2593,6 @@ class KiNotesMainPanel(wx.Panel):
         """Import board size/info."""
         try:
             header = self._get_import_header("Board Information")
-            header = self._get_import_title()
             info = self.metadata_extractor.extract('board_size')
             self._insert_text(header + info)
         except Exception as e:
@@ -2449,29 +2671,56 @@ class KiNotesMainPanel(wx.Panel):
             wx.MessageBox(f"Error importing all metadata: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
     
     def _insert_text(self, text):
-        """Insert text at cursor or end."""
+        """Insert text at cursor or end, handling tables properly for Visual Editor."""
         try:
-            current = self.text_editor.GetValue()
-            if current and not current.endswith("\n"):
-                current += "\n"
-            current += "\n" + text
-            self.text_editor.SetValue(current)
-            self.text_editor.SetInsertionPointEnd()
-            self._apply_editor_colors()
+            # Check if we're in Visual Editor mode
+            if self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor:
+                # Check if text contains markdown table
+                has_markdown_table = '|' in text and any(
+                    line.strip().startswith('|') and line.strip().endswith('|') 
+                    for line in text.split('\n')
+                )
+                
+                if has_markdown_table:
+                    # Use the visual editor's markdown formatter for proper table rendering
+                    try:
+                        self.visual_editor.insert_markdown_as_formatted(text)
+                    except Exception as table_err:
+                        # Fallback: insert as plain text if table parsing fails
+                        self.visual_editor.editor.WriteText(text + "\n")
+                else:
+                    # No tables - insert directly into editor
+                    self.visual_editor.editor.WriteText(text + "\n")
+                    
+                # Move cursor to end and mark as modified
+                self.visual_editor.SetInsertionPointEnd()
+                self.visual_editor._modified = True
+            else:
+                # Markdown mode - insert text as-is
+                current = self._get_note_content()
+                if current and not current.endswith("\n"):
+                    current += "\n"
+                current += "\n" + text
+                self._set_note_content(current)
+                if self.text_editor:
+                    self.text_editor.SetInsertionPointEnd()
+            
+            # Switch to notes tab
             self._show_tab(0)
-        except:
-            pass
-    
+            
+        except Exception as e:
+            wx.MessageBox(f"Error inserting text: {e}", "Insert Error", wx.OK | wx.ICON_ERROR)
+
     def _on_export_pdf(self):
         """Export notes to PDF."""
         try:
-            content = self.text_editor.GetValue()
+            content = self._get_note_content()
             filepath = self.pdf_exporter.export(content)
             if filepath:
                 wx.MessageBox("Exported to:\n" + filepath, "PDF Export", wx.OK | wx.ICON_INFORMATION)
         except Exception as e:
             wx.MessageBox("Export failed: " + str(e), "Error", wx.OK | wx.ICON_ERROR)
-    
+
     def _on_manual_save(self):
         """Manual save."""
         try:
@@ -2486,7 +2735,10 @@ class KiNotesMainPanel(wx.Panel):
         event.Skip()
     
     def _on_text_click(self, event):
-        """Handle @REF clicks."""
+        """Handle @REF clicks (Markdown mode only)."""
+        if not self.text_editor:
+            event.Skip()
+            return
         try:
             pos = self.text_editor.HitTestPos(event.GetPosition())[1]
             if pos >= 0:
@@ -2558,7 +2810,7 @@ class KiNotesMainPanel(wx.Panel):
         try:
             content = self.notes_manager.load()
             if content:
-                self.text_editor.SetValue(content)
+                self._set_note_content(content)
                 self._apply_editor_colors()
         except:
             pass
@@ -2582,7 +2834,7 @@ class KiNotesMainPanel(wx.Panel):
     def _save_notes(self):
         """Save notes."""
         try:
-            self.notes_manager.save(self.text_editor.GetValue())
+            self.notes_manager.save(self._get_note_content())
         except:
             pass
     

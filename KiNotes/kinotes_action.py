@@ -28,11 +28,22 @@ if _plugin_dir not in sys.path:
 
 # Force reload of modules to get latest changes
 import importlib
-try:
-    from ui import main_panel
-    importlib.reload(main_panel)
-except:
-    pass
+
+def _force_reload_modules():
+    """Force reload all UI modules to pick up latest changes."""
+    try:
+        # Reload in dependency order: visual_editor, markdown_converter, then main_panel
+        from ui import visual_editor, markdown_converter, main_panel
+        importlib.reload(visual_editor)
+        print("[KiNotes] Reloaded visual_editor")
+        importlib.reload(markdown_converter)
+        print("[KiNotes] Reloaded markdown_converter")
+        importlib.reload(main_panel)
+        print("[KiNotes] Reloaded main_panel")
+    except Exception as e:
+        print(f"[KiNotes] Module reload warning: {e}")
+
+_force_reload_modules()
 
 from core.notes_manager import NotesManager
 from core.designator_linker import DesignatorLinker
@@ -41,8 +52,8 @@ from core.pdf_exporter import PDFExporter
 from ui.main_panel import KiNotesMainPanel
 
 # Plugin version - change this to force reload
-_PLUGIN_VERSION = "1.2.0"
-print(f"KiNotes v{_PLUGIN_VERSION} loaded")
+_PLUGIN_VERSION = "1.3.2"
+print(f"KiNotes v{_PLUGIN_VERSION} loaded - Visual Editor enabled")
 
 
 # Global singleton - ensures only ONE window ever

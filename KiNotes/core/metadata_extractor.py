@@ -93,27 +93,114 @@ class MetadataExtractor:
             return "<!-- Error: No board loaded -->"
         
         lines = [
-            "## Layer Stackup",
-            "",
-            "| Layer | Type | Thickness |",
-            "|-------|------|-----------|",
+            "| Layer | Type | Material | Thickness | Epsilon |",
+            "|-------|------|----------|-----------|---------|",
         ]
         
+        stackup_found = False
+        stackup = None
+        
         try:
-            # KiCad 9+ stackup API
-            stackup = board.GetDesignSettings().GetStackupDescriptor()
+            # KiCad 9+ direct stackup accessor (new in KiCad 9)
+            if hasattr(board, 'GetStackup'):
+                stackup = board.GetStackup()
             
-            for item in stackup.GetList():
-                layer_name = item.GetLayerName() if hasattr(item, 'GetLayerName') else str(item.GetBrdLayerId())
-                layer_type = item.GetTypeName() if hasattr(item, 'GetTypeName') else "Unknown"
-                thickness = f"{item.GetThickness() / 1000000:.3f}mm" if hasattr(item, 'GetThickness') else "N/A"
+            # Fallback to older API via GetDesignSettings
+            if stackup is None:
+                ds = board.GetDesignSettings()
+                if hasattr(ds, 'GetStackupDescriptor'):
+                    stackup = ds.GetStackupDescriptor()
+            
+            if stackup is not None:
+                # Try GetCount() + GetStackupLayer(i) (KiCad 9+)
+                if hasattr(stackup, 'GetCount'):
+                    count = stackup.GetCount()
+                    for i in range(count):
+                        item = stackup.GetStackupLayer(i)
+                        if item is None:
+                            continue
+                        stackup_found = True
+                        self._add_stackup_layer_row(lines, board, item, i)
                 
-                lines.append(f"| {layer_name} | {layer_type} | {thickness} |")
+                # Try iterating directly (some KiCad versions)
+                elif hasattr(stackup, '__iter__'):
+                    for i, item in enumerate(stackup):
+                        stackup_found = True
+                        self._add_stackup_layer_row(lines, board, item, i)
+                
+                # Try GetList() with list() conversion
+                elif hasattr(stackup, 'GetList'):
+                    try:
+                        stack_list = list(stackup.GetList())
+                        for i, item in enumerate(stack_list):
+                            stackup_found = True
+                            self._add_stackup_layer_row(lines, board, item, i)
+                    except:
+                        pass
+                    
         except Exception as e:
-            lines.append(f"| (Stackup data not available: {e}) | | |")
+            lines.append(f"| (Stackup API error: {e}) | | | | |")
+        
+        # Fallback: show basic copper layer info
+        if not stackup_found:
+            lines = [
+                "| Layer | Type |",
+                "|-------|------|",
+            ]
+            try:
+                copper_count = board.GetCopperLayerCount()
+                enabled = board.GetEnabledLayers()
+                
+                for layer_id in range(pcbnew.PCB_LAYER_ID_COUNT):
+                    if enabled.Contains(layer_id) and pcbnew.IsCopperLayer(layer_id):
+                        layer_name = board.GetLayerName(layer_id)
+                        lines.append(f"| {layer_name} | Copper |")
+                
+                lines.append("")
+                lines.append(f"*Total copper layers: {copper_count}*")
+            except Exception as e:
+                lines.append(f"| (Error: {e}) | |")
         
         lines.append("")
         return "\n".join(lines)
+    
+    def _add_stackup_layer_row(self, lines, board, item, index):
+        """Helper to add a stackup layer row."""
+        # Get layer name
+        try:
+            layer_id = item.GetBrdLayerId()
+            layer_name = board.GetLayerName(layer_id) if layer_id >= 0 else "Dielectric"
+        except:
+            layer_name = f"Layer {index}"
+        
+        # Get layer type
+        try:
+            type_name = item.GetTypeName()
+        except:
+            type_name = "Unknown"
+        
+        # Get material
+        try:
+            material = item.GetMaterial() or "-"
+        except:
+            material = "-"
+        
+        # Get thickness
+        try:
+            thickness_iu = item.GetThickness()
+            thickness_mm = pcbnew.ToMM(thickness_iu)
+            thickness_str = f"{thickness_mm:.3f}mm"
+        except:
+            thickness_str = "N/A"
+        
+        # Get epsilon_r
+        try:
+            epsilon = item.GetEpsilonR()
+            epsilon_str = f"{epsilon:.2f}" if epsilon > 0 else "-"
+        except:
+            epsilon_str = "-"
+        
+        lines.append(f"| {layer_name} | {type_name} | {material} | {thickness_str} | {epsilon_str} |")
     
     def extract_board_size(self):
         """Extract board dimensions."""

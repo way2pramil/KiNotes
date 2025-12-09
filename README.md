@@ -13,13 +13,26 @@ Write design decisions, link components with `@R1` syntax, import board metadata
 
 ## ✨ Features
 
-### 📝 Smart Notes Editor
-- **Markdown-based** notes with live formatting
-- **To-do lists** with `- [ ]` / `- [x]` checkboxes and strikethrough
+### 📝 Dual-Mode Notes Editor
+- **Visual Editor (WYSIWYG)** — Notion-like rich text editing with toolbar
+  - Bold, Italic, Underline, Strikethrough formatting
+  - Headings (H1, H2, H3)
+  - Bullet lists, numbered lists, checkboxes
+  - Insert tables, images, links, dividers, timestamps
+  - Keyboard shortcuts (Ctrl+B, Ctrl+I, etc.)
+- **Markdown Editor** — Power user mode with raw markdown
+  - Live preview formatting
+  - `- [ ]` / `- [x]` checkboxes with strikethrough
 - **Auto-link designators** — type `@R1`, `@U3`, `@C5` → highlights component on PCB
-- **Insert images** — embed block diagrams, schematics, or screenshots
 - **Auto-save** on every change, close, or outside click
 - **Git-friendly** `.kinotes/` folder in project directory
+
+### 🎨 Modern UI & Theming
+- **Dark/Light mode** toggle with custom color schemes
+- **iOS-inspired** clean, minimal interface
+- **User-selectable colors** — 5 background + 5 text color presets per theme
+- **Dockable panel** — dock left/right like Properties panel, or use popup
+- **Icon-based toolbar** — intuitive buttons
 
 ### 🔗 PCB Integration (KiCad 9+)
 - **Import Board Metadata** with one-click dropdown:
@@ -34,6 +47,8 @@ Write design decisions, link components with `@R1` syntax, import board metadata
   - Design rules
 - **Click `@REF`** → jump to and highlight component in pcbnew
 - **Component metadata preview** — value, footprint, layer, nets
+
+> **Note:** Table-based imports (BOM, Layers, Stackup, Drill Table) currently require Markdown mode
 
 ### 📋 IBOM-Style BOM Generator
 - **Column Selection** — Reference, Value, Footprint, Qty, Description, Manufacturer, MPN, Supplier, SPN, Layer, Position, Rotation, DNP
@@ -52,8 +67,9 @@ Write design decisions, link components with `@R1` syntax, import board metadata
 - **Follows KiCad UI** patterns for natural integration
 - **Dockable panel** — dock left/right like Properties panel, or use popup
 - **Icon-based toolbar** — intuitive buttons
-- **Dark/Light mode** — respects system theme
+- **Dark/Light mode** — with customizable color schemes
 - **PCBtools.xyz branding** in footer
+- **Time tracking** — per-task stopwatch with work diary export
 
 ---
 
@@ -127,8 +143,10 @@ KiNotes/
 ├── kinotes_action.py        # Main action plugin entry point
 ├── ui/
 │   ├── main_panel.py        # Main notes panel UI
+│   ├── visual_editor.py     # WYSIWYG rich text editor
+│   ├── markdown_converter.py# Markdown ↔ RichText conversion
 │   ├── toolbar.py           # Icon toolbar
-│   ├── todo_widget.py       # Checkbox to-do list
+│   ├── bom_dialog.py        # IBOM-style BOM generator
 │   └── styles.py            # iOS-like styling
 ├── core/
 │   ├── notes_manager.py     # Load/save notes
@@ -149,12 +167,13 @@ KiNotes/
 
 | Version | Features | Status |
 |---------|----------|:------:|
-| **v0.1** | Notes panel, auto-save, basic Markdown | 🟢 Done |
-| **v0.2** | `@REF` linking, component highlight | 🟡 In Progress |
-| **v0.3** | Metadata import (BOM, stackup, etc.) | 🔄 Planned |
-| **v0.4** | PDF export, image support | 🔄 Planned |
-| **v0.5** | Dockable panel, iOS-like UI polish | 🔄 Planned |
-| **v1.0** | Production release | 🔄 Planned |
+| **v1.0** | Notes panel, auto-save, basic Markdown | 🟢 Done |
+| **v1.1** | `@REF` linking, component highlight | 🟢 Done |
+| **v1.2** | Metadata import (BOM, stackup, etc.) | 🟢 Done |
+| **v1.3** | Dark/Light mode, custom colors, time tracking | 🟢 Done |
+| **v1.4** | **Visual Editor (WYSIWYG)**, Markdown converter | 🟢 Done |
+| **v1.5** | Table rendering in Visual Editor | 🔄 In Progress |
+| **v2.0** | Production release, KiCad Plugin Manager | 🔄 Planned |
 
 ---
 
