@@ -104,6 +104,94 @@ def hex_to_colour(hex_str):
 
 
 # ============================================================
+# DPI SCALING UTILITIES - KiCad-compatible High-DPI support
+# ============================================================
+_dpi_scale_factor = None
+_user_scale_factor = None  # User-configurable override
+
+# Available scale options for settings
+UI_SCALE_OPTIONS = {
+    "Auto (System)": None,
+    "100% (Standard)": 1.0,
+    "110%": 1.1,
+    "125%": 1.25,
+    "150%": 1.5,
+    "175%": 1.75,
+    "200% (High-DPI)": 2.0,
+}
+
+def set_user_scale_factor(factor):
+    """Set user-preferred UI scale factor.
+    
+    Args:
+        factor: Scale factor (1.0 = 100%, 1.5 = 150%, etc.) or None for auto
+    """
+    global _user_scale_factor, _dpi_scale_factor
+    _user_scale_factor = factor
+    _dpi_scale_factor = None  # Reset cached value to recalculate
+
+def get_user_scale_factor():
+    """Get the current user scale factor setting."""
+    return _user_scale_factor
+
+def get_dpi_scale_factor(window=None):
+    """Get the DPI scale factor for high-DPI displays.
+    
+    Returns a multiplier (1.0 = 96 DPI, 1.25 = 120 DPI, 1.5 = 144 DPI, 2.0 = 192 DPI)
+    If user has set a manual scale, that takes priority.
+    """
+    global _dpi_scale_factor, _user_scale_factor
+    
+    # User override takes priority
+    if _user_scale_factor is not None:
+        return _user_scale_factor
+    
+    if _dpi_scale_factor is not None:
+        return _dpi_scale_factor
+    
+    try:
+        if window:
+            # Use window's DPI if available (wxPython 4.1+)
+            if hasattr(window, 'GetDPIScaleFactor'):
+                _dpi_scale_factor = window.GetDPIScaleFactor()
+                return _dpi_scale_factor
+            elif hasattr(window, 'GetContentScaleFactor'):
+                _dpi_scale_factor = window.GetContentScaleFactor()
+                return _dpi_scale_factor
+        
+        # Fallback: use screen DPI
+        dc = wx.ScreenDC()
+        dpi = dc.GetPPI()
+        _dpi_scale_factor = dpi[0] / 96.0  # 96 DPI is standard
+    except:
+        _dpi_scale_factor = 1.0
+    
+    return _dpi_scale_factor
+
+def scale_size(size, window=None):
+    """Scale a size tuple (width, height) for DPI.
+    
+    Args:
+        size: Tuple (width, height) or single int
+        window: Optional window to get DPI from
+    
+    Returns:
+        Scaled size tuple or int
+    """
+    factor = get_dpi_scale_factor(window)
+    if isinstance(size, tuple):
+        return (int(size[0] * factor), int(size[1] * factor))
+    return int(size * factor)
+
+def scale_font_size(size, window=None):
+    """Scale font size for DPI (slightly less aggressive than UI scaling)."""
+    factor = get_dpi_scale_factor(window)
+    # Font scaling is typically less than UI scaling
+    font_factor = 1.0 + (factor - 1.0) * 0.7
+    return int(size * font_factor)
+
+
+# ============================================================
 # TIME TRACKER - Per-task stopwatch with RTC logging
 # ============================================================
 class TimeTracker:
@@ -373,25 +461,27 @@ class RoundedButton(wx.Panel):
     def __init__(self, parent, label="", size=(120, 44), bg_color="#4285F4", 
                  fg_color="#FFFFFF", icon="", corner_radius=8, font_size=11,
                  font_weight=wx.FONTWEIGHT_BOLD):
-        super().__init__(parent, size=size)
+        # Apply DPI scaling to size
+        scaled_size = scale_size(size, parent)
+        super().__init__(parent, size=scaled_size)
         
         self.label = label
         self.icon = icon
         self.bg_color = hex_to_colour(bg_color) if isinstance(bg_color, str) else bg_color
         self.fg_color = hex_to_colour(fg_color) if isinstance(fg_color, str) else fg_color
-        self.corner_radius = corner_radius
+        self.corner_radius = scale_size(corner_radius, parent)
         self.is_hovered = False
         self.is_pressed = False
         self.callback = None
-        self.button_size = size
-        self.base_font_size = font_size
+        self.button_size = scaled_size
+        self.base_font_size = scale_font_size(font_size, parent)
         self.font_weight = font_weight
         
-        # Don't force max size - let parent control height via DPI
-        self.SetMinSize(size)
+        # Use scaled size for min size
+        self.SetMinSize(scaled_size)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         
-        self.font = wx.Font(font_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, font_weight)
+        self.font = wx.Font(self.base_font_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, font_weight)
         
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_ENTER_WINDOW, self._on_enter)
@@ -495,7 +585,9 @@ class PlayPauseButton(wx.Panel):
     """Play/Pause button for timer control - official wxPython compatible."""
     
     def __init__(self, parent, size=(42, 28), is_on=False):
-        super().__init__(parent, size=size)
+        # Apply DPI scaling
+        scaled_size = scale_size(size, parent)
+        super().__init__(parent, size=scaled_size)
         
         self.is_on = is_on
         self.callback = None
@@ -504,8 +596,8 @@ class PlayPauseButton(wx.Panel):
         self.color_paused = hex_to_colour("#8E8E93")   # Gray when paused
         self.text_color = wx.WHITE
         
-        # Use MinSize but let parent control via DPI
-        self.SetMinSize(size)
+        # Use scaled size for MinSize
+        self.SetMinSize(scaled_size)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -576,7 +668,9 @@ class ToggleSwitch(wx.Panel):
     """Simple toggle switch for settings - iOS-style."""
     
     def __init__(self, parent, size=(50, 26), is_on=False):
-        super().__init__(parent, size=size)
+        # Apply DPI scaling
+        scaled_size = scale_size(size, parent)
+        super().__init__(parent, size=scaled_size)
         
         self.is_on = is_on
         self.callback = None
@@ -585,8 +679,8 @@ class ToggleSwitch(wx.Panel):
         self.track_color_off = hex_to_colour("#CCCCCC")
         self.knob_color = wx.WHITE
         
-        # Use MinSize but let parent control via DPI
-        self.SetMinSize(size)
+        # Use scaled size for MinSize
+        self.SetMinSize(scaled_size)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -742,6 +836,9 @@ class KiNotesMainPanel(wx.Panel):
                 # Only use visual if available
                 if self._use_visual_editor and not VISUAL_EDITOR_AVAILABLE:
                     self._use_visual_editor = False
+                # UI Scale factor - None means auto
+                ui_scale = settings.get("ui_scale_factor", None)
+                set_user_scale_factor(ui_scale)
         except:
             pass
 
@@ -755,7 +852,8 @@ class KiNotesMainPanel(wx.Panel):
                 "dark_bg_color": self._dark_bg_color_name,
                 "dark_text_color": self._dark_text_color_name,
                 "dark_mode": self._dark_mode,
-                "use_visual_editor": self._use_visual_editor
+                "use_visual_editor": self._use_visual_editor,
+                "ui_scale_factor": get_user_scale_factor()
             })
             self.notes_manager.save_settings(settings)
         except:
@@ -807,10 +905,10 @@ class KiNotesMainPanel(wx.Panel):
         """Create top bar with tabs + Import button on same line."""
         top_bar = wx.Panel(self)
         top_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
-        top_bar.SetMinSize((-1, 70))
+        top_bar.SetMinSize((-1, scale_size(70, self)))
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.AddSpacer(16)
+        sizer.AddSpacer(scale_size(16, self))
         
         # Tab buttons - unified rounded style
         self.tab_buttons = []
@@ -879,10 +977,10 @@ class KiNotesMainPanel(wx.Panel):
         """Create bottom bar with pcbtools.xyz link, Save and Export PDF buttons."""
         bottom_bar = wx.Panel(self)
         bottom_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
-        bottom_bar.SetMinSize((-1, 70))
+        bottom_bar.SetMinSize((-1, scale_size(70, self)))
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.AddSpacer(16)
+        sizer.AddSpacer(scale_size(16, self))
         
         # pcbtools.xyz link on the left with globe icon
         link_text = wx.StaticText(bottom_bar, label="\U0001F310 pcbtools.xyz")
@@ -1116,9 +1214,10 @@ class KiNotesMainPanel(wx.Panel):
     
     def _on_settings_click(self, event):
         """Show color settings dialog with Light/Dark theme buttons and time tracking options."""
-        dlg = wx.Dialog(self, title="Settings", size=(650, 900),
+        # Size increased by 20% for better visibility
+        dlg = wx.Dialog(self, title="Settings", size=(780, 1200),
                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        dlg.SetMinSize((650, 900))
+        dlg.SetMinSize((780, 1080))
         dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         
         # Initialize selected theme state
@@ -1273,6 +1372,77 @@ class KiNotesMainPanel(wx.Panel):
         editor_panel.SetSizer(editor_sizer)
         sizer.Add(editor_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
         
+        sizer.AddSpacer(20)
+        
+        # Separator
+        sep3 = wx.StaticLine(dlg)
+        sizer.Add(sep3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
+        
+        sizer.AddSpacer(20)
+        
+        # UI Scale Settings Section
+        scale_header = wx.StaticText(dlg, label="🔍 UI Scale (High-DPI)")
+        scale_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        scale_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        sizer.Add(scale_header, 0, wx.LEFT | wx.BOTTOM, 24)
+        
+        scale_panel = wx.Panel(dlg)
+        scale_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        scale_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Auto checkbox
+        self._scale_auto_checkbox = wx.CheckBox(scale_panel, label="  Auto (Use System DPI)")
+        current_scale = get_user_scale_factor()
+        self._scale_auto_checkbox.SetValue(current_scale is None)
+        self._scale_auto_checkbox.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        self._scale_auto_checkbox.Bind(wx.EVT_CHECKBOX, self._on_scale_auto_toggle)
+        scale_sizer.Add(self._scale_auto_checkbox, 0, wx.ALL, 10)
+        
+        # Scale slider row
+        slider_row = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # Min label
+        min_label = wx.StaticText(scale_panel, label="100%")
+        min_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        slider_row.Add(min_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        
+        # Slider: 100% to 200% (values 100-200)
+        self._scale_slider = wx.Slider(scale_panel, value=100, minValue=100, maxValue=200,
+                                        style=wx.SL_HORIZONTAL)
+        if current_scale is not None:
+            self._scale_slider.SetValue(int(current_scale * 100))
+        else:
+            # Show system DPI value when auto
+            system_scale = get_dpi_scale_factor(self)
+            self._scale_slider.SetValue(int(system_scale * 100))
+        self._scale_slider.Enable(current_scale is not None)  # Disabled when auto
+        self._scale_slider.Bind(wx.EVT_SLIDER, self._on_scale_slider_change)
+        slider_row.Add(self._scale_slider, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+        
+        # Max label
+        max_label = wx.StaticText(scale_panel, label="200%")
+        max_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        slider_row.Add(max_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 8)
+        
+        scale_sizer.Add(slider_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        
+        # Current value display
+        current_factor = get_dpi_scale_factor(self)
+        self._scale_value_label = wx.StaticText(scale_panel, 
+            label=f"Current: {int(current_factor * 100)}%")
+        self._scale_value_label.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self._scale_value_label.SetForegroundColour(hex_to_colour(self._theme["accent_blue"]))
+        scale_sizer.Add(self._scale_value_label, 0, wx.ALIGN_CENTER | wx.TOP, 8)
+        
+        # Scale hint
+        scale_hint = wx.StaticText(scale_panel, 
+            label="Restart KiNotes for changes to take effect")
+        scale_hint.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        scale_sizer.Add(scale_hint, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, 10)
+        
+        scale_panel.SetSizer(scale_sizer)
+        sizer.Add(scale_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
+        
         sizer.AddStretchSpacer()
         
         # Buttons - unified rounded style with clear Save action
@@ -1357,10 +1527,30 @@ class KiNotesMainPanel(wx.Panel):
             new_use_markdown = self._markdown_mode_checkbox.GetValue()
             self._use_visual_editor = not new_use_markdown
             
-            # Check if editor mode changed - requires restart notification
+            # Update UI scale factor setting
+            old_scale_factor = get_user_scale_factor()
+            if self._scale_auto_checkbox.GetValue():
+                new_scale_factor = None  # Auto mode
+            else:
+                new_scale_factor = self._scale_slider.GetValue() / 100.0
+            set_user_scale_factor(new_scale_factor)
+            
+            # Check if editor mode or scale changed - requires restart notification
+            needs_restart = False
+            restart_reasons = []
+            
             if old_visual_editor != self._use_visual_editor:
+                needs_restart = True
+                restart_reasons.append("Editor mode")
+            
+            if old_scale_factor != new_scale_factor:
+                needs_restart = True
+                restart_reasons.append("UI scale")
+            
+            if needs_restart:
+                reasons_str = " and ".join(restart_reasons)
                 wx.MessageBox(
-                    "Editor mode change will take effect after restarting KiNotes.",
+                    f"{reasons_str} change will take effect after restarting KiNotes.",
                     "Restart Required",
                     wx.OK | wx.ICON_INFORMATION
                 )
@@ -1372,6 +1562,26 @@ class KiNotesMainPanel(wx.Panel):
             self.Layout()
         
         dlg.Destroy()
+    
+    def _on_scale_auto_toggle(self, event):
+        """Handle auto scale checkbox toggle."""
+        is_auto = self._scale_auto_checkbox.GetValue()
+        self._scale_slider.Enable(not is_auto)
+        
+        if is_auto:
+            # Show system DPI value on slider
+            system_scale = get_dpi_scale_factor(self)
+            self._scale_slider.SetValue(int(system_scale * 100))
+            self._scale_value_label.SetLabel(f"Current: {int(system_scale * 100)}% (Auto)")
+        else:
+            # Use slider value
+            slider_val = self._scale_slider.GetValue()
+            self._scale_value_label.SetLabel(f"Current: {slider_val}%")
+    
+    def _on_scale_slider_change(self, event):
+        """Handle scale slider value change."""
+        slider_val = self._scale_slider.GetValue()
+        self._scale_value_label.SetLabel(f"Current: {slider_val}%")
     
     def _on_theme_select(self, dlg, sizer, is_dark):
         """Handle theme button selection in settings dialog."""

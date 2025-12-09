@@ -27,6 +27,42 @@ from typing import Optional, Tuple, List
 
 
 # ============================================================
+# DPI SCALING UTILITIES
+# ============================================================
+_dpi_scale_factor = None
+
+def get_dpi_scale_factor(window=None):
+    """Get the DPI scale factor for high-DPI displays."""
+    global _dpi_scale_factor
+    if _dpi_scale_factor is not None:
+        return _dpi_scale_factor
+    
+    try:
+        if window:
+            if hasattr(window, 'GetDPIScaleFactor'):
+                _dpi_scale_factor = window.GetDPIScaleFactor()
+                return _dpi_scale_factor
+            elif hasattr(window, 'GetContentScaleFactor'):
+                _dpi_scale_factor = window.GetContentScaleFactor()
+                return _dpi_scale_factor
+        
+        dc = wx.ScreenDC()
+        dpi = dc.GetPPI()
+        _dpi_scale_factor = dpi[0] / 96.0
+    except:
+        _dpi_scale_factor = 1.0
+    
+    return _dpi_scale_factor
+
+def scale_size(size, window=None):
+    """Scale a size tuple or int for DPI."""
+    factor = get_dpi_scale_factor(window)
+    if isinstance(size, tuple):
+        return (int(size[0] * factor), int(size[1] * factor))
+    return int(size * factor)
+
+
+# ============================================================
 # VISUAL EDITOR STYLES - Dark/Light Theme Aware
 # ============================================================
 
@@ -325,10 +361,10 @@ class VisualNoteEditor(wx.Panel):
         """Create the formatting toolbar with all buttons."""
         toolbar = wx.Panel(self)
         toolbar.SetBackgroundColour(self._toolbar_bg)
-        toolbar.SetMinSize((-1, 44))
+        toolbar.SetMinSize((-1, scale_size(44, self)))
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.AddSpacer(8)
+        sizer.AddSpacer(scale_size(8, self))
         
         # Define toolbar buttons
         # Format: (label, tooltip, callback, is_toggle)
@@ -373,26 +409,27 @@ class VisualNoteEditor(wx.Panel):
             if group_idx > 0:
                 # Add separator
                 sep = wx.StaticLine(toolbar, style=wx.LI_VERTICAL)
-                sep.SetMinSize((1, 28))
-                sizer.Add(sep, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, 6)
+                sep.SetMinSize((1, scale_size(28, self)))
+                sizer.Add(sep, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, scale_size(6, self))
             
             for label, tooltip, callback, is_toggle in group:
                 btn = self._create_toolbar_button(toolbar, label, tooltip, callback)
                 self._toolbar_buttons[label] = btn
-                sizer.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
+                sizer.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, scale_size(2, self))
         
         sizer.AddStretchSpacer()
         
         # Clear formatting button on right
         clear_btn = self._create_toolbar_button(toolbar, "✕", "Clear Formatting", self._on_clear_format)
-        sizer.Add(clear_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        sizer.Add(clear_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(8, self))
         
         toolbar.SetSizer(sizer)
         return toolbar
     
     def _create_toolbar_button(self, parent, label: str, tooltip: str, callback) -> wx.Button:
         """Create a toolbar button with consistent styling."""
-        btn = wx.Button(parent, label=label, size=(36, 32), style=wx.BORDER_NONE)
+        btn_size = scale_size((36, 32), self)
+        btn = wx.Button(parent, label=label, size=btn_size, style=wx.BORDER_NONE)
         btn.SetBackgroundColour(self._toolbar_bg)
         btn.SetForegroundColour(self._text_color)
         btn.SetToolTip(tooltip)
@@ -654,45 +691,46 @@ class VisualNoteEditor(wx.Panel):
     
     def _on_insert_table(self, event):
         """Insert a proper RichText table with visual styling."""
-        # Ask for table dimensions
-        dlg = wx.Dialog(self, title="Insert Table", size=(300, 220),
+        # Ask for table dimensions - scale dialog size for DPI
+        dlg_size = scale_size((300, 220), self)
+        dlg = wx.Dialog(self, title="Insert Table", size=dlg_size,
                        style=wx.DEFAULT_DIALOG_STYLE)
         dlg.SetBackgroundColour(self._bg_color)
         
         panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        panel_sizer.AddSpacer(16)
+        panel_sizer.AddSpacer(scale_size(16, self))
         
         # Rows input
         row_sizer = wx.BoxSizer(wx.HORIZONTAL)
         row_label = wx.StaticText(dlg, label="Rows:")
         row_label.SetForegroundColour(self._text_color)
-        row_label.SetMinSize((80, -1))
-        row_sizer.Add(row_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        row_label.SetMinSize((scale_size(80, self), -1))
+        row_sizer.Add(row_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
         row_spin = wx.SpinCtrl(dlg, min=2, max=50, initial=4)
-        row_spin.SetMinSize((100, -1))
+        row_spin.SetMinSize((scale_size(100, self), -1))
         row_sizer.Add(row_spin, 0, wx.EXPAND)
-        panel_sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 20)
+        panel_sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
         
-        panel_sizer.AddSpacer(12)
+        panel_sizer.AddSpacer(scale_size(12, self))
         
         # Columns input
         col_sizer = wx.BoxSizer(wx.HORIZONTAL)
         col_label = wx.StaticText(dlg, label="Columns:")
         col_label.SetForegroundColour(self._text_color)
-        col_label.SetMinSize((80, -1))
-        col_sizer.Add(col_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        col_label.SetMinSize((scale_size(80, self), -1))
+        col_sizer.Add(col_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
         col_spin = wx.SpinCtrl(dlg, min=2, max=10, initial=4)
-        col_spin.SetMinSize((100, -1))
+        col_spin.SetMinSize((scale_size(100, self), -1))
         col_sizer.Add(col_spin, 0, wx.EXPAND)
-        panel_sizer.Add(col_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 20)
+        panel_sizer.Add(col_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
         
-        panel_sizer.AddSpacer(12)
+        panel_sizer.AddSpacer(scale_size(12, self))
         
         # Header row checkbox
         header_check = wx.CheckBox(dlg, label="Include header row")
         header_check.SetValue(True)
         header_check.SetForegroundColour(self._text_color)
-        panel_sizer.Add(header_check, 0, wx.LEFT | wx.RIGHT, 20)
+        panel_sizer.Add(header_check, 0, wx.LEFT | wx.RIGHT, scale_size(20, self))
         
         panel_sizer.AddStretchSpacer()
         
@@ -701,15 +739,15 @@ class VisualNoteEditor(wx.Panel):
         btn_sizer.AddStretchSpacer()
         
         cancel_btn = wx.Button(dlg, wx.ID_CANCEL, "Cancel")
-        cancel_btn.SetMinSize((80, 32))
-        btn_sizer.Add(cancel_btn, 0, wx.RIGHT, 10)
+        cancel_btn.SetMinSize(scale_size((80, 32), self))
+        btn_sizer.Add(cancel_btn, 0, wx.RIGHT, scale_size(10, self))
         
         ok_btn = wx.Button(dlg, wx.ID_OK, "Insert Table")
-        ok_btn.SetMinSize((100, 32))
+        ok_btn.SetMinSize(scale_size((100, 32), self))
         ok_btn.SetDefault()
         btn_sizer.Add(ok_btn, 0)
         
-        panel_sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, 16)
+        panel_sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, scale_size(16, self))
         
         dlg.SetSizer(panel_sizer)
         dlg.Layout()
