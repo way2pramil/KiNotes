@@ -877,7 +877,7 @@ class KiNotesMainPanel(wx.Panel):
         sizer.AddSpacer(20)
         
         # Open work logs folder link
-        folder_text = wx.StaticText(bottom_bar, label="📁 Work Logs")
+        folder_text = wx.StaticText(bottom_bar, label="📁 Directory")
         folder_text.SetForegroundColour(hex_to_colour(self._theme["accent_blue"]))
         folder_text.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, underline=True))
         folder_text.SetCursor(wx.Cursor(wx.CURSOR_HAND))
@@ -1112,7 +1112,7 @@ class KiNotesMainPanel(wx.Panel):
         mode_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         mode_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        mode_label = wx.StaticText(mode_panel, label= " Theme")
+        mode_label = wx.StaticText(mode_panel, label= "Select Theme")
         mode_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         mode_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         mode_sizer.Add(mode_label, 0, wx.ALIGN_CENTER_VERTICAL)
@@ -1137,7 +1137,7 @@ class KiNotesMainPanel(wx.Panel):
         # Time Tracking Settings Section
         time_header = wx.StaticText(dlg, label="⏱ Time Tracking Options")
         time_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        time_header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        time_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         sizer.Add(time_header, 0, wx.LEFT | wx.BOTTOM, 24)
         
         # Enable time tracking checkbox
@@ -1325,7 +1325,7 @@ class KiNotesMainPanel(wx.Panel):
             # Light Theme Colors
             header = wx.StaticText(panel, label="Light Theme Colors")
             header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-            header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+            header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
             panel_sizer.Add(header, 0, wx.LEFT, 24)
             panel_sizer.AddSpacer(12)
             
@@ -2370,6 +2370,7 @@ class KiNotesMainPanel(wx.Panel):
         """Import board size/info."""
         try:
             header = self._get_import_header("Board Information")
+            header = self._get_import_title()
             info = self.metadata_extractor.extract('board_size')
             self._insert_text(header + info)
         except Exception as e:

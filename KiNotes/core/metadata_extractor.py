@@ -152,7 +152,7 @@ class MetadataExtractor:
         return "\n".join(lines)
     
     def extract_diff_pairs(self):
-        """Extract differential pair information."""
+        """Extract differential pair information using KiCad's IsDiffPair() API."""
         board = self._get_board()
         if not board:
             return "<!-- Error: No board loaded -->"
@@ -163,27 +163,51 @@ class MetadataExtractor:
         ]
         
         try:
-            # Get net classes and look for diff pairs
-            design_settings = board.GetDesignSettings()
-            net_classes = design_settings.GetNetClasses()
-            
             diff_pairs_found = []
+            processed_nets = set()
             
-            # Look for nets ending in + and - or _P and _N
-            nets = {}
-            for net in board.GetNetInfo().NetsByName():
-                net_name = net
-                nets[net_name] = True
-            
-            # Find pairs
-            for net_name in nets:
-                if net_name.endswith('+') or net_name.endswith('_P'):
-                    base = net_name[:-1] if net_name.endswith('+') else net_name[:-2]
-                    pair_suffix = '-' if net_name.endswith('+') else '_N'
-                    pair_name = base + pair_suffix
+            # Use KiCad's native IsDiffPair() detection
+            net_info = board.GetNetInfo()
+            for i in range(net_info.GetNetCount()):
+                net = net_info.GetNetItem(i)
+                if net and hasattr(net, 'IsDiffPair') and net.IsDiffPair():
+                    net_name = net.GetNetname()
                     
-                    if pair_name in nets:
-                        diff_pairs_found.append((net_name, pair_name))
+                    # Avoid duplicate pairs (both P and N will report as diff pair)
+                    if net_name not in processed_nets:
+                        # Try to get the coupled net
+                        if hasattr(net, 'GetDiffPairCoupledNet'):
+                            coupled_net = net.GetDiffPairCoupledNet()
+                            if coupled_net:
+                                coupled_name = coupled_net.GetNetname()
+                                processed_nets.add(net_name)
+                                processed_nets.add(coupled_name)
+                                
+                                # Determine which is positive/negative based on naming
+                                if net_name.endswith('+') or net_name.endswith('_P') or net_name.endswith('P'):
+                                    diff_pairs_found.append((net_name, coupled_name))
+                                else:
+                                    diff_pairs_found.append((coupled_name, net_name))
+                        else:
+                            # Fallback: just mark as diff pair without coupled info
+                            processed_nets.add(net_name)
+                            diff_pairs_found.append((net_name, "?"))
+            
+            # Fallback to string pattern matching if IsDiffPair() not available
+            if not diff_pairs_found and not hasattr(net_info.GetNetItem(0) if net_info.GetNetCount() > 0 else None, 'IsDiffPair'):
+                nets = {}
+                for net in board.GetNetInfo().NetsByName():
+                    net_name = net
+                    nets[net_name] = True
+                
+                for net_name in nets:
+                    if net_name.endswith('+') or net_name.endswith('_P'):
+                        base = net_name[:-1] if net_name.endswith('+') else net_name[:-2]
+                        pair_suffix = '-' if net_name.endswith('+') else '_N'
+                        pair_name = base + pair_suffix
+                        
+                        if pair_name in nets:
+                            diff_pairs_found.append((net_name, pair_name))
             
             if diff_pairs_found:
                 lines.extend([
