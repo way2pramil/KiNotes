@@ -1486,7 +1486,7 @@ class KiNotesMainPanel(wx.Panel):
         
         self._panel_width_spin = wx.SpinCtrl(panel_size_panel, min=600, max=2000, initial=current_width)
         self._panel_width_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        self._panel_width_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_secondary"]))
+        self._panel_width_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
         width_row.Add(self._panel_width_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
         
         width_px_label = wx.StaticText(panel_size_panel, label="px")
@@ -1504,7 +1504,7 @@ class KiNotesMainPanel(wx.Panel):
         
         self._panel_height_spin = wx.SpinCtrl(panel_size_panel, min=500, max=2000, initial=current_height)
         self._panel_height_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        self._panel_height_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_secondary"]))
+        self._panel_height_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
         height_row.Add(self._panel_height_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
         
         height_px_label = wx.StaticText(panel_size_panel, label="px")
