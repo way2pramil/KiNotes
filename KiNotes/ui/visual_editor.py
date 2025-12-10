@@ -386,7 +386,6 @@ class VisualNoteEditor(wx.Panel):
             [
                 ("•", "Bullet List", self._on_bullet_list, False),
                 ("1.", "Numbered List", self._on_numbered_list, False),
-                ("☐", "Checkbox", self._on_checkbox, False),
             ],
             # Insert
             [
@@ -814,19 +813,20 @@ class VisualNoteEditor(wx.Panel):
         if pos > 0 and len(text) > 0 and text[pos - 1] != '\n':
             self._editor.WriteText("\n")
         
-        # Create table attributes
-        table_attr = rt.RichTextAttr()
-        
         # Calculate column widths - use provided width or auto-calculate
         if col_width is None:
             editor_width = self._editor.GetClientSize().GetWidth() - 40
             col_width = max(80, editor_width // cols)
         
-        # Create the table
+        # Default row height if not provided
+        if row_height is None:
+            row_height = 30
+        
+        # Create the table with row/col dimensions
         table = self._editor.WriteTable(rows, cols)
         
         if table:
-            # Style the table
+            # Style the table cells
             for row_idx in range(rows):
                 for col_idx in range(cols):
                     cell = table.GetCell(row_idx, col_idx)
@@ -857,7 +857,9 @@ class VisualNoteEditor(wx.Panel):
                         self._editor.WriteText(cell_text)
                         self._editor.EndStyle()
         
-        self._editor.WriteText("\n")
+        # Move cursor to end of document after table insertion
+        self._editor.MoveEnd()
+        self._editor.WriteText("\n\n")
         self._modified = True
     
     def insert_data_table(self, headers: List[str], data: List[List[str]], title: str = None):

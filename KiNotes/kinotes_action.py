@@ -113,12 +113,19 @@ class KiNotesFrame(wx.Frame):
         self.project_dir = project_dir or self._get_project_dir()
         project_name = os.path.basename(self.project_dir) if self.project_dir else "KiNotes"
         
+        # Get version from package
+        try:
+            from . import __version__
+            version = __version__
+        except:
+            version = "1.4.1"
+        
         # Use regular Frame style for better close button visibility
         style = (wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
         
         super().__init__(
             parent,
-            title="KiNotes",
+            title=f"KiNotes v{version}",
             size=(1092, 1170),  # 30% larger (840*1.3, 900*1.3)
             style=style
         )
@@ -149,8 +156,11 @@ class KiNotesFrame(wx.Frame):
         """Initialize the UI."""
         self.SetBackgroundColour(wx.Colour(250, 250, 250))
         
-        # Set icon
-        icon_path = os.path.join(_plugin_dir, "resources", "icon.png")
+        # Set icon - try SVG first, then PNG
+        icon_svg = os.path.join(_plugin_dir, "resources", "icon.svg")
+        icon_png = os.path.join(_plugin_dir, "resources", "icon.png")
+        icon_path = icon_svg if os.path.exists(icon_svg) else icon_png
+        
         if os.path.exists(icon_path):
             try:
                 self.SetIcon(wx.Icon(icon_path))
@@ -361,12 +371,23 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
         self.category = "Utilities"
         self.description = "Smart engineering notes with tabs: Notes, Todo List, Settings"
         self.show_toolbar_button = True
-        self.icon_file_name = os.path.join(_plugin_dir, "resources", "icon.png")
         
-        # Dark mode icon
-        dark_icon = os.path.join(_plugin_dir, "resources", "icon.png")
-        if os.path.exists(dark_icon):
-            self.dark_icon_file_name = dark_icon
+        # Try 24x24 toolbar icon first, then fallback to main icon
+        icon_24 = os.path.join(_plugin_dir, "resources", "icons", "icon_24x24.svg")
+        icon_svg = os.path.join(_plugin_dir, "resources", "icon.svg")
+        icon_png = os.path.join(_plugin_dir, "resources", "icon.png")
+        
+        if os.path.exists(icon_24):
+            self.icon_file_name = icon_24
+        elif os.path.exists(icon_svg):
+            self.icon_file_name = icon_svg
+        elif os.path.exists(icon_png):
+            self.icon_file_name = icon_png
+        else:
+            self.icon_file_name = ""
+        
+        # Dark mode icon (same as light for now)
+        self.dark_icon_file_name = self.icon_file_name
     
     def Run(self):
         """Run the plugin - ensures only one frame is open."""

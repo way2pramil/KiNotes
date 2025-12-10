@@ -27,6 +27,7 @@ class NotesManager:
         self.settings_path = os.path.join(self.notes_dir, self.SETTINGS_FILE)
         self.meta_path = os.path.join(self.notes_dir, self.META_FILE)
         
+        # First ensure folder exists, then migrate
         self._ensure_folder_exists()
         self._migrate_legacy_notes()
     
@@ -36,18 +37,25 @@ class NotesManager:
         # Sanitize: remove special characters, replace spaces with underscores
         name = re.sub(r'[<>:"/\\|?*]', '', name)
         name = name.replace(' ', '_')
+        # Remove leading/trailing underscores
+        name = name.strip('_')
         return name if name else "project"
     
     def _migrate_legacy_notes(self):
         """Migrate from old notes.md to new KiNotes_<project>.md format."""
+        # Only migrate if legacy exists and new file doesn't
         if os.path.exists(self.legacy_notes_path) and not os.path.exists(self.notes_path):
             try:
-                # Copy content from legacy to new filename
+                # Read content from legacy file
                 with open(self.legacy_notes_path, "r", encoding="utf-8") as f:
                     content = f.read()
+                # Write to new filename
                 with open(self.notes_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                print(f"KiNotes: Migrated notes to {os.path.basename(self.notes_path)}")
+                # Rename legacy file to .bak to avoid re-migration
+                backup_path = self.legacy_notes_path + ".bak"
+                os.rename(self.legacy_notes_path, backup_path)
+                print(f"KiNotes: Migrated notes.md to {os.path.basename(self.notes_path)}")
             except Exception as e:
                 print(f"KiNotes: Error migrating notes: {e}")
     
