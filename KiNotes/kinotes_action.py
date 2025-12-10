@@ -156,14 +156,11 @@ class KiNotesFrame(wx.Frame):
         """Initialize the UI."""
         self.SetBackgroundColour(wx.Colour(250, 250, 250))
         
-        # Set icon - try SVG first, then PNG
-        icon_svg = os.path.join(_plugin_dir, "resources", "icon.svg")
+        # Set window icon (PNG format)
         icon_png = os.path.join(_plugin_dir, "resources", "icon.png")
-        icon_path = icon_svg if os.path.exists(icon_svg) else icon_png
-        
-        if os.path.exists(icon_path):
+        if os.path.exists(icon_png):
             try:
-                self.SetIcon(wx.Icon(icon_path))
+                self.SetIcon(wx.Icon(icon_png))
             except:
                 pass
         
@@ -372,22 +369,15 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
         self.description = "Smart engineering notes with tabs: Notes, Todo List, Settings"
         self.show_toolbar_button = True
         
-        # Try 24x24 toolbar icon first, then fallback to main icon
-        icon_24 = os.path.join(_plugin_dir, "resources", "icons", "icon_24x24.svg")
-        icon_svg = os.path.join(_plugin_dir, "resources", "icon.svg")
+        # KiCad requires PNG format for toolbar icons (24x24)
         icon_png = os.path.join(_plugin_dir, "resources", "icon.png")
         
-        if os.path.exists(icon_24):
-            self.icon_file_name = icon_24
-        elif os.path.exists(icon_svg):
-            self.icon_file_name = icon_svg
-        elif os.path.exists(icon_png):
+        if os.path.exists(icon_png):
             self.icon_file_name = icon_png
+            self.dark_icon_file_name = icon_png
         else:
             self.icon_file_name = ""
-        
-        # Dark mode icon (same as light for now)
-        self.dark_icon_file_name = self.icon_file_name
+            self.dark_icon_file_name = ""
     
     def Run(self):
         """Run the plugin - ensures only one frame is open."""
