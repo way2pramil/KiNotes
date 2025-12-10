@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Background: Rounded rectangle representing a note/document -->
+  <rect x="8" y="4" width="48" height="56" rx="4" ry="4" fill="#2196F3"/>
+  
+  <!-- Folded corner effect -->
+  <path d="M44 4 L56 16 L44 16 Z" fill="#1976D2"/>
+  <path d="M44 4 L44 16 L56 16" fill="none" stroke="#1565C0" stroke-width="0.5"/>
+  
+  <!-- Note lines representing text/markdown -->
+  <rect x="14" y="22" width="28" height="3" rx="1.5" fill="white" opacity="0.9"/>
+  <rect x="14" y="30" width="22" height="3" rx="1.5" fill="white" opacity="0.9"/>
+  <rect x="14" y="38" width="32" height="3" rx="1.5" fill="white" opacity="0.9"/>
+  <rect x="14" y="46" width="18" height="3" rx="1.5" fill="white" opacity="0.9"/>
+  
+  <!-- @ symbol representing designator linking - key feature -->
+  <circle cx="48" cy="50" r="10" fill="#4CAF50"/>
+  <text x="48" y="55" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">@</text>
+</svg>

@@ -3,12 +3,13 @@ KiNotes - Smart Engineering Notes for KiCad 9+
 A PCBtools.xyz Plugin
 
 Features:
-- Markdown-based notes with auto-save
+- Dual-Mode Editor: Visual WYSIWYG or Markdown
 - @REF designator linking to highlight PCB components
 - Import board metadata (BOM, stackup, netlist, etc.)
 - Export notes to PDF
-- iOS-inspired modern UI
-- Dockable panel or popup window
+- Dark/Light themes with custom colors
+- Per-task time tracking
+- Git-friendly .kinotes/ folder storage
 
 Target: KiCad 9.0+ (Python 3.9+, wxPython 4.2+)
 Website: https://pcbtools.xyz
@@ -16,7 +17,7 @@ Repository: https://github.com/way2pramil/KiNotes
 License: MIT
 """
 
-__version__ = "1.0.0"
+__version__ = "1.4.1"
 __author__ = "PCBtools.xyz"
 __license__ = "MIT"
 

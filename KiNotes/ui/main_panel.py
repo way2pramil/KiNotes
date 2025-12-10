@@ -1516,8 +1516,9 @@ class KiNotesMainPanel(wx.Panel):
             self.time_tracker.time_format_24h = self._time_format_choice.GetSelection() == 0
             self.time_tracker.show_work_diary_button = self._show_work_diary.GetValue()
             
-            # Show/hide export diary button based on setting
-            if self.time_tracker.show_work_diary_button:
+            # Show/hide export diary button based on setting AND current tab
+            # Only show on Todo tab (idx==1) when setting is enabled
+            if self.time_tracker.show_work_diary_button and self._current_tab == 1:
                 self.export_diary_btn.Show()
             else:
                 self.export_diary_btn.Hide()

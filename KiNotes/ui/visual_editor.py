@@ -369,12 +369,12 @@ class VisualNoteEditor(wx.Panel):
         # Define toolbar buttons
         # Format: (label, tooltip, callback, is_toggle)
         button_groups = [
-            # Text formatting
+            # Text formatting - unified simple text icons
             [
-                ("𝐁", "Bold (Ctrl+B)", self._on_bold, True),
-                ("𝐼", "Italic (Ctrl+I)", self._on_italic, True),
-                ("U̲", "Underline (Ctrl+U)", self._on_underline, True),
-                ("S̶", "Strikethrough", self._on_strikethrough, True),
+                ("B", "Bold (Ctrl+B)", self._on_bold, True),
+                ("I", "Italic (Ctrl+I)", self._on_italic, True),
+                ("U", "Underline (Ctrl+U)", self._on_underline, True),
+                ("ab", "Strikethrough", self._on_strikethrough, True),
             ],
             # Headings
             [
@@ -391,10 +391,10 @@ class VisualNoteEditor(wx.Panel):
             # Insert
             [
                 ("—", "Divider", self._on_divider, False),
-                ("🕐", "Timestamp", self._on_timestamp, False),
-                ("🔗", "Link", self._on_insert_link, False),
-                ("📷", "Image", self._on_insert_image, False),
-                ("▦", "Table", self._on_insert_table, False),
+                ("⏱", "Timestamp", self._on_timestamp, False),
+                ("⛓", "Link", self._on_insert_link, False),
+                ("🖼", "Image", self._on_insert_image, False),
+                ("⊞", "Table", self._on_insert_table, False),
             ],
             # Undo/Redo
             [
@@ -434,8 +434,15 @@ class VisualNoteEditor(wx.Panel):
         btn.SetForegroundColour(self._text_color)
         btn.SetToolTip(tooltip)
         
-        # Set font - use system font for emoji compatibility
-        if len(label) <= 2 and not any(c in label for c in "𝐁𝐼"):
+        # Set font - unified styling for all buttons
+        if label in ("B", "I", "U"):
+            # Bold/Italic/Underline with appropriate style
+            style = wx.FONTSTYLE_ITALIC if label == "I" else wx.FONTSTYLE_NORMAL
+            btn.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, style, wx.FONTWEIGHT_BOLD))
+        elif label == "ab":
+            # Strikethrough - smaller font
+            btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        elif len(label) <= 2:
             btn.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         else:
             btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
@@ -692,7 +699,7 @@ class VisualNoteEditor(wx.Panel):
     def _on_insert_table(self, event):
         """Insert a proper RichText table with visual styling."""
         # Ask for table dimensions - scale dialog size for DPI
-        dlg_size = scale_size((300, 220), self)
+        dlg_size = scale_size((320, 320), self)
         dlg = wx.Dialog(self, title="Insert Table", size=dlg_size,
                        style=wx.DEFAULT_DIALOG_STYLE)
         dlg.SetBackgroundColour(self._bg_color)
@@ -704,33 +711,57 @@ class VisualNoteEditor(wx.Panel):
         row_sizer = wx.BoxSizer(wx.HORIZONTAL)
         row_label = wx.StaticText(dlg, label="Rows:")
         row_label.SetForegroundColour(self._text_color)
-        row_label.SetMinSize((scale_size(80, self), -1))
+        row_label.SetMinSize((scale_size(100, self), -1))
         row_sizer.Add(row_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
         row_spin = wx.SpinCtrl(dlg, min=2, max=50, initial=4)
         row_spin.SetMinSize((scale_size(100, self), -1))
         row_sizer.Add(row_spin, 0, wx.EXPAND)
         panel_sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
         
-        panel_sizer.AddSpacer(scale_size(12, self))
+        panel_sizer.AddSpacer(scale_size(10, self))
         
         # Columns input
         col_sizer = wx.BoxSizer(wx.HORIZONTAL)
         col_label = wx.StaticText(dlg, label="Columns:")
         col_label.SetForegroundColour(self._text_color)
-        col_label.SetMinSize((scale_size(80, self), -1))
+        col_label.SetMinSize((scale_size(100, self), -1))
         col_sizer.Add(col_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
         col_spin = wx.SpinCtrl(dlg, min=2, max=10, initial=4)
         col_spin.SetMinSize((scale_size(100, self), -1))
         col_sizer.Add(col_spin, 0, wx.EXPAND)
         panel_sizer.Add(col_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
         
-        panel_sizer.AddSpacer(scale_size(12, self))
+        panel_sizer.AddSpacer(scale_size(10, self))
         
-        # Header row checkbox
-        header_check = wx.CheckBox(dlg, label="Include header row")
-        header_check.SetValue(True)
-        header_check.SetForegroundColour(self._text_color)
-        panel_sizer.Add(header_check, 0, wx.LEFT | wx.RIGHT, scale_size(20, self))
+        # Row Height input
+        height_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        height_label = wx.StaticText(dlg, label="Row Height:")
+        height_label.SetForegroundColour(self._text_color)
+        height_label.SetMinSize((scale_size(100, self), -1))
+        height_sizer.Add(height_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
+        height_spin = wx.SpinCtrl(dlg, min=20, max=200, initial=30)
+        height_spin.SetMinSize((scale_size(80, self), -1))
+        height_sizer.Add(height_spin, 0)
+        height_unit = wx.StaticText(dlg, label="px")
+        height_unit.SetForegroundColour(self._text_color)
+        height_sizer.Add(height_unit, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, scale_size(5, self))
+        panel_sizer.Add(height_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
+        
+        panel_sizer.AddSpacer(scale_size(10, self))
+        
+        # Column Width input
+        width_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        width_label = wx.StaticText(dlg, label="Column Width:")
+        width_label.SetForegroundColour(self._text_color)
+        width_label.SetMinSize((scale_size(100, self), -1))
+        width_sizer.Add(width_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
+        width_spin = wx.SpinCtrl(dlg, min=40, max=500, initial=100)
+        width_spin.SetMinSize((scale_size(80, self), -1))
+        width_sizer.Add(width_spin, 0)
+        width_unit = wx.StaticText(dlg, label="px")
+        width_unit.SetForegroundColour(self._text_color)
+        width_sizer.Add(width_unit, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, scale_size(5, self))
+        panel_sizer.Add(width_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
         
         panel_sizer.AddStretchSpacer()
         
@@ -756,13 +787,15 @@ class VisualNoteEditor(wx.Panel):
         if dlg.ShowModal() == wx.ID_OK:
             rows = row_spin.GetValue()
             cols = col_spin.GetValue()
-            has_header = header_check.GetValue()
-            self._insert_rich_table(rows, cols, has_header)
+            row_height = height_spin.GetValue()
+            col_width = width_spin.GetValue()
+            self._insert_rich_table(rows, cols, False, row_height=row_height, col_width=col_width)
         
         dlg.Destroy()
     
     def _insert_rich_table(self, rows: int, cols: int, has_header: bool = True, 
-                          headers: List[str] = None, data: List[List[str]] = None):
+                          headers: List[str] = None, data: List[List[str]] = None,
+                          row_height: int = None, col_width: int = None):
         """
         Insert a proper RichTextTable with styling.
         
@@ -772,6 +805,8 @@ class VisualNoteEditor(wx.Panel):
             has_header: Whether first row is header
             headers: Optional header text list
             data: Optional data rows list
+            row_height: Optional row height in pixels
+            col_width: Optional column width in pixels
         """
         # Ensure we're at end of line
         pos = self._editor.GetInsertionPoint()
@@ -782,9 +817,10 @@ class VisualNoteEditor(wx.Panel):
         # Create table attributes
         table_attr = rt.RichTextAttr()
         
-        # Calculate column widths
-        editor_width = self._editor.GetClientSize().GetWidth() - 40
-        col_width = max(80, editor_width // cols)
+        # Calculate column widths - use provided width or auto-calculate
+        if col_width is None:
+            editor_width = self._editor.GetClientSize().GetWidth() - 40
+            col_width = max(80, editor_width // cols)
         
         # Create the table
         table = self._editor.WriteTable(rows, cols)

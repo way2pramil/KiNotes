@@ -141,6 +141,7 @@ Click the **Import Metadata** dropdown and select:
 KiNotes/
 ├── __init__.py              # Package init & plugin registration
 ├── kinotes_action.py        # Main action plugin entry point
+├── metadata.json            # KiCad PCM metadata
 ├── ui/
 │   ├── main_panel.py        # Main notes panel UI
 │   ├── visual_editor.py     # WYSIWYG rich text editor
@@ -154,11 +155,11 @@ KiNotes/
 │   ├── metadata_extractor.py# BOM, stackup, netlist extraction
 │   └── pdf_exporter.py      # PDF export
 ├── resources/
-│   ├── icon.png
-│   ├── icons/               # Toolbar icons
-│   └── styles.css           # UI styling
+│   ├── icon.png             # Toolbar icon (24x24)
+│   ├── icon.svg             # PCM icon (64x64)
+│   └── icons/               # Additional icons
 └── .kinotes/                # Per-project notes storage
-    └── notes.md
+    └── KiNotes_<project>.md # Project-named notes file
 ```
 
 ---
@@ -171,9 +172,10 @@ KiNotes/
 | **v1.1** | `@REF` linking, component highlight | 🟢 Done |
 | **v1.2** | Metadata import (BOM, stackup, etc.) | 🟢 Done |
 | **v1.3** | Dark/Light mode, custom colors, time tracking | 🟢 Done |
-| **v1.4** | **Visual Editor (WYSIWYG)**, Markdown converter | 🟢 Done |
+| **v1.4** | **Visual Editor (WYSIWYG)**, DPI scaling, UI scale settings | 🟢 Done |
+| **v1.4.1** | **PCM Ready**, Insert Table improvements, icon consistency | 🟢 Done |
 | **v1.5** | Table rendering in Visual Editor | 🔄 In Progress |
-| **v2.0** | Production release, KiCad Plugin Manager | 🔄 Planned |
+| **v2.0** | KiCad Plugin Manager release | 🔄 Planned |
 
 ---
 

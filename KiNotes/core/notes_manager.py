@@ -2,6 +2,7 @@
 KiNotes Notes Manager - Load/save notes, todos, settings to .kinotes folder
 """
 import os
+import re
 import json
 from datetime import datetime
 
@@ -10,7 +11,7 @@ class NotesManager:
     """Manages loading and saving notes, todos, and settings for a KiCad project."""
     
     NOTES_FOLDER = ".kinotes"
-    NOTES_FILE = "notes.md"
+    LEGACY_NOTES_FILE = "notes.md"  # Old filename for migration
     TODOS_FILE = "todos.json"
     SETTINGS_FILE = "settings.json"
     META_FILE = "meta.json"
@@ -18,13 +19,37 @@ class NotesManager:
     def __init__(self, project_dir):
         """Initialize with project directory path."""
         self.project_dir = project_dir
+        self.project_name = self._get_project_name()
         self.notes_dir = os.path.join(project_dir, self.NOTES_FOLDER)
-        self.notes_path = os.path.join(self.notes_dir, self.NOTES_FILE)
+        self.notes_path = os.path.join(self.notes_dir, f"KiNotes_{self.project_name}.md")
+        self.legacy_notes_path = os.path.join(self.notes_dir, self.LEGACY_NOTES_FILE)
         self.todos_path = os.path.join(self.notes_dir, self.TODOS_FILE)
         self.settings_path = os.path.join(self.notes_dir, self.SETTINGS_FILE)
         self.meta_path = os.path.join(self.notes_dir, self.META_FILE)
         
         self._ensure_folder_exists()
+        self._migrate_legacy_notes()
+    
+    def _get_project_name(self) -> str:
+        """Get sanitized project name from directory."""
+        name = os.path.basename(self.project_dir)
+        # Sanitize: remove special characters, replace spaces with underscores
+        name = re.sub(r'[<>:"/\\|?*]', '', name)
+        name = name.replace(' ', '_')
+        return name if name else "project"
+    
+    def _migrate_legacy_notes(self):
+        """Migrate from old notes.md to new KiNotes_<project>.md format."""
+        if os.path.exists(self.legacy_notes_path) and not os.path.exists(self.notes_path):
+            try:
+                # Copy content from legacy to new filename
+                with open(self.legacy_notes_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                with open(self.notes_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print(f"KiNotes: Migrated notes to {os.path.basename(self.notes_path)}")
+            except Exception as e:
+                print(f"KiNotes: Error migrating notes: {e}")
     
     def _ensure_folder_exists(self):
         """Create .kinotes folder if it doesn't exist."""

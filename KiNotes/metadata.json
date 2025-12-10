@@ -1,26 +1,34 @@
 {
+  "$schema": "https://go.kicad.org/pcm/schemas/v1",
   "name": "KiNotes",
-  "author": "PCBtools.xyz",
-  "description": "Smart Engineering Notes for KiCad 9+. Write Markdown notes with @REF designator linking, import board metadata (BOM, stackup, netlist), export to PDF, and enjoy an iOS-inspired modern UI.",
-  "version": "1.0.0",
-  "repository": "https://github.com/way2pramil/KiNotes",
-  "website": "https://pcbtools.xyz",
+  "description": "Smart Engineering Notes for KiCad 9+ with @REF linking, BOM import, and PDF export",
+  "description_full": "KiNotes brings real engineering notes directly inside KiCad pcbnew — with zero friction.\n\nFeatures:\n• Dual-Mode Editor: Visual WYSIWYG or Markdown\n• Auto-link designators: type @R1, @U3 → highlights component on PCB\n• Import board metadata: BOM, Stackup, Netlist, Layers, Diff Pairs\n• Dark/Light themes with custom colors\n• Export to PDF and Markdown\n• Per-task time tracking with work diary\n• Git-friendly .kinotes/ folder storage\n\nBuilt by PCBtools.xyz for modern KiCad workflows.",
+  "identifier": "com.pcbtools.kinotes",
+  "type": "plugin",
+  "author": {
+    "name": "PCBtools.xyz",
+    "contact": {
+      "web": "https://pcbtools.xyz",
+      "github": "https://github.com/way2pramil"
+    }
+  },
+  "maintainer": {
+    "name": "PCBtools.xyz",
+    "contact": {
+      "web": "https://pcbtools.xyz"
+    }
+  },
   "license": "MIT",
-  "type": "python-plugin",
-  "platforms": [
-    "linux",
-    "windows",
-    "macos"
-  ],
-  "kicad_version": "9.0",
-  "python_version": "3.9",
-  "keywords": [
-    "notes",
-    "markdown",
-    "documentation",
-    "pcb",
-    "engineering",
-    "bom",
-    "stackup"
+  "resources": {
+    "homepage": "https://pcbtools.xyz",
+    "repository": "https://github.com/way2pramil/KiNotes",
+    "issues": "https://github.com/way2pramil/KiNotes/issues"
+  },
+  "versions": [
+    {
+      "version": "1.4.1",
+      "status": "stable",
+      "kicad_version": "9.0"
+    }
   ]
 }
