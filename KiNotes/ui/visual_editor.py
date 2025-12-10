@@ -315,6 +315,19 @@ class VisualNoteEditor(wx.Panel):
                 
                 # Update default style for new text
                 self._editor.SetDefaultStyle(basic_style)
+                
+                # Apply new text color to ALL existing text
+                text_length = self._editor.GetLastPosition()
+                if text_length > 0:
+                    # Create style for existing text (preserve formatting, change color)
+                    color_attr = rt.RichTextAttr()
+                    color_attr.SetTextColour(self._text_color)
+                    color_attr.SetFlags(wx.TEXT_ATTR_TEXT_COLOUR)
+                    self._editor.SetStyleEx(
+                        rt.RichTextRange(0, text_length),
+                        color_attr,
+                        rt.RICHTEXT_SETSTYLE_WITH_UNDO
+                    )
             
             # Update toolbar buttons
             if hasattr(self, '_toolbar_buttons') and self._toolbar_buttons:
