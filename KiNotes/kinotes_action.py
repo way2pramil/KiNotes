@@ -120,13 +120,25 @@ class KiNotesFrame(wx.Frame):
         except:
             version = "1.4.1"
         
+        # Load panel size from settings
+        panel_width = 1092  # Default width
+        panel_height = 1170  # Default height
+        try:
+            notes_manager = NotesManager(self.project_dir)
+            settings = notes_manager.load_settings()
+            if settings:
+                panel_width = settings.get("panel_width", 1092)
+                panel_height = settings.get("panel_height", 1170)
+        except:
+            pass
+        
         # Use regular Frame style for better close button visibility
         style = (wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
         
         super().__init__(
             parent,
             title=f"KiNotes v{version}",
-            size=(1092, 1170),  # 30% larger (840*1.3, 900*1.3)
+            size=(panel_width, panel_height),
             style=style
         )
         

@@ -301,11 +301,14 @@ class TimeTracker:
             self.stop_task(task_id)
             del self.task_timers[task_id]
     
-    def export_work_diary(self):
+    def export_work_diary(self, format_24h=True):
         """Generate Markdown work diary content."""
         total_sec = self.get_total_seconds()
         hours = total_sec // 3600
         minutes = (total_sec % 3600) // 60
+        
+        # Choose time format based on setting
+        time_fmt = "%H:%M" if format_24h else "%I:%M %p"
         
         lines = [
             "# Work Log — KiCad Project",
@@ -322,8 +325,8 @@ class TimeTracker:
                 lines.append(f"## Task: {data['text']}")
                 
                 for session in data["history"]:
-                    start_dt = datetime.datetime.fromtimestamp(session['start']).strftime("%H:%M")
-                    stop_dt = datetime.datetime.fromtimestamp(session['stop']).strftime("%H:%M")
+                    start_dt = datetime.datetime.fromtimestamp(session['start']).strftime(time_fmt)
+                    stop_dt = datetime.datetime.fromtimestamp(session['stop']).strftime(time_fmt)
                     sess_sec = session['stop'] - session['start']
                     sess_min = sess_sec // 60
                     lines.append(f"- Session: {start_dt} → {stop_dt} ({sess_min} min)")
@@ -855,6 +858,11 @@ class KiNotesMainPanel(wx.Panel):
                 "use_visual_editor": self._use_visual_editor,
                 "ui_scale_factor": get_user_scale_factor()
             })
+            # Save panel size if settings dialog controls exist
+            if hasattr(self, '_panel_width_spin') and self._panel_width_spin:
+                settings["panel_width"] = self._panel_width_spin.GetValue()
+            if hasattr(self, '_panel_height_spin') and self._panel_height_spin:
+                settings["panel_height"] = self._panel_height_spin.GetValue()
             self.notes_manager.save_settings(settings)
         except:
             pass
@@ -1114,7 +1122,7 @@ class KiNotesMainPanel(wx.Panel):
     def _on_export_work_diary(self):
         """Export work diary to .kinotes directory with smart naming."""
         try:
-            content = self.time_tracker.export_work_diary()
+            content = self.time_tracker.export_work_diary(format_24h=self.time_tracker.time_format_24h)
             filepath, kinotes_dir = self._get_work_diary_path()
             
             with open(filepath, "w", encoding="utf-8") as f:
@@ -1454,6 +1462,68 @@ class KiNotesMainPanel(wx.Panel):
         
         sizer.AddSpacer(20)
         
+        # Panel Size Settings Section
+        panel_size_header = wx.StaticText(scroll_win, label="📐 Default Panel Size")
+        panel_size_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        panel_size_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        sizer.Add(panel_size_header, 0, wx.LEFT | wx.BOTTOM, 24)
+        
+        panel_size_panel = wx.Panel(scroll_win)
+        panel_size_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        panel_size_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Load current panel size settings
+        current_settings = self.notes_manager.load_settings() or {}
+        current_width = current_settings.get("panel_width", 1092)
+        current_height = current_settings.get("panel_height", 1170)
+        
+        # Width row
+        width_row = wx.BoxSizer(wx.HORIZONTAL)
+        width_label = wx.StaticText(panel_size_panel, label="Width:")
+        width_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        width_label.SetMinSize((60, -1))
+        width_row.Add(width_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        
+        self._panel_width_spin = wx.SpinCtrl(panel_size_panel, min=600, max=2000, initial=current_width)
+        self._panel_width_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        self._panel_width_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_secondary"]))
+        width_row.Add(self._panel_width_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        
+        width_px_label = wx.StaticText(panel_size_panel, label="px")
+        width_px_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        width_row.Add(width_px_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        panel_size_sizer.Add(width_row, 0, wx.ALL, 10)
+        
+        # Height row
+        height_row = wx.BoxSizer(wx.HORIZONTAL)
+        height_label = wx.StaticText(panel_size_panel, label="Height:")
+        height_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        height_label.SetMinSize((60, -1))
+        height_row.Add(height_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        
+        self._panel_height_spin = wx.SpinCtrl(panel_size_panel, min=500, max=2000, initial=current_height)
+        self._panel_height_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        self._panel_height_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_secondary"]))
+        height_row.Add(self._panel_height_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        
+        height_px_label = wx.StaticText(panel_size_panel, label="px")
+        height_px_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        height_row.Add(height_px_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        panel_size_sizer.Add(height_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        
+        # Panel size hint
+        panel_size_hint = wx.StaticText(panel_size_panel, 
+            label="Restart KiNotes for size changes to take effect")
+        panel_size_hint.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        panel_size_sizer.Add(panel_size_hint, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        
+        panel_size_panel.SetSizer(panel_size_sizer)
+        sizer.Add(panel_size_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
+        
+        sizer.AddSpacer(20)
+        
         # Set up scroll window with content sizer
         scroll_win.SetSizer(sizer)
         scroll_win.FitInside()
@@ -1552,6 +1622,14 @@ class KiNotesMainPanel(wx.Panel):
                 new_scale_factor = self._scale_slider.GetValue() / 100.0
             set_user_scale_factor(new_scale_factor)
             
+            # Check panel size changes
+            current_settings = self.notes_manager.load_settings() or {}
+            old_width = current_settings.get("panel_width", 1092)
+            old_height = current_settings.get("panel_height", 1170)
+            new_width = self._panel_width_spin.GetValue()
+            new_height = self._panel_height_spin.GetValue()
+            panel_size_changed = (old_width != new_width or old_height != new_height)
+            
             # Check if editor mode or scale changed - requires restart notification
             needs_restart = False
             restart_reasons = []
@@ -1563,6 +1641,10 @@ class KiNotesMainPanel(wx.Panel):
             if old_scale_factor != new_scale_factor:
                 needs_restart = True
                 restart_reasons.append("UI scale")
+            
+            if panel_size_changed:
+                needs_restart = True
+                restart_reasons.append("Panel size")
             
             if needs_restart:
                 reasons_str = " and ".join(restart_reasons)

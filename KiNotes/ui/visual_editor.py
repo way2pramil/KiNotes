@@ -1179,14 +1179,15 @@ class VisualNoteEditor(wx.Panel):
         pos = self._editor.GetInsertionPoint()
         text = self._editor.GetValue()
         
-        # Check if clicked on a checkbox
-        if pos > 0 and pos <= len(text):
+        # Only check for checkbox if there's actual text and position is valid
+        if text and pos > 0 and pos <= len(text):
+            # Get character at click position (pos-1 since pos is after character)
             char = text[pos - 1] if pos > 0 else ''
-            prev_char = text[pos - 2] if pos > 1 else ''
             
-            # Toggle checkbox if clicked on it
-            if char in '☐☑' or prev_char in '☐☑':
-                check_pos = pos - 1 if char in '☐☑' else pos - 2
+            # Only toggle if we clicked directly on a checkbox character
+            # This prevents accidental checkbox insertion on empty lines or double-clicks
+            if char in '☐☑':
+                check_pos = pos - 1
                 current_char = text[check_pos]
                 new_char = '☑' if current_char == '☐' else '☐'
                 
