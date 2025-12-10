@@ -1477,47 +1477,49 @@ class KiNotesMainPanel(wx.Panel):
         current_width = current_settings.get("panel_width", 1092)
         current_height = current_settings.get("panel_height", 1170)
         
-        # Width row
-        width_row = wx.BoxSizer(wx.HORIZONTAL)
+        # Horizontal row: [Width: spin px] | [Height: spin px]
+        size_row = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # Width section
         width_label = wx.StaticText(panel_size_panel, label="Width:")
         width_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        width_label.SetMinSize((60, -1))
-        width_row.Add(width_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        size_row.Add(width_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
-        self._panel_width_spin = wx.SpinCtrl(panel_size_panel, min=600, max=2000, initial=current_width)
+        self._panel_width_spin = wx.SpinCtrl(panel_size_panel, min=800, max=2000, initial=max(800, current_width))
         self._panel_width_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         self._panel_width_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
-        width_row.Add(self._panel_width_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        size_row.Add(self._panel_width_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
         
         width_px_label = wx.StaticText(panel_size_panel, label="px")
         width_px_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        width_row.Add(width_px_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        size_row.Add(width_px_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
         
-        panel_size_sizer.Add(width_row, 0, wx.ALL, 10)
+        # Separator
+        sep_label = wx.StaticText(panel_size_panel, label="|")
+        sep_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        size_row.Add(sep_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
         
-        # Height row
-        height_row = wx.BoxSizer(wx.HORIZONTAL)
+        # Height section (min 600px - Windows standard for 768px screens)
         height_label = wx.StaticText(panel_size_panel, label="Height:")
         height_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        height_label.SetMinSize((60, -1))
-        height_row.Add(height_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        size_row.Add(height_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
-        self._panel_height_spin = wx.SpinCtrl(panel_size_panel, min=500, max=2000, initial=current_height)
+        self._panel_height_spin = wx.SpinCtrl(panel_size_panel, min=600, max=2000, initial=max(600, current_height))
         self._panel_height_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         self._panel_height_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
-        height_row.Add(self._panel_height_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        size_row.Add(self._panel_height_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
         
         height_px_label = wx.StaticText(panel_size_panel, label="px")
         height_px_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        height_row.Add(height_px_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        size_row.Add(height_px_label, 0, wx.ALIGN_CENTER_VERTICAL)
         
-        panel_size_sizer.Add(height_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        panel_size_sizer.Add(size_row, 0, wx.ALL, 10)
         
         # Panel size hint
         panel_size_hint = wx.StaticText(panel_size_panel, 
-            label="Restart KiNotes for size changes to take effect")
+            label="Restart KiNotes for size changes to take effect (Min: 800×600)")
         panel_size_hint.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        panel_size_sizer.Add(panel_size_hint, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        panel_size_sizer.Add(panel_size_hint, 0, wx.LEFT | wx.BOTTOM, 10)
         
         panel_size_panel.SetSizer(panel_size_sizer)
         sizer.Add(panel_size_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
@@ -1714,74 +1716,56 @@ class KiNotesMainPanel(wx.Panel):
         
         panel_sizer = wx.BoxSizer(wx.VERTICAL)
         
+        # Header
+        theme_name = "Dark" if is_dark else "Light"
+        header = wx.StaticText(panel, label=f"{theme_name} Theme Colors")
+        header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        panel_sizer.Add(header, 0, wx.LEFT, 24)
+        panel_sizer.AddSpacer(12)
+        
+        # Horizontal row: [Background: dropdown] space [Text: dropdown]
+        color_row = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # Background color section
+        bg_label = wx.StaticText(panel, label="Background:")
+        bg_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        bg_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        color_row.Add(bg_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        
         if is_dark:
-            # Dark Theme Colors
-            header = wx.StaticText(panel, label="Dark Theme Colors")
-            header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-            header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-            panel_sizer.Add(header, 0, wx.LEFT, 24)
-            panel_sizer.AddSpacer(12)
-            
-            # Background color
-            bg_label = wx.StaticText(panel, label="Background:")
-            bg_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            bg_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-            panel_sizer.Add(bg_label, 0, wx.LEFT, 24)
-            panel_sizer.AddSpacer(6)
-            
             dark_bg_choices = list(DARK_BACKGROUND_COLORS.keys())
             self._bg_choice = wx.Choice(panel, choices=dark_bg_choices)
             dark_bg_name = getattr(self, '_dark_bg_color_name', 'Charcoal')
             self._bg_choice.SetSelection(dark_bg_choices.index(dark_bg_name) if dark_bg_name in dark_bg_choices else 0)
-            panel_sizer.Add(self._bg_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
-            
-            panel_sizer.AddSpacer(16)
-            
-            # Text color
-            txt_label = wx.StaticText(panel, label="Text:")
-            txt_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            txt_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-            panel_sizer.Add(txt_label, 0, wx.LEFT, 24)
-            panel_sizer.AddSpacer(6)
-            
+        else:
+            bg_choices = list(BACKGROUND_COLORS.keys())
+            self._bg_choice = wx.Choice(panel, choices=bg_choices)
+            self._bg_choice.SetSelection(bg_choices.index(self._bg_color_name) if self._bg_color_name in bg_choices else 0)
+        
+        self._bg_choice.SetMinSize((140, -1))
+        color_row.Add(self._bg_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 30)
+        
+        # Text color section
+        txt_label = wx.StaticText(panel, label="Text:")
+        txt_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        txt_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        color_row.Add(txt_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        
+        if is_dark:
             dark_txt_choices = list(DARK_TEXT_COLORS.keys())
             self._txt_choice = wx.Choice(panel, choices=dark_txt_choices)
             dark_txt_name = getattr(self, '_dark_text_color_name', 'Pure White')
             self._txt_choice.SetSelection(dark_txt_choices.index(dark_txt_name) if dark_txt_name in dark_txt_choices else 0)
-            panel_sizer.Add(self._txt_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
         else:
-            # Light Theme Colors
-            header = wx.StaticText(panel, label="Light Theme Colors")
-            header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-            header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-            panel_sizer.Add(header, 0, wx.LEFT, 24)
-            panel_sizer.AddSpacer(12)
-            
-            # Background color
-            bg_label = wx.StaticText(panel, label="Background:")
-            bg_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            bg_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-            panel_sizer.Add(bg_label, 0, wx.LEFT, 24)
-            panel_sizer.AddSpacer(6)
-            
-            bg_choices = list(BACKGROUND_COLORS.keys())
-            self._bg_choice = wx.Choice(panel, choices=bg_choices)
-            self._bg_choice.SetSelection(bg_choices.index(self._bg_color_name) if self._bg_color_name in bg_choices else 0)
-            panel_sizer.Add(self._bg_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
-            
-            panel_sizer.AddSpacer(16)
-            
-            # Text color
-            txt_label = wx.StaticText(panel, label="Text:")
-            txt_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            txt_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-            panel_sizer.Add(txt_label, 0, wx.LEFT, 24)
-            panel_sizer.AddSpacer(6)
-            
             txt_choices = list(TEXT_COLORS.keys())
             self._txt_choice = wx.Choice(panel, choices=txt_choices)
             self._txt_choice.SetSelection(txt_choices.index(self._text_color_name) if self._text_color_name in txt_choices else 0)
-            panel_sizer.Add(self._txt_choice, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
+        
+        self._txt_choice.SetMinSize((140, -1))
+        color_row.Add(self._txt_choice, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        panel_sizer.Add(color_row, 0, wx.LEFT | wx.RIGHT, 24)
         
         panel.SetSizer(panel_sizer)
         panel.Layout()
