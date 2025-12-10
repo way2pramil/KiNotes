@@ -17,7 +17,7 @@ Repository: https://github.com/way2pramil/KiNotes
 License: MIT
 """
 
-__version__ = "1.4.1"
+__version__ = "1.4.2"
 __author__ = "PCBtools.xyz"
 __license__ = "MIT"
 
