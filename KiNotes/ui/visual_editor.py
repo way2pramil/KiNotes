@@ -433,6 +433,10 @@ class VisualNoteEditor(wx.Panel):
         btn.SetForegroundColour(self._text_color)
         btn.SetToolTip(tooltip)
         
+        # Store active state for toggle buttons
+        btn._is_active = False
+        btn._base_label = label
+        
         # Set font - unified styling for all buttons
         if label in ("B", "I", "U"):
             # Bold/Italic/Underline with appropriate style
@@ -449,19 +453,90 @@ class VisualNoteEditor(wx.Panel):
         btn.Bind(wx.EVT_BUTTON, callback)
         btn.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         
-        # Hover effect
+        # Hover effect - respects active state
         def on_enter(evt):
-            btn.SetBackgroundColour(self._button_hover)
-            btn.Refresh()
+            if not btn._is_active:
+                btn.SetBackgroundColour(self._button_hover)
+                btn.Refresh()
         
         def on_leave(evt):
-            btn.SetBackgroundColour(self._toolbar_bg)
-            btn.Refresh()
+            if not btn._is_active:
+                btn.SetBackgroundColour(self._toolbar_bg)
+                btn.Refresh()
         
         btn.Bind(wx.EVT_ENTER_WINDOW, on_enter)
         btn.Bind(wx.EVT_LEAVE_WINDOW, on_leave)
         
         return btn
+    
+    def _set_button_active(self, btn, active: bool):
+        """Set a toolbar button's active (highlighted) state."""
+        if not hasattr(btn, '_is_active'):
+            return
+        
+        btn._is_active = active
+        
+        if active:
+            # Highlighted state - accent color background
+            btn.SetBackgroundColour(self._accent_color)
+            btn.SetForegroundColour(wx.Colour(255, 255, 255))
+        else:
+            # Normal state
+            btn.SetBackgroundColour(self._toolbar_bg)
+            btn.SetForegroundColour(self._text_color)
+        
+        btn.Refresh()
+    
+    def _update_toolbar_states(self):
+        """Update toolbar button highlight states based on current text formatting."""
+        if not hasattr(self, '_toolbar_buttons') or not self._toolbar_buttons:
+            return
+        
+        try:
+            # Get style at current position
+            attr = rt.RichTextAttr()
+            pos = self._editor.GetInsertionPoint()
+            
+            # Try to get style from selection or insertion point
+            if self._editor.HasSelection():
+                self._editor.GetStyleForRange(self._editor.GetSelectionRange(), attr)
+            else:
+                self._editor.GetStyle(pos, attr)
+            
+            # Check Bold
+            if "B" in self._toolbar_buttons:
+                is_bold = attr.HasFontWeight() and attr.GetFontWeight() == wx.FONTWEIGHT_BOLD
+                self._set_button_active(self._toolbar_buttons["B"], is_bold)
+            
+            # Check Italic
+            if "I" in self._toolbar_buttons:
+                is_italic = attr.HasFontItalic() and attr.GetFontStyle() == wx.FONTSTYLE_ITALIC
+                self._set_button_active(self._toolbar_buttons["I"], is_italic)
+            
+            # Check Underline
+            if "U" in self._toolbar_buttons:
+                is_underline = attr.HasFontUnderlined() and attr.GetFontUnderlined()
+                self._set_button_active(self._toolbar_buttons["U"], is_underline)
+            
+            # Check Strikethrough
+            if "ab" in self._toolbar_buttons:
+                effects = attr.GetTextEffects() if attr.HasTextEffects() else 0
+                is_strike = bool(effects & wx.TEXT_ATTR_EFFECT_STRIKETHROUGH)
+                self._set_button_active(self._toolbar_buttons["ab"], is_strike)
+        
+        except Exception:
+            # Silently handle errors during state update
+            pass
+    
+    def _on_selection_changed(self, event):
+        """Handle selection or style change - update toolbar button states."""
+        self._update_toolbar_states()
+        event.Skip()
+    
+    def _on_focus_change(self, event):
+        """Handle focus change - update toolbar states."""
+        self._update_toolbar_states()
+        event.Skip()
     
     def _configure_editor_styles(self):
         """Configure the rich text editor default styles."""
@@ -491,6 +566,10 @@ class VisualNoteEditor(wx.Panel):
         self._editor.Bind(wx.EVT_TEXT, self._on_text_changed)
         self._editor.Bind(wx.EVT_KEY_DOWN, self._on_key_down)
         self._editor.Bind(wx.EVT_LEFT_UP, self._on_click)
+        # Update toolbar button states on selection change
+        self._editor.Bind(wx.EVT_SET_FOCUS, self._on_focus_change)
+        self._editor.Bind(rt.EVT_RICHTEXT_SELECTION_CHANGED, self._on_selection_changed)
+        self._editor.Bind(rt.EVT_RICHTEXT_STYLE_CHANGED, self._on_selection_changed)
     
     # ============================================================
     # FORMATTING HANDLERS
@@ -500,16 +579,19 @@ class VisualNoteEditor(wx.Panel):
         """Toggle bold formatting."""
         self._editor.ApplyBoldToSelection()
         self._modified = True
+        self._update_toolbar_states()
     
     def _on_italic(self, event):
         """Toggle italic formatting."""
         self._editor.ApplyItalicToSelection()
         self._modified = True
+        self._update_toolbar_states()
     
     def _on_underline(self, event):
         """Toggle underline formatting."""
         self._editor.ApplyUnderlineToSelection()
         self._modified = True
+        self._update_toolbar_states()
     
     def _on_strikethrough(self, event):
         """Toggle strikethrough formatting."""
@@ -524,6 +606,7 @@ class VisualNoteEditor(wx.Panel):
             rt.RICHTEXT_SETSTYLE_WITH_UNDO
         )
         self._modified = True
+        self._update_toolbar_states()
     
     def _apply_heading(self, level: int):
         """Apply heading style to current paragraph."""
@@ -1000,6 +1083,16 @@ class VisualNoteEditor(wx.Panel):
         shift = event.ShiftDown()
         alt = event.AltDown()
         
+        # ESC key - clear selection and update toolbar
+        if key == wx.WXK_ESCAPE:
+            if self._editor.HasSelection():
+                # Clear selection - move cursor to end of selection
+                sel_end = self._editor.GetSelectionRange().GetEnd()
+                self._editor.SetInsertionPoint(sel_end)
+                self._editor.SelectNone()
+            self._update_toolbar_states()
+            return
+        
         # Keyboard shortcuts
         if ctrl and not shift and not alt:
             if key == ord('B'):
@@ -1082,7 +1175,7 @@ class VisualNoteEditor(wx.Panel):
             self._editor.WriteText('\n')
     
     def _on_click(self, event):
-        """Handle mouse clicks - toggle checkboxes."""
+        """Handle mouse clicks - toggle checkboxes and update toolbar states."""
         pos = self._editor.GetInsertionPoint()
         text = self._editor.GetValue()
         
@@ -1101,6 +1194,9 @@ class VisualNoteEditor(wx.Panel):
                 self._editor.SetSelection(check_pos, check_pos + 1)
                 self._editor.WriteText(new_char)
                 self._modified = True
+        
+        # Update toolbar button states based on current formatting
+        wx.CallAfter(self._update_toolbar_states)
         
         event.Skip()
     

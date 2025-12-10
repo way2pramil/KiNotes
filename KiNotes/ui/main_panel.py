@@ -1214,20 +1214,29 @@ class KiNotesMainPanel(wx.Panel):
     
     def _on_settings_click(self, event):
         """Show color settings dialog with Light/Dark theme buttons and time tracking options."""
-        # Size increased by 20% for better visibility
-        dlg = wx.Dialog(self, title="Settings", size=(780, 1200),
+        # Use scrolled dialog to ensure all content is always accessible
+        dlg = wx.Dialog(self, title="Settings", size=(780, 850),
                        style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        dlg.SetMinSize((780, 1080))
+        dlg.SetMinSize((700, 550))
         dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         
         # Initialize selected theme state
         self._selected_theme_dark = self._dark_mode
         
+        # Main sizer for dialog (scroll area + buttons)
+        dialog_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Create scrolled window for all settings content
+        scroll_win = wx.ScrolledWindow(dlg, style=wx.VSCROLL)
+        scroll_win.SetScrollRate(0, 20)
+        scroll_win.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        
+        # Content sizer inside scroll window
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.AddSpacer(24)
         
         # Dark Mode Toggle Section
-        mode_panel = wx.Panel(dlg)
+        mode_panel = wx.Panel(scroll_win)
         mode_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         mode_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
@@ -1278,7 +1287,7 @@ class KiNotesMainPanel(wx.Panel):
         sizer.AddSpacer(16)
         
         # Colors panel - immediately below theme selection
-        self._colors_panel = wx.Panel(dlg)
+        self._colors_panel = wx.Panel(scroll_win)
         self._colors_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         self._rebuild_color_options(self._colors_panel, self._dark_mode)
         sizer.Add(self._colors_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 0)
@@ -1286,19 +1295,19 @@ class KiNotesMainPanel(wx.Panel):
         sizer.AddSpacer(20)
         
         # Separator
-        sep = wx.StaticLine(dlg)
+        sep = wx.StaticLine(scroll_win)
         sizer.Add(sep, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
         
         sizer.AddSpacer(20)
         
         # Time Tracking Settings Section
-        time_header = wx.StaticText(dlg, label="⏱ Time Tracking Options")
+        time_header = wx.StaticText(scroll_win, label="⏱ Time Tracking Options")
         time_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         time_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         sizer.Add(time_header, 0, wx.LEFT | wx.BOTTOM, 24)
         
         # Enable time tracking checkbox
-        time_track_panel = wx.Panel(dlg)
+        time_track_panel = wx.Panel(scroll_win)
         time_track_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         time_track_sizer = wx.BoxSizer(wx.VERTICAL)
         
@@ -1335,18 +1344,18 @@ class KiNotesMainPanel(wx.Panel):
         sizer.AddSpacer(20)
         
         # Separator
-        sep2 = wx.StaticLine(dlg)
+        sep2 = wx.StaticLine(scroll_win)
         sizer.Add(sep2, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
         
         sizer.AddSpacer(20)
         
         # Editor Mode Settings Section
-        editor_header = wx.StaticText(dlg, label="📝 Editor Mode")
+        editor_header = wx.StaticText(scroll_win, label="📝 Editor Mode")
         editor_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         editor_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         sizer.Add(editor_header, 0, wx.LEFT | wx.BOTTOM, 24)
         
-        editor_panel = wx.Panel(dlg)
+        editor_panel = wx.Panel(scroll_win)
         editor_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         editor_sizer = wx.BoxSizer(wx.VERTICAL)
         
@@ -1375,18 +1384,18 @@ class KiNotesMainPanel(wx.Panel):
         sizer.AddSpacer(20)
         
         # Separator
-        sep3 = wx.StaticLine(dlg)
+        sep3 = wx.StaticLine(scroll_win)
         sizer.Add(sep3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
         
         sizer.AddSpacer(20)
         
         # UI Scale Settings Section
-        scale_header = wx.StaticText(dlg, label="🔍 UI Scale (High-DPI)")
+        scale_header = wx.StaticText(scroll_win, label="🔍 UI Scale (High-DPI)")
         scale_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         scale_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         sizer.Add(scale_header, 0, wx.LEFT | wx.BOTTOM, 24)
         
-        scale_panel = wx.Panel(dlg)
+        scale_panel = wx.Panel(scroll_win)
         scale_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         scale_sizer = wx.BoxSizer(wx.VERTICAL)
         
@@ -1443,9 +1452,16 @@ class KiNotesMainPanel(wx.Panel):
         scale_panel.SetSizer(scale_sizer)
         sizer.Add(scale_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
         
-        sizer.AddStretchSpacer()
+        sizer.AddSpacer(20)
         
-        # Buttons - unified rounded style with clear Save action
+        # Set up scroll window with content sizer
+        scroll_win.SetSizer(sizer)
+        scroll_win.FitInside()
+        
+        # Add scroll window to dialog (expands to fill)
+        dialog_sizer.Add(scroll_win, 1, wx.EXPAND)
+        
+        # Buttons panel - OUTSIDE scroll area, always visible at bottom
         btn_panel = wx.Panel(dlg)
         btn_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -1491,9 +1507,9 @@ class KiNotesMainPanel(wx.Panel):
         btn_sizer.Add(apply_btn, 0)
         
         btn_panel.SetSizer(btn_sizer)
-        sizer.Add(btn_panel, 0, wx.EXPAND | wx.ALL, 24)
+        dialog_sizer.Add(btn_panel, 0, wx.EXPAND | wx.ALL, 24)
         
-        dlg.SetSizer(sizer)
+        dlg.SetSizer(dialog_sizer)
         
         if dlg.ShowModal() == wx.ID_OK:
             # Update theme - check which button is highlighted (dark_btn has accent = dark selected)
