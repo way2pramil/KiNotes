@@ -35,7 +35,17 @@ try:
         KiNotesFrame,
         KiNotesDockablePanel,
     )
-except ImportError:
+    
+    # Register plugin with KiCad
+    # The registration happens automatically at the bottom of kinotes_action.py
+    # via: KiNotesActionPlugin().register()
+    # This import triggers that registration
+    
+except ImportError as e:
     # Module imports fail outside KiCad (no pcbnew/wx)
     # This is expected during development/testing
+    import sys
+    if 'pcbnew' in sys.modules or 'wx' in sys.modules:
+        # If inside KiCad but import failed, print error
+        print(f"[KiNotes] Import error: {e}")
     pass

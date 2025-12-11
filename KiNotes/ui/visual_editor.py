@@ -22,8 +22,21 @@ import wx
 import wx.richtext as rt
 import os
 import re
+import sys
 import datetime
 from typing import Optional, Tuple, List
+
+from .debug_event_logger import EventLevel
+
+
+def _kinotes_log(msg: str):
+    """Log message to console, handling KiCad's None stdout."""
+    try:
+        if sys.stdout is not None:
+            print(msg)
+            sys.stdout.flush()
+    except:
+        pass  # Silently ignore if stdout not available
 
 
 # ============================================================
@@ -69,12 +82,17 @@ def scale_size(size, window=None):
 class VisualEditorStyles:
     """Style definitions for the visual editor."""
     
-    # Font sizes in points
-    FONT_SIZE_NORMAL = 11
+    # Font sizes in points (FONT_SIZE_NORMAL can be overridden by user settings)
+    FONT_SIZE_NORMAL = 11  # Default, can be changed via settings (8-24)
     FONT_SIZE_H1 = 22
     FONT_SIZE_H2 = 18
     FONT_SIZE_H3 = 14
     FONT_SIZE_CODE = 10
+    
+    @classmethod
+    def set_normal_font_size(cls, size: int):
+        """Set the normal font size (8-24 points)."""
+        cls.FONT_SIZE_NORMAL = max(8, min(24, size))
     
     # List markers
     BULLET_CHARS = ["•", "◦", "▪"]
@@ -85,8 +103,14 @@ class VisualEditorStyles:
     DIVIDER_CHAR = "─" * 40
     
     @classmethod
-    def get_heading_style(cls, level: int, dark_mode: bool = False) -> rt.RichTextAttr:
-        """Get heading style for level 1-3."""
+    def get_heading_style(cls, level: int, dark_mode: bool = False, text_color: wx.Colour = None) -> rt.RichTextAttr:
+        """Get heading style for level 1-3.
+        
+        Args:
+            level: Heading level (1, 2, or 3)
+            dark_mode: Whether dark mode is enabled
+            text_color: Custom text color (uses theme default if None)
+        """
         attr = rt.RichTextAttr()
         
         if level == 1:
@@ -105,8 +129,10 @@ class VisualEditorStyles:
             attr.SetParagraphSpacingBefore(12)
             attr.SetParagraphSpacingAfter(6)
         
-        # Set text color based on theme
-        if dark_mode:
+        # Set text color - use custom color if provided, else theme default
+        if text_color:
+            attr.SetTextColour(text_color)
+        elif dark_mode:
             attr.SetTextColour(wx.Colour(255, 255, 255))
         else:
             attr.SetTextColour(wx.Colour(30, 30, 30))
@@ -162,34 +188,126 @@ class VisualEditorStyles:
         return attr
     
     @classmethod
-    def get_table_header_style(cls, dark_mode: bool = False) -> rt.RichTextAttr:
-        """Get table header cell style."""
+    def get_table_header_style(cls, dark_mode: bool = False, text_color: wx.Colour = None, bg_color: wx.Colour = None) -> rt.RichTextAttr:
+        """Get table header cell style.
+        
+        Args:
+            dark_mode: Whether dark mode is enabled
+            text_color: Custom text color (uses theme default if None)
+            bg_color: Custom background color for header (uses theme default if None)
+        """
         attr = rt.RichTextAttr()
         attr.SetFontSize(cls.FONT_SIZE_NORMAL)
         attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
         
-        if dark_mode:
+        # Text color
+        if text_color:
+            attr.SetTextColour(text_color)
+        elif dark_mode:
             attr.SetTextColour(wx.Colour(255, 255, 255))
-            attr.SetBackgroundColour(wx.Colour(58, 58, 60))
         else:
             attr.SetTextColour(wx.Colour(30, 30, 30))
+        
+        # Header background - slightly different from main bg for contrast
+        if bg_color:
+            # Adjust provided bg for header contrast
+            r, g, b = bg_color.Red(), bg_color.Green(), bg_color.Blue()
+            if dark_mode:
+                attr.SetBackgroundColour(wx.Colour(min(255, r + 20), min(255, g + 20), min(255, b + 20)))
+            else:
+                attr.SetBackgroundColour(wx.Colour(max(0, r - 15), max(0, g - 15), max(0, b - 15)))
+        elif dark_mode:
+            attr.SetBackgroundColour(wx.Colour(58, 58, 60))
+        else:
             attr.SetBackgroundColour(wx.Colour(240, 240, 240))
         
         return attr
     
     @classmethod
-    def get_table_cell_style(cls, dark_mode: bool = False) -> rt.RichTextAttr:
-        """Get table cell style."""
+    def get_table_cell_style(cls, dark_mode: bool = False, text_color: wx.Colour = None) -> rt.RichTextAttr:
+        """Get table cell style.
+        
+        Args:
+            dark_mode: Whether dark mode is enabled
+            text_color: Custom text color (uses theme default if None)
+        """
         attr = rt.RichTextAttr()
         attr.SetFontSize(cls.FONT_SIZE_NORMAL)
         attr.SetFontWeight(wx.FONTWEIGHT_NORMAL)
         
-        if dark_mode:
+        if text_color:
+            attr.SetTextColour(text_color)
+        elif dark_mode:
             attr.SetTextColour(wx.Colour(230, 230, 230))
         else:
             attr.SetTextColour(wx.Colour(50, 50, 50))
         
         return attr
+
+
+# ============================================================
+# MARGIN PANEL - Clean left margin for breathing space
+# ============================================================
+
+class MarginPanel(wx.Panel):
+    """
+    Simple left margin panel for the visual editor.
+    Provides breathing space between panel edge and text content.
+    Matches theme colors seamlessly.
+    """
+    
+    def __init__(self, parent, dark_mode: bool = False):
+        super().__init__(parent, style=wx.BORDER_NONE)
+        
+        self._dark_mode = dark_mode
+        
+        # Margin width - 20 pixels for clean breathing space
+        self._width = 20
+        self.SetMinSize((self._width, 100))
+        self.SetSize((self._width, -1))
+        
+        self._update_colors()
+        self.SetBackgroundColour(self._bg_color)
+        
+        self.Bind(wx.EVT_PAINT, self._on_paint)
+    
+    def _update_colors(self):
+        """Update colors based on dark mode."""
+        if self._dark_mode:
+            # Match dark editor background
+            self._bg_color = wx.Colour(30, 30, 32)
+        else:
+            # Match light editor background
+            self._bg_color = wx.Colour(255, 255, 255)
+    
+    def set_editor(self, editor):
+        """Set the associated editor (for API compatibility)."""
+        pass  # No longer needed, but keep for compatibility
+    
+    def update_from_editor(self):
+        """Update from editor (for API compatibility)."""
+        pass  # No longer needed
+    
+    def _update_line_height(self):
+        """For API compatibility."""
+        pass
+    
+    def update_dark_mode(self, dark_mode: bool):
+        """Update dark mode setting."""
+        self._dark_mode = dark_mode
+        self._update_colors()
+        self.SetBackgroundColour(self._bg_color)
+        self.Refresh()
+    
+    def _on_paint(self, event):
+        """Paint the margin - just a clean solid color."""
+        dc = wx.BufferedPaintDC(self)
+        dc.SetBackground(wx.Brush(self._bg_color))
+        dc.Clear()
+
+
+# Alias for backward compatibility
+LineNumberPanel = MarginPanel
 
 
 # ============================================================
@@ -205,10 +323,11 @@ class VisualNoteEditor(wx.Panel):
     - Rich text editing capabilities
     - Automatic Markdown conversion on save
     - Dark mode support
+    - Smart cross-probe for PCB designators
     - KiCad 9+ / wxWidgets 3.2+ compatible
     """
     
-    def __init__(self, parent, dark_mode: bool = False, style: int = 0):
+    def __init__(self, parent, dark_mode: bool = False, style: int = 0, beta_features: bool = False):
         """
         Initialize the Visual Note Editor.
         
@@ -216,13 +335,23 @@ class VisualNoteEditor(wx.Panel):
             parent: Parent wx.Window
             dark_mode: Enable dark theme colors
             style: Window style flags (e.g., wx.BORDER_NONE)
+            beta_features: Enable beta features like Table insertion
         """
         super().__init__(parent, style=style)
         
         self._dark_mode = dark_mode
+        self._beta_features = beta_features
         self._modified = False
         self._current_list_type = None  # 'bullet', 'numbered', 'checkbox'
         self._list_item_number = 0
+        self._font_size = VisualEditorStyles.FONT_SIZE_NORMAL  # User-configurable
+        
+        # Cross-probe settings
+        self._crossprobe_enabled = True
+        self._designator_linker = None  # Set by main panel
+        self._net_linker = None  # Set by main panel (Beta)
+        self._debug_logger = None
+        self._debug_modules = {"net": False, "designator": False}
         
         # Theme colors - custom colors override defaults
         self._custom_bg_color = None  # User-selected background color
@@ -274,6 +403,10 @@ class VisualNoteEditor(wx.Panel):
         self._dark_mode = dark_mode
         self._update_theme_colors()
         self._apply_visual_theme()
+        
+        # Update line numbers panel
+        if hasattr(self, '_line_numbers') and self._line_numbers:
+            self._line_numbers.update_dark_mode(dark_mode)
     
     def set_custom_colors(self, bg_color: wx.Colour = None, text_color: wx.Colour = None):
         """
@@ -316,13 +449,14 @@ class VisualNoteEditor(wx.Panel):
                 # Update default style for new text
                 self._editor.SetDefaultStyle(basic_style)
                 
-                # Apply new text color to ALL existing text
+                # Apply new text color AND background to ALL existing text
                 text_length = self._editor.GetLastPosition()
                 if text_length > 0:
-                    # Create style for existing text (preserve formatting, change color)
+                    # Create style for existing text - update both text and background color
                     color_attr = rt.RichTextAttr()
                     color_attr.SetTextColour(self._text_color)
-                    color_attr.SetFlags(wx.TEXT_ATTR_TEXT_COLOUR)
+                    color_attr.SetBackgroundColour(self._bg_color)
+                    color_attr.SetFlags(wx.TEXT_ATTR_TEXT_COLOUR | wx.TEXT_ATTR_BACKGROUND_COLOUR)
                     self._editor.SetStyleEx(
                         rt.RichTextRange(0, text_length),
                         color_attr,
@@ -356,6 +490,13 @@ class VisualNoteEditor(wx.Panel):
         self._toolbar = self._create_toolbar()
         main_sizer.Add(self._toolbar, 0, wx.EXPAND)
         
+        # Create horizontal sizer for line numbers + editor
+        editor_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # Create line number panel
+        self._line_numbers = LineNumberPanel(self, self._dark_mode)
+        editor_sizer.Add(self._line_numbers, 0, wx.EXPAND)
+        
         # Create rich text editor
         self._editor = rt.RichTextCtrl(
             self,
@@ -366,7 +507,12 @@ class VisualNoteEditor(wx.Panel):
         self._editor.SetBackgroundColour(self._bg_color)
         self._configure_editor_styles()
         
-        main_sizer.Add(self._editor, 1, wx.EXPAND | wx.ALL, 8)
+        # Connect line numbers to editor
+        self._line_numbers.set_editor(self._editor)
+        
+        editor_sizer.Add(self._editor, 1, wx.EXPAND)
+        
+        main_sizer.Add(editor_sizer, 1, wx.EXPAND | wx.ALL, 8)
         
         self.SetSizer(main_sizer)
     
@@ -381,6 +527,17 @@ class VisualNoteEditor(wx.Panel):
         
         # Define toolbar buttons
         # Format: (label, tooltip, callback, is_toggle)
+        
+        # Insert group - Table only shown when beta features enabled
+        insert_buttons = [
+            ("—", "Divider", self._on_divider, False),
+            ("⏱", "Timestamp", self._on_timestamp, False),
+            ("⛓", "Link", self._on_insert_link, False),
+            ("🖼", "Image", self._on_insert_image, False),
+        ]
+        if self._beta_features:
+            insert_buttons.append(("⊞", "Table (Beta)", self._on_insert_table, False))
+        
         button_groups = [
             # Text formatting - unified simple text icons
             [
@@ -401,13 +558,7 @@ class VisualNoteEditor(wx.Panel):
                 ("1.", "Numbered List", self._on_numbered_list, False),
             ],
             # Insert
-            [
-                ("—", "Divider", self._on_divider, False),
-                ("⏱", "Timestamp", self._on_timestamp, False),
-                ("⛓", "Link", self._on_insert_link, False),
-                ("🖼", "Image", self._on_insert_image, False),
-                ("⊞", "Table", self._on_insert_table, False),
-            ],
+            insert_buttons,
             # Undo/Redo
             [
                 ("↶", "Undo (Ctrl+Z)", self._on_undo, False),
@@ -553,36 +704,162 @@ class VisualNoteEditor(wx.Panel):
     
     def _configure_editor_styles(self):
         """Configure the rich text editor default styles."""
-        # Get the style sheet
-        stylesheet = self._editor.GetStyleSheet()
-        if stylesheet is None:
-            stylesheet = rt.RichTextStyleSheet()
-            self._editor.SetStyleSheet(stylesheet)
-        
-        # Set default font
-        default_font = wx.Font(
-            VisualEditorStyles.FONT_SIZE_NORMAL,
-            wx.FONTFAMILY_DEFAULT,
-            wx.FONTSTYLE_NORMAL,
-            wx.FONTWEIGHT_NORMAL
-        )
-        self._editor.SetFont(default_font)
-        
-        # Set default text color
-        basic_style = rt.RichTextAttr()
-        basic_style.SetTextColour(self._text_color)
-        basic_style.SetBackgroundColour(self._bg_color)
-        self._editor.SetBasicStyle(basic_style)
+        try:
+            print(f"[KiNotes] _configure_editor_styles: Entering")
+            # Always create a fresh style sheet to avoid stale references
+            print(f"[KiNotes] _configure_editor_styles: Creating fresh style sheet")
+            try:
+                stylesheet = rt.RichTextStyleSheet()
+                self._editor.SetStyleSheet(stylesheet)
+            except Exception as e:
+                print(f"[KiNotes] _configure_editor_styles: Style sheet creation warning: {e}")
+            
+            print(f"[KiNotes] _configure_editor_styles: Creating font with size {self._font_size}")
+            # Set default font using instance font size
+            default_font = wx.Font(
+                self._font_size,
+                wx.FONTFAMILY_DEFAULT,
+                wx.FONTSTYLE_NORMAL,
+                wx.FONTWEIGHT_NORMAL
+            )
+            print(f"[KiNotes] _configure_editor_styles: Setting font on editor")
+            self._editor.SetFont(default_font)
+            
+            print(f"[KiNotes] _configure_editor_styles: Creating basic style")
+            # Set default text color
+            basic_style = rt.RichTextAttr()
+            basic_style.SetTextColour(self._text_color)
+            basic_style.SetBackgroundColour(self._bg_color)
+            basic_style.SetFontSize(self._font_size)
+            print(f"[KiNotes] _configure_editor_styles: Setting basic style on editor")
+            self._editor.SetBasicStyle(basic_style)
+            print(f"[KiNotes] _configure_editor_styles: Success!")
+        except Exception as e:
+            print(f"[KiNotes] Configure editor styles warning: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _get_normal_style_with_theme(self) -> rt.RichTextAttr:
+        """Get normal style that respects the current theme colors."""
+        attr = rt.RichTextAttr()
+        attr.SetFontSize(VisualEditorStyles.FONT_SIZE_NORMAL)
+        attr.SetFontWeight(wx.FONTWEIGHT_NORMAL)
+        attr.SetFontStyle(wx.FONTSTYLE_NORMAL)
+        attr.SetFontUnderlined(False)
+        attr.SetParagraphSpacingBefore(4)
+        attr.SetParagraphSpacingAfter(4)
+        # Use the editor's actual theme colors
+        attr.SetTextColour(self._text_color)
+        attr.SetBackgroundColour(self._bg_color)
+        return attr
+    
+    def set_font_size(self, size: int):
+        """Set the editor font size (8-24 points)."""
+        try:
+            print(f"[KiNotes] set_font_size: Entering with size={size}")
+            self._font_size = max(8, min(24, size))
+            print(f"[KiNotes] set_font_size: About to call _configure_editor_styles()")
+            self._configure_editor_styles()
+            print(f"[KiNotes] set_font_size: _configure_editor_styles() completed")
+            # Update line numbers panel line height (with safety checks)
+            if hasattr(self, '_line_numbers') and self._line_numbers:
+                try:
+                    print(f"[KiNotes] set_font_size: About to update line height")
+                    self._line_numbers._update_line_height()
+                    print(f"[KiNotes] set_font_size: Line height updated")
+                except Exception as e:
+                    print(f"[KiNotes] Line number height update warning: {e}")
+                try:
+                    print(f"[KiNotes] set_font_size: About to update line numbers from editor")
+                    self._line_numbers.update_from_editor()
+                    print(f"[KiNotes] set_font_size: Line numbers updated")
+                except Exception as e:
+                    print(f"[KiNotes] Line number update warning: {e}")
+            print(f"[KiNotes] set_font_size: Exiting successfully")
+        except Exception as e:
+            print(f"[KiNotes] Font size setting warning: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _bind_events(self):
         """Bind editor events."""
         self._editor.Bind(wx.EVT_TEXT, self._on_text_changed)
         self._editor.Bind(wx.EVT_KEY_DOWN, self._on_key_down)
+        self._editor.Bind(wx.EVT_KEY_UP, self._on_key_up)
         self._editor.Bind(wx.EVT_LEFT_UP, self._on_click)
         # Update toolbar button states on selection change
         self._editor.Bind(wx.EVT_SET_FOCUS, self._on_focus_change)
         self._editor.Bind(rt.EVT_RICHTEXT_SELECTION_CHANGED, self._on_selection_changed)
         self._editor.Bind(rt.EVT_RICHTEXT_STYLE_CHANGED, self._on_selection_changed)
+    
+    def cleanup(self):
+        """Clean up resources before destruction."""
+        try:
+            # Unbind all editor events
+            if hasattr(self, '_editor') and self._editor:
+                try:
+                    self._editor.Unbind(wx.EVT_TEXT)
+                    self._editor.Unbind(wx.EVT_KEY_DOWN)
+                    self._editor.Unbind(wx.EVT_KEY_UP)
+                    self._editor.Unbind(wx.EVT_LEFT_UP)
+                    self._editor.Unbind(wx.EVT_SET_FOCUS)
+                    self._editor.Unbind(rt.EVT_RICHTEXT_SELECTION_CHANGED)
+                    self._editor.Unbind(rt.EVT_RICHTEXT_STYLE_CHANGED)
+                except:
+                    pass
+                # Clear content to release memory
+                try:
+                    self._editor.Clear()
+                except:
+                    pass
+            
+            # Clear references
+            self._editor = None
+            self._line_numbers = None
+            self._toolbar = None
+            self._toolbar_buttons = None
+            self._designator_linker = None
+            self._net_linker = None
+            self._debug_logger = None
+        except Exception as e:
+            print(f"[KiNotes] Visual editor cleanup warning: {e}")
+    
+    def _ensure_cursor_visible(self):
+        """
+        Ensure the cursor is visible by scrolling if necessary.
+        This provides auto-scroll when cursor moves out of visible area.
+        """
+        if not self._editor:
+            return
+        
+        try:
+            # Use RichTextCtrl's built-in method to show the caret
+            self._editor.ShowPosition(self._editor.GetInsertionPoint())
+            
+            # Update line numbers panel after scroll
+            if hasattr(self, '_line_numbers') and self._line_numbers:
+                wx.CallAfter(self._line_numbers.update_from_editor)
+        except:
+            pass
+    
+    def _on_key_up(self, event):
+        """Handle key up - ensure cursor visible after navigation."""
+        key = event.GetKeyCode()
+        
+        # Navigation keys that might move cursor out of view
+        nav_keys = [
+            wx.WXK_UP, wx.WXK_DOWN, wx.WXK_PAGEUP, wx.WXK_PAGEDOWN,
+            wx.WXK_HOME, wx.WXK_END, wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER
+        ]
+        
+        if key in nav_keys:
+            # Ensure cursor is visible after navigation
+            wx.CallAfter(self._ensure_cursor_visible)
+            # Also update line numbers
+            if hasattr(self, '_line_numbers') and self._line_numbers:
+                wx.CallAfter(self._line_numbers.update_from_editor)
+        
+        event.Skip()
     
     # ============================================================
     # FORMATTING HANDLERS
@@ -623,7 +900,8 @@ class VisualNoteEditor(wx.Panel):
     
     def _apply_heading(self, level: int):
         """Apply heading style to current paragraph."""
-        attr = VisualEditorStyles.get_heading_style(level, self._dark_mode)
+        # Use editor's theme text color for headings
+        attr = VisualEditorStyles.get_heading_style(level, self._dark_mode, self._text_color)
         
         # Get current paragraph range
         pos = self._editor.GetInsertionPoint()
@@ -635,7 +913,14 @@ class VisualNoteEditor(wx.Panel):
         while line_end < len(text) and text[line_end] != '\n':
             line_end += 1
         
-        # Apply style to paragraph
+        # Apply BOTH character and paragraph styles
+        # First apply character formatting (font size, weight, color)
+        self._editor.SetStyleEx(
+            rt.RichTextRange(line_start, line_end),
+            attr,
+            rt.RICHTEXT_SETSTYLE_WITH_UNDO | rt.RICHTEXT_SETSTYLE_CHARACTERS_ONLY
+        )
+        # Then apply paragraph formatting (spacing)
         self._editor.SetStyleEx(
             rt.RichTextRange(line_start, line_end),
             attr,
@@ -651,7 +936,8 @@ class VisualNoteEditor(wx.Panel):
             text: The heading text to insert
             level: Heading level (1, 2, or 3)
         """
-        attr = VisualEditorStyles.get_heading_style(level, self._dark_mode)
+        # Use editor's theme text color for headings
+        attr = VisualEditorStyles.get_heading_style(level, self._dark_mode, self._text_color)
         
         # Begin the styled paragraph
         self._editor.BeginStyle(attr)
@@ -802,13 +1088,13 @@ class VisualNoteEditor(wx.Panel):
         panel_sizer = wx.BoxSizer(wx.VERTICAL)
         panel_sizer.AddSpacer(scale_size(16, self))
         
-        # Rows input
+        # Rows input (including header row)
         row_sizer = wx.BoxSizer(wx.HORIZONTAL)
         row_label = wx.StaticText(dlg, label="Rows:")
         row_label.SetForegroundColour(self._text_color)
         row_label.SetMinSize((scale_size(100, self), -1))
         row_sizer.Add(row_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
-        row_spin = wx.SpinCtrl(dlg, min=2, max=50, initial=4)
+        row_spin = wx.SpinCtrl(dlg, min=2, max=100, initial=4)
         row_spin.SetMinSize((scale_size(100, self), -1))
         row_sizer.Add(row_spin, 0, wx.EXPAND)
         panel_sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
@@ -884,7 +1170,9 @@ class VisualNoteEditor(wx.Panel):
             cols = col_spin.GetValue()
             row_height = height_spin.GetValue()
             col_width = width_spin.GetValue()
-            self._insert_rich_table(rows, cols, False, row_height=row_height, col_width=col_width)
+            # Create header row with "Column 1", "Column 2", etc.
+            headers = [f"Column {i+1}" for i in range(cols)]
+            self._insert_rich_table(rows, cols, True, headers=headers, row_height=row_height, col_width=col_width)
         
         dlg.Destroy()
     
@@ -892,7 +1180,7 @@ class VisualNoteEditor(wx.Panel):
                           headers: List[str] = None, data: List[List[str]] = None,
                           row_height: int = None, col_width: int = None):
         """
-        Insert a proper RichTextTable with styling.
+        Insert a proper RichTextTable with styling and borders.
         
         Args:
             rows: Number of rows (including header if has_header)
@@ -900,8 +1188,8 @@ class VisualNoteEditor(wx.Panel):
             has_header: Whether first row is header
             headers: Optional header text list
             data: Optional data rows list
-            row_height: Optional row height in pixels
-            col_width: Optional column width in pixels
+            row_height: Optional row height in pixels (default: 30)
+            col_width: Optional column width in pixels (default: auto-calculated)
         """
         # Ensure we're at end of line
         pos = self._editor.GetInsertionPoint()
@@ -909,58 +1197,84 @@ class VisualNoteEditor(wx.Panel):
         if pos > 0 and len(text) > 0 and text[pos - 1] != '\n':
             self._editor.WriteText("\n")
         
-        # Calculate column widths - use provided width or auto-calculate
+        # Default column width - auto-calculate based on editor width
         if col_width is None:
-            editor_width = self._editor.GetClientSize().GetWidth() - 40
-            col_width = max(80, editor_width // cols)
+            editor_width = self._editor.GetClientSize().GetWidth() - 60
+            col_width = max(80, min(200, editor_width // cols))
         
-        # Default row height if not provided
+        # Default row height
         if row_height is None:
             row_height = 30
         
-        # Create the table with row/col dimensions
-        table = self._editor.WriteTable(rows, cols)
+        # Set border color based on theme
+        if self._dark_mode:
+            border_color = wx.Colour(100, 100, 100)  # Gray border for dark mode
+        else:
+            border_color = wx.Colour(180, 180, 180)  # Light gray for light mode
         
-        if table:
-            # Style the table cells
-            for row_idx in range(rows):
-                for col_idx in range(cols):
-                    cell = table.GetCell(row_idx, col_idx)
-                    if cell:
-                        # Set cell properties
-                        cell_attr = rt.RichTextAttr()
+        # Create table attributes with proper column widths
+        table_attr = rt.RichTextAttr()
+        try:
+            # Set up text box attributes for the table
+            text_box_attr = table_attr.GetTextBoxAttr()
+            
+            # Set table width to total of all columns
+            total_width = col_width * cols
+            text_box_attr.GetWidth().SetValue(total_width, rt.TEXT_ATTR_UNITS_PIXELS)
+            
+            # Set border
+            text_box_attr.GetBorder().SetColour(border_color)
+            text_box_attr.GetBorder().SetWidth(1, rt.TEXT_ATTR_UNITS_PIXELS)
+            text_box_attr.GetBorder().SetStyle(wx.BORDER_SIMPLE)
+        except Exception as e:
+            pass  # Table attribute API may vary
+        
+        # Create the table with attributes
+        table = self._editor.WriteTable(rows, cols, table_attr)
+        
+        if table is None:
+            # Table creation failed - raise exception to trigger fallback
+            raise Exception("WriteTable returned None - rich table not supported")
+        
+        # Set cell properties (width, height, border) without writing text
+        # Writing text into cells with SetCaretPosition causes crashes in KiCad
+        for row_idx in range(rows):
+            for col_idx in range(cols):
+                cell = table.GetCell(row_idx, col_idx)
+                if cell:
+                    try:
+                        cell_props = cell.GetProperties()
+                        cell_box = cell_props.GetTextBoxAttr()
                         
-                        # Header row styling
-                        if has_header and row_idx == 0:
-                            cell_attr = VisualEditorStyles.get_table_header_style(self._dark_mode)
-                            # Set header text
-                            if headers and col_idx < len(headers):
-                                cell_text = headers[col_idx]
-                            else:
-                                cell_text = f"Column {col_idx + 1}"
-                        else:
-                            cell_attr = VisualEditorStyles.get_table_cell_style(self._dark_mode)
-                            # Set data text
-                            data_row = row_idx - (1 if has_header else 0)
-                            if data and data_row < len(data) and col_idx < len(data[data_row]):
-                                cell_text = str(data[data_row][col_idx])
-                            else:
-                                cell_text = ""
+                        # Set cell width
+                        cell_box.GetWidth().SetValue(col_width, rt.TEXT_ATTR_UNITS_PIXELS)
                         
-                        # Write cell content
-                        self._editor.SetCaretPosition(cell.GetRange().GetStart())
-                        self._editor.BeginStyle(cell_attr)
-                        self._editor.WriteText(cell_text)
-                        self._editor.EndStyle()
+                        # Set cell height
+                        cell_box.GetHeight().SetValue(row_height, rt.TEXT_ATTR_UNITS_PIXELS)
+                        
+                        # Set cell padding
+                        cell_box.GetPadding().Set(5, rt.TEXT_ATTR_UNITS_PIXELS)
+                        
+                        # Set cell border
+                        cell_box.GetBorder().SetColour(border_color)
+                        cell_box.GetBorder().SetWidth(1, rt.TEXT_ATTR_UNITS_PIXELS)
+                        cell_box.GetBorder().SetStyle(wx.BORDER_SIMPLE)
+                        
+                        cell.SetProperties(cell_props)
+                    except Exception as e:
+                        pass  # Cell properties API may vary
         
         # Move cursor to end of document after table insertion
         self._editor.MoveEnd()
+        self._editor.WriteText("\n\n")
+        self._modified = True
         self._editor.WriteText("\n\n")
         self._modified = True
     
     def insert_data_table(self, headers: List[str], data: List[List[str]], title: str = None):
         """
         Public method to insert a formatted data table (for BOM, metadata, etc.)
+        Uses ASCII table format for reliable cross-platform rendering.
         
         Args:
             headers: List of column header strings
@@ -975,18 +1289,17 @@ class VisualNoteEditor(wx.Panel):
             self._editor.EndFontSize()
             self._editor.EndBold()
         
-        rows = len(data) + 1  # +1 for header
-        cols = len(headers)
-        
-        if rows > 1 and cols > 0:
-            self._insert_rich_table(rows, cols, True, headers, data)
+        # Always use ASCII table for reliable rendering
+        # RichTextTable has issues with cell positioning in KiCad's wxPython
+        if headers:
+            self._insert_ascii_table(headers, data if data else [])
         
         self._modified = True
     
     def insert_markdown_as_formatted(self, markdown_text: str):
         """
         Parse markdown text and insert as properly formatted rich text.
-        Handles tables, headings, lists, etc.
+        Handles tables, headings, lists, inline bold/italic, etc.
         
         Args:
             markdown_text: Markdown formatted string
@@ -1024,18 +1337,71 @@ class VisualNoteEditor(wx.Panel):
                 match = re.match(r'^(\s*)[-*+]\s+(.+)$', line)
                 if match:
                     text = match.group(2)
-                    self._editor.WriteText(f"• {text}\n")
+                    self._editor.WriteText("• ")
+                    self._write_inline_formatted_text(text)
+                    self._editor.WriteText("\n")
                     i += 1
                     continue
             
-            # Regular text
+            # Regular text with possible inline formatting
             if line.strip():
-                self._editor.WriteText(line + "\n")
+                self._write_inline_formatted_text(line)
+                self._editor.WriteText("\n")
             else:
                 self._editor.WriteText("\n")
             i += 1
         
         self._modified = True
+    
+    def _write_inline_formatted_text(self, text: str):
+        """
+        Write text with inline markdown formatting (bold, italic).
+        Handles **bold**, *italic*, and ***bold italic***.
+        """
+        # Pattern to match **bold**, *italic*, or ***bold italic***
+        # Process from left to right, handling nested formatting
+        pattern = r'(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*)'
+        
+        last_end = 0
+        for match in re.finditer(pattern, text):
+            # Write any text before this match as normal
+            if match.start() > last_end:
+                self._editor.WriteText(text[last_end:match.start()])
+            
+            full_match = match.group(0)
+            
+            # Determine formatting type
+            if full_match.startswith('***'):
+                # Bold italic
+                content = match.group(2)
+                attr = rt.RichTextAttr()
+                attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
+                attr.SetFontStyle(wx.FONTSTYLE_ITALIC)
+                self._editor.BeginStyle(attr)
+                self._editor.WriteText(content)
+                self._editor.EndStyle()
+            elif full_match.startswith('**'):
+                # Bold
+                content = match.group(3)
+                attr = rt.RichTextAttr()
+                attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
+                self._editor.BeginStyle(attr)
+                self._editor.WriteText(content)
+                self._editor.EndStyle()
+            elif full_match.startswith('*'):
+                # Italic
+                content = match.group(4)
+                attr = rt.RichTextAttr()
+                attr.SetFontStyle(wx.FONTSTYLE_ITALIC)
+                self._editor.BeginStyle(attr)
+                self._editor.WriteText(content)
+                self._editor.EndStyle()
+            
+            last_end = match.end()
+        
+        # Write any remaining text after the last match
+        if last_end < len(text):
+            self._editor.WriteText(text[last_end:])
     
     def _parse_and_insert_markdown_table(self, table_lines: List[str]):
         """Parse markdown table lines and insert as RichTextTable."""
@@ -1045,22 +1411,83 @@ class VisualNoteEditor(wx.Panel):
         # Parse headers (first line)
         header_line = table_lines[0]
         headers = [cell.strip() for cell in header_line.strip('|').split('|')]
-        headers = [h for h in headers if h]  # Remove empty
+        headers = [h for h in headers if h]  # Remove empty strings
+        
+        if not headers:
+            return
         
         # Skip separator line (second line with ---)
         # Parse data rows
         data = []
         for line in table_lines[2:]:
-            if '---' in line:
+            if '---' in line or not line.strip():
                 continue
             cells = [cell.strip() for cell in line.strip('|').split('|')]
-            cells = [c for c in cells if c is not None]
+            cells = [c for c in cells if c]  # Remove empty strings
             if cells:
-                data.append(cells)
+                # Ensure row has same number of columns as headers
+                while len(cells) < len(headers):
+                    cells.append("")
+                data.append(cells[:len(headers)])  # Trim to header count
         
-        # Insert as rich table
-        if headers:
-            self.insert_data_table(headers, data)
+        # Try to insert as rich table, fallback to ASCII table if it fails
+        if headers and data:
+            try:
+                self.insert_data_table(headers, data)
+            except Exception as e:
+                # Fallback: Insert as formatted ASCII table
+                self._insert_ascii_table(headers, data)
+        elif headers:
+            # No data rows - just show headers
+            self._insert_ascii_table(headers, [])
+    
+    def _insert_ascii_table(self, headers: List[str], data: List[List[str]]):
+        """Insert table as formatted ASCII text with proper alignment."""
+        if not headers:
+            return
+        
+        # Ensure newline before table
+        pos = self._editor.GetInsertionPoint()
+        text = self._editor.GetValue()
+        if pos > 0 and len(text) > 0 and text[pos - 1] != '\n':
+            self._editor.WriteText("\n")
+        
+        # Calculate column widths (min 8 chars for readability)
+        col_widths = [max(8, len(str(h))) for h in headers]
+        for row in data:
+            for i, cell in enumerate(row):
+                if i < len(col_widths):
+                    col_widths[i] = max(col_widths[i], len(str(cell)))
+        
+        # Cap max width to prevent overly wide columns
+        col_widths = [min(w, 40) for w in col_widths]
+        
+        # Insert header row with bold
+        self._editor.BeginBold()
+        header_cells = []
+        for i, h in enumerate(headers):
+            if i < len(col_widths):
+                header_cells.append(str(h)[:col_widths[i]].ljust(col_widths[i]))
+        self._editor.WriteText(" │ ".join(header_cells) + "\n")
+        self._editor.EndBold()
+        
+        # Insert separator line
+        separator_parts = ["─" * w for w in col_widths]
+        self._editor.WriteText("─┼─".join(separator_parts) + "\n")
+        
+        # Insert data rows
+        for row in data:
+            cells_padded = []
+            for i in range(len(headers)):
+                if i < len(row):
+                    cell_text = str(row[i])[:col_widths[i]]  # Truncate if needed
+                else:
+                    cell_text = ""
+                cells_padded.append(cell_text.ljust(col_widths[i]))
+            self._editor.WriteText(" │ ".join(cells_padded) + "\n")
+        
+        # Add empty line after table
+        self._editor.WriteText("\n")
     
     def _on_undo(self, event):
         """Undo last action."""
@@ -1071,14 +1498,54 @@ class VisualNoteEditor(wx.Panel):
         self._editor.Redo()
     
     def _on_clear_format(self, event):
-        """Clear all formatting from selection."""
-        attr = VisualEditorStyles.get_normal_style(self._dark_mode)
-        self._editor.SetStyleEx(
-            self._editor.GetSelectionRange(),
-            attr,
-            rt.RICHTEXT_SETSTYLE_WITH_UNDO | rt.RICHTEXT_SETSTYLE_REMOVE
-        )
+        """Clear all formatting from selection or current paragraph."""
+        # Use theme-aware normal style
+        normal_attr = self._get_normal_style_with_theme()
+        
+        if self._editor.HasSelection():
+            # Clear formatting on selection
+            self._editor.SetStyleEx(
+                self._editor.GetSelectionRange(),
+                normal_attr,
+                rt.RICHTEXT_SETSTYLE_WITH_UNDO
+            )
+        else:
+            # Clear formatting on current paragraph (if has text)
+            self._clear_current_paragraph_format()
+        
+        # Always reset default style for future typing - uses theme colors
+        self._editor.SetDefaultStyle(normal_attr)
+        
+        # Also set basic style to ensure new text uses theme colors
+        self._editor.SetBasicStyle(normal_attr)
+        
         self._modified = True
+        self._update_toolbar_states()
+    
+    def _clear_current_paragraph_format(self):
+        """Clear formatting on the current paragraph/line."""
+        # Use theme-aware normal style
+        normal_attr = self._get_normal_style_with_theme()
+        
+        pos = self._editor.GetInsertionPoint()
+        text = self._editor.GetValue()
+        
+        # Find paragraph boundaries
+        line_start = text.rfind('\n', 0, pos) + 1
+        line_end = text.find('\n', pos)
+        if line_end == -1:
+            line_end = len(text)
+        
+        # Apply normal style to paragraph if it has content
+        if line_end > line_start:
+            self._editor.SetStyleEx(
+                rt.RichTextRange(line_start, line_end),
+                normal_attr,
+                rt.RICHTEXT_SETSTYLE_WITH_UNDO
+            )
+        
+        # Always set default style for future typing
+        self._editor.SetDefaultStyle(normal_attr)
     
     # ============================================================
     # EVENT HANDLERS
@@ -1087,6 +1554,11 @@ class VisualNoteEditor(wx.Panel):
     def _on_text_changed(self, event):
         """Handle text changes."""
         self._modified = True
+        # Ensure cursor stays visible when typing
+        wx.CallAfter(self._ensure_cursor_visible)
+        # Update line numbers panel
+        if hasattr(self, '_line_numbers') and self._line_numbers:
+            wx.CallAfter(self._line_numbers.update_from_editor)
         event.Skip()
     
     def _on_key_down(self, event):
@@ -1096,13 +1568,24 @@ class VisualNoteEditor(wx.Panel):
         shift = event.ShiftDown()
         alt = event.AltDown()
         
-        # ESC key - clear selection and update toolbar
+        # ESC key - clear formatting and reset to normal text
         if key == wx.WXK_ESCAPE:
+            # Clear any selection
             if self._editor.HasSelection():
-                # Clear selection - move cursor to end of selection
                 sel_end = self._editor.GetSelectionRange().GetEnd()
                 self._editor.SetInsertionPoint(sel_end)
                 self._editor.SelectNone()
+            
+            # Use theme-aware normal style
+            normal_attr = self._get_normal_style_with_theme()
+            
+            # Reset default and basic style to use theme colors
+            self._editor.SetDefaultStyle(normal_attr)
+            self._editor.SetBasicStyle(normal_attr)
+            
+            # Also clear formatting on current paragraph if has text
+            self._clear_current_paragraph_format()
+            
             self._update_toolbar_states()
             return
         
@@ -1160,7 +1643,7 @@ class VisualNoteEditor(wx.Panel):
         event.Skip()
     
     def _handle_enter_key(self):
-        """Handle Enter key - continue lists if applicable."""
+        """Handle Enter key - new line with normal text style."""
         pos = self._editor.GetInsertionPoint()
         text = self._editor.GetValue()
         
@@ -1168,39 +1651,66 @@ class VisualNoteEditor(wx.Panel):
         line_start = text.rfind('\n', 0, pos) + 1
         current_line = text[line_start:pos]
         
-        # Check for list prefixes
+        # Check for list prefixes to continue them
         bullet_match = re.match(r'^([•◦▪]\s)', current_line)
         number_match = re.match(r'^(\d+)\.\s', current_line)
         checkbox_match = re.match(r'^([☐☑]\s)', current_line)
         
+        # Get theme-aware normal style for the new line
+        normal_attr = self._get_normal_style_with_theme()
+        
         if bullet_match:
-            # Continue bullet list
-            self._editor.WriteText('\n• ')
+            # Continue bullet list but check if line is empty (just bullet)
+            line_content = current_line[len(bullet_match.group(1)):].strip()
+            if not line_content:
+                # Empty bullet - end list, insert normal newline
+                self._editor.WriteText('\n')
+            else:
+                self._editor.WriteText('\n• ')
         elif number_match:
-            # Continue numbered list
-            next_num = int(number_match.group(1)) + 1
-            self._editor.WriteText(f'\n{next_num}. ')
+            # Continue numbered list but check if line is empty
+            line_content = current_line[len(number_match.group(0)):].strip()
+            if not line_content:
+                # Empty number - end list
+                self._editor.WriteText('\n')
+            else:
+                next_num = int(number_match.group(1)) + 1
+                self._editor.WriteText(f'\n{next_num}. ')
         elif checkbox_match:
-            # Continue checkbox list
-            self._editor.WriteText('\n☐ ')
+            # Continue checkbox list but check if line is empty
+            line_content = current_line[len(checkbox_match.group(1)):].strip()
+            if not line_content:
+                # Empty checkbox - end list
+                self._editor.WriteText('\n')
+            else:
+                self._editor.WriteText('\n☐ ')
         else:
-            # Normal enter
+            # Normal enter - insert newline
             self._editor.WriteText('\n')
+        
+        # Reset to theme-aware normal style for the new line
+        self._editor.SetDefaultStyle(normal_attr)
+        self._modified = True
     
     def _on_click(self, event):
-        """Handle mouse clicks - toggle checkboxes and update toolbar states."""
-        pos = self._editor.GetInsertionPoint()
+        """Handle mouse clicks - toggle checkboxes, cross-probe designators/nets, update toolbar states."""
+        # Use cursor position after click (original working logic)
+        click_pos = self._editor.GetInsertionPoint()
         text = self._editor.GetValue()
         
+        _kinotes_log(f"[KiNotes Click] Click position: {click_pos}, Text length: {len(text)}")
+        
         # Only check for checkbox if there's actual text and position is valid
-        if text and pos > 0 and pos <= len(text):
+        if text and click_pos > 0 and click_pos <= len(text):
             # Get character at click position (pos-1 since pos is after character)
-            char = text[pos - 1] if pos > 0 else ''
+            char = text[click_pos - 1] if click_pos > 0 else ''
+            
+            _kinotes_log(f"[KiNotes Click] Char at pos-1: '{char}'")
             
             # Only toggle if we clicked directly on a checkbox character
             # This prevents accidental checkbox insertion on empty lines or double-clicks
             if char in '☐☑':
-                check_pos = pos - 1
+                check_pos = click_pos - 1
                 current_char = text[check_pos]
                 new_char = '☑' if current_char == '☐' else '☐'
                 
@@ -1208,6 +1718,30 @@ class VisualNoteEditor(wx.Panel):
                 self._editor.SetSelection(check_pos, check_pos + 1)
                 self._editor.WriteText(new_char)
                 self._modified = True
+                _kinotes_log(f"[KiNotes Click] Toggled checkbox")
+            else:
+                # Check for net highlighting first: [[NET:name]] pattern (Beta)
+                if self._crossprobe_enabled:
+                    self._log_debug("net", EventLevel.DEBUG, f"[KiNotes Click] Crossprobe enabled, checking for nets...")
+                    net_info = self._get_net_at_click_with_pos(click_pos)
+                    if net_info:
+                        net_name, start_pos, end_pos = net_info
+                        self._log_debug("net", EventLevel.INFO, f"[KiNotes Click] Found net: {net_name}")
+                        self._try_net_highlight_with_style(net_name, start_pos, end_pos)
+                    else:
+                        self._log_debug("net", EventLevel.DEBUG, f"[KiNotes Click] No net found, checking designators...")
+                        # Fall back to cross-probe on designators (R1, C5, U3, etc.)
+                        word_info = self._get_designator_at_click_with_pos(click_pos)
+                        if word_info:
+                            designator, start_pos, end_pos = word_info
+                            self._log_debug("designator", EventLevel.INFO, f"[KiNotes Click] Found designator: {designator}")
+                            self._try_crossprobe_with_style(designator, start_pos, end_pos)
+                        else:
+                            self._log_debug("designator", EventLevel.DEBUG, f"[KiNotes Click] No designator found either")
+                else:
+                    self._log_debug("designator", EventLevel.DEBUG, f"[KiNotes Click] Crossprobe disabled")
+        else:
+            _kinotes_log(f"[KiNotes Click] Invalid position or no text")
         
         # Update toolbar button states based on current formatting
         wx.CallAfter(self._update_toolbar_states)
@@ -1227,7 +1761,13 @@ class VisualNoteEditor(wx.Panel):
             markdown_text: Markdown formatted string
         """
         from .markdown_converter import MarkdownToRichText
-        converter = MarkdownToRichText(self._editor, self._dark_mode)
+        # Pass theme colors to converter for proper heading/text coloring
+        converter = MarkdownToRichText(
+            self._editor, 
+            self._dark_mode, 
+            text_color=self._text_color,
+            bg_color=self._bg_color
+        )
         converter.convert(markdown_text)
         self._modified = False
     
@@ -1293,3 +1833,459 @@ class VisualNoteEditor(wx.Panel):
     def GetEditor(self) -> rt.RichTextCtrl:
         """Get the underlying RichTextCtrl for advanced operations."""
         return self._editor
+    
+    # ============================================================
+    # CROSS-PROBE API
+    # ============================================================
+    
+    def set_crossprobe_enabled(self, enabled: bool):
+        """Enable or disable cross-probe functionality."""
+        self._crossprobe_enabled = enabled
+    
+    def set_designator_linker(self, linker):
+        """Set the designator linker for cross-probe functionality."""
+        self._designator_linker = linker
+    
+    def set_net_linker(self, linker):
+        """Set the net linker for net highlighting (Beta)."""
+        self._net_linker = linker
+        if linker:
+            print("[KiNotes] Visual editor received net linker")
+            self._log_debug("net", EventLevel.INFO, "[KiNotes] Visual editor received net linker")
+        else:
+            print("[KiNotes] Visual editor cleared net linker")
+
+    def set_debug_logging(self, logger, modules: dict):
+        """Attach debug logger and module filters."""
+        self._debug_logger = logger
+        self._debug_modules = modules or {}
+        for key in ("net", "designator"):
+            if key not in self._debug_modules:
+                self._debug_modules[key] = False
+
+    def _log_debug(self, module: str, level: EventLevel, message: str):
+        """Log to console and optional debug panel if module enabled."""
+        _kinotes_log(message)
+        try:
+            if self._debug_logger and self._debug_modules.get(module, False):
+                self._debug_logger.log(level, message)
+        except Exception:
+            pass
+    
+    def _get_word_at_position(self, pos: int) -> Tuple[str, int, int]:
+        """
+        Get the word at the given position.
+        Returns (word, start_pos, end_pos).
+        Supports alphanumeric + underscore + hyphen for designators.
+        """
+        text = self._editor.GetValue()
+        if not text or pos < 0 or pos > len(text):
+            return ("", pos, pos)
+        
+        # Find word boundaries
+        start = pos
+        end = pos
+        
+        # Scan backward to find word start
+        while start > 0 and (text[start - 1].isalnum() or text[start - 1] in '_-'):
+            start -= 1
+        
+        # Scan forward to find word end
+        while end < len(text) and (text[end].isalnum() or text[end] in '_-'):
+            end += 1
+        
+        return (text[start:end], start, end)
+
+    def _get_net_word_at_position(self, pos: int) -> Tuple[str, int, int]:
+        """
+        Get a net name at the given position (more permissive than regular word).
+        Supports net chars: alphanumeric + underscore + hyphen + plus.
+        Returns (net_name, start_pos, end_pos).
+        """
+        text = self._editor.GetValue()
+        if not text or pos < 0 or pos > len(text):
+            return ("", pos, pos)
+        
+        # Find word boundaries (net chars include +, -, _, alnum)
+        start = pos
+        end = pos
+        
+        # Scan backward to find net start
+        while start > 0 and (text[start - 1].isalnum() or text[start - 1] in '_-+'):
+            start -= 1
+        
+        # Scan forward to find net end
+        while end < len(text) and (text[end].isalnum() or text[end] in '_-+'):
+            end += 1
+        
+        return (text[start:end], start, end)
+    
+    def _check_for_designator_at_click(self, pos: int) -> Optional[str]:
+        """
+        Check if click position is on a valid designator.
+        Returns the designator string or None.
+        """
+        if not self._crossprobe_enabled or not self._designator_linker:
+            return None
+        
+        word, start, end = self._get_word_at_position(pos)
+        if not word:
+            return None
+        
+        # Check if it matches a designator pattern
+        word_upper = word.upper()
+        
+        # Use the smart pattern from designator linker
+        import re
+        # Standard EE designator prefixes
+        prefixes = ['R', 'C', 'L', 'D', 'U', 'Q', 'J', 'P', 'K', 'SW', 'S', 'F', 'FB', 
+                   'TP', 'Y', 'X', 'T', 'M', 'LED', 'IC', 'CON', 'RLY', 'XTAL', 'ANT', 
+                   'BT', 'VR', 'RV', 'TR', 'FID', 'MH', 'JP', 'LS', 'SP', 'MIC']
+        
+        pattern = re.compile(
+            r'^(' + '|'.join(sorted(prefixes, key=len, reverse=True)) + r')(\d+[A-Z]?)$',
+            re.IGNORECASE
+        )
+        
+        if pattern.match(word_upper):
+            return word_upper
+        
+        return None
+    
+    def _ensure_net_linker(self):
+        """Lazy-load net linker from cache manager on demand (inside KiCad only)."""
+        if self._net_linker:
+            return  # Already have one
+        # Try to get linker from cache manager (use absolute import to avoid relative import issues)
+        try:
+            from KiNotes.core.net_cache_manager import get_net_cache_manager
+            cache_manager = get_net_cache_manager()
+            self._net_linker = cache_manager.get_linker()
+            if self._net_linker:
+                print("[KiNotes] Net linker acquired from cache manager")
+            else:
+                print("[KiNotes] Net linker is None from cache manager (no board?)")
+        except ImportError as e:
+            print(f"[KiNotes] Net linker lazy-load import error: {e}")
+            # Fallback: try parent chain
+            try:
+                parent = self.GetParent()
+                while parent:
+                    if hasattr(parent, 'net_cache_manager') and parent.net_cache_manager:
+                        self._net_linker = parent.net_cache_manager.get_linker()
+                        if self._net_linker:
+                            print("[KiNotes] Net linker acquired from parent's cache manager (fallback)")
+                            return
+                    parent = parent.GetParent()
+            except Exception as e2:
+                print(f"[KiNotes] Net linker fallback warning: {e2}")
+        except Exception as e:
+            print(f"[KiNotes] Net linker lazy-load error: {e}")
+
+    def _get_net_at_click_with_pos(self, pos: int) -> Optional[Tuple[str, int, int]]:
+        """
+        Check if click position is on a net reference.
+        Returns (net_name, start_pos, end_pos) or None.
+        
+        Supports multiple syntaxes:
+        - [[NET:VCC]]    (explicit, no false positives)
+        - @VCC           (short form, like designators use @R1)
+        - VCC            (implicit, if VCC is a known net in the cache)
+        """
+        # Lazy-load net linker on first click
+        self._ensure_net_linker()
+        if not self._net_linker:
+            self._log_debug("net", EventLevel.DEBUG, "[KiNotes Net Detection] No net_linker available (KiCad board not found)")
+            return None
+        
+        text = self._editor.GetValue()
+        if not text or pos < 0 or pos > len(text):
+            self._log_debug("net", EventLevel.DEBUG, f"[KiNotes Net Detection] Invalid position: {pos}, text length: {len(text)}")
+            return None
+        
+        self._log_debug("net", EventLevel.DEBUG, f"[KiNotes Net Detection] Searching around position {pos}")
+        
+        search_start = max(0, pos - 50)
+        search_text = text[search_start:pos + 50]
+        
+        self._log_debug("net", EventLevel.DEBUG, f"[KiNotes Net Detection] Search snippet: '{search_text}'")
+        
+        import re
+        
+        # Try explicit syntax first: [[NET:NETNAME]] (supports special chars like +3V3, AC_N)
+        pattern_explicit = r'\[\[NET:([A-Za-z0-9_+\-]+)\]\]'
+        for match in re.finditer(pattern_explicit, search_text):
+            match_start = search_start + match.start()
+            match_end = search_start + match.end()
+            if match_start <= pos < match_end:
+                net_name = match.group(1)
+                self._log_debug("net", EventLevel.INFO, f"[KiNotes Net Detection] ✓ Found explicit pattern: {net_name}")
+                return (net_name, match_start, match_end)
+        
+        # Try short form: @NETNAME (supports special chars like +3V3, AC_N)
+        pattern_short = r'@([A-Za-z0-9_+\-]+)'
+        for match in re.finditer(pattern_short, search_text):
+            match_start = search_start + match.start()
+            match_end = search_start + match.end()
+            if match_start <= pos < match_end:
+                net_name = match.group(1)
+                self._log_debug("net", EventLevel.INFO, f"[KiNotes Net Detection] ✓ Found short form: {net_name}")
+                return (net_name, match_start, match_end)
+        
+        # Try implicit: bare word if it's a known net (get from net_linker cache)
+        # Use net-specific word extraction to handle nets like +3V3, AC_N, etc.
+        word, start, end = self._get_net_word_at_position(pos)
+        self._log_debug("net", EventLevel.DEBUG, f"[KiNotes Net Detection] Extracted net word: '{word}'")
+        
+        # CHEAT CODE: Blank extraction = clear highlight signal
+        # (User clicked on empty/whitespace → clear any active highlight on PCB board)
+        if word == '':
+            self._log_debug("net", EventLevel.INFO, f"[KiNotes Net Detection] Blank extraction → clearing PCB board highlights")
+            if hasattr(self._net_linker, 'clear_highlight'):
+                self._net_linker.clear_highlight()
+            return None  # Signal no net found
+        
+        if word and hasattr(self._net_linker, 'is_valid_net'):
+            is_valid = self._net_linker.is_valid_net(word.upper())
+            self._log_debug("net", EventLevel.DEBUG, f"[KiNotes Net Detection] Is '{word}' valid net? {is_valid}")
+            if is_valid:
+                self._log_debug("net", EventLevel.INFO, f"[KiNotes Net Detection] ✓ Found implicit net: {word}")
+                return (word.upper(), start, end)
+        
+        self._log_debug("net", EventLevel.DEBUG, f"[KiNotes Net Detection] ✗ No net pattern found")
+        return None
+    
+    def _get_designator_at_click_with_pos(self, pos: int) -> Optional[Tuple[str, int, int]]:
+        """
+        Check if click position is on a valid designator.
+        Returns (designator, start_pos, end_pos) or None.
+        Uses the designator_linker's pattern which includes custom prefixes.
+        """
+        if not self._crossprobe_enabled or not self._designator_linker:
+            return None
+        
+        word, start, end = self._get_word_at_position(pos)
+        if not word:
+            return None
+        
+        # Use the designator linker's pattern (includes custom prefixes from settings)
+        word_upper = word.upper()
+        
+        # Check using the linker's SMART_DESIGNATOR_PATTERN which has custom prefixes
+        if hasattr(self._designator_linker, 'SMART_DESIGNATOR_PATTERN'):
+            if self._designator_linker.SMART_DESIGNATOR_PATTERN.match(word):
+                self._log_debug("designator", EventLevel.DEBUG, f"[KiNotes] Matched designator: {word_upper}")
+                return (word_upper, start, end)
+        
+        # Fallback: check using DESIGNATOR_PATTERN for generic validation
+        if hasattr(self._designator_linker, 'DESIGNATOR_PATTERN'):
+            if self._designator_linker.DESIGNATOR_PATTERN.match(word):
+                return (word_upper, start, end)
+        
+        return None
+    
+    def _try_crossprobe_with_style(self, designator: str, start_pos: int, end_pos: int) -> bool:
+        """
+        Attempt to cross-probe and apply visual styling to the designator text.
+        Green bold = found on board, Red bold = not found.
+        """
+        self._log_debug("designator", EventLevel.INFO, f"[KiNotes Cross-Probe] Attempting to highlight: {designator}")
+        
+        if not self._crossprobe_enabled:
+            self._log_debug("designator", EventLevel.DEBUG, "[KiNotes Cross-Probe] Cross-probe is disabled in settings")
+            return False
+        
+        if not self._designator_linker:
+            self._log_debug("designator", EventLevel.ERROR, "[KiNotes Cross-Probe] No designator linker available")
+            return False
+        
+        try:
+            result = self._designator_linker.highlight(designator)
+            
+            # Apply visual styling to the designator text
+            self._apply_crossprobe_style(start_pos, end_pos, success=result)
+            
+            if result:
+                self._log_debug("designator", EventLevel.SUCCESS, f"[KiNotes Cross-Probe] Successfully highlighted {designator}")
+                self._editor.SetToolTip(f"✓ {designator} selected on PCB")
+            else:
+                self._log_debug("designator", EventLevel.WARNING, f"[KiNotes Cross-Probe] Component {designator} not found on board")
+                self._editor.SetToolTip(f"✗ {designator} not found on board")
+            
+            # Clear tooltip after 2 seconds
+            wx.CallLater(2000, lambda: self._editor.SetToolTip(""))
+            return result
+            
+        except Exception as e:
+            self._log_debug("designator", EventLevel.ERROR, f"[KiNotes Cross-Probe] Error: {e}")
+            return False
+    
+    def _apply_crossprobe_style(self, start_pos: int, end_pos: int, success: bool):
+        """Apply Bold + Color styling to designator based on cross-probe result."""
+        try:
+            attr = rt.RichTextAttr()
+            
+            # Set bold
+            attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
+            
+            # Set color based on result
+            if success:
+                # Green for found
+                attr.SetTextColour(wx.Colour(76, 175, 80))  # Material Green 500
+            else:
+                # Red for not found  
+                attr.SetTextColour(wx.Colour(244, 67, 54))  # Material Red 500
+            
+            # Apply style to the designator text
+            text_range = rt.RichTextRange(start_pos, end_pos)
+            self._editor.SetStyleEx(text_range, attr, rt.RICHTEXT_SETSTYLE_WITH_UNDO)
+            
+            # Flash effect - briefly make it brighter, then settle
+            wx.CallLater(150, lambda: self._flash_designator(start_pos, end_pos, success))
+            
+        except Exception as e:
+            _kinotes_log(f"[KiNotes Cross-Probe] Style error: {e}")
+    
+    def _flash_designator(self, start_pos: int, end_pos: int, success: bool):
+        """Apply final settled style after flash."""
+        try:
+            attr = rt.RichTextAttr()
+            attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
+            
+            if success:
+                # Settled green
+                attr.SetTextColour(wx.Colour(56, 142, 60))  # Darker green
+            else:
+                # Settled red
+                attr.SetTextColour(wx.Colour(211, 47, 47))  # Darker red
+            
+            text_range = rt.RichTextRange(start_pos, end_pos)
+            self._editor.SetStyleEx(text_range, attr, rt.RICHTEXT_SETSTYLE_WITH_UNDO)
+        except:
+            pass
+
+    def _try_net_highlight_with_style(self, net_name: str, start_pos: int, end_pos: int) -> bool:
+        """
+        Attempt to highlight net by name and apply visual styling.
+        Blue bold = successfully highlighted, Gray bold = not found (Beta feature).
+        """
+        self._log_debug("net", EventLevel.INFO, f"[KiNotes Net Linker] Attempting to highlight net: {net_name} (Beta)")
+        
+        if not self._net_linker:
+            self._log_debug("net", EventLevel.ERROR, "[KiNotes Net Linker] No net linker available (Beta feature may be disabled)")
+            return False
+        
+        try:
+            result = self._net_linker.highlight(net_name)
+            
+            # Apply visual styling to the net pattern
+            self._apply_net_style(start_pos, end_pos, success=result)
+            
+            if result:
+                self._log_debug("net", EventLevel.SUCCESS, f"[KiNotes Net Linker] Successfully highlighted net {net_name}")
+                self._editor.SetToolTip(f"✓ Net {net_name} highlighted on PCB")
+            else:
+                self._log_debug("net", EventLevel.WARNING, f"[KiNotes Net Linker] Net {net_name} not found on board")
+                self._editor.SetToolTip(f"✗ Net {net_name} not found on board")
+            
+            # Clear tooltip after 2 seconds
+            wx.CallLater(2000, lambda: self._editor.SetToolTip(""))
+            return result
+            
+        except Exception as e:
+            self._log_debug("net", EventLevel.ERROR, f"[KiNotes Net Linker] Error: {e}")
+            return False
+    
+    def _apply_net_style(self, start_pos: int, end_pos: int, success: bool):
+        """Apply Bold + Color styling to net pattern based on highlighting result."""
+        try:
+            attr = rt.RichTextAttr()
+            
+            # Set bold
+            attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
+            
+            # Set color based on result (use blue for success, gray for not found)
+            if success:
+                # Blue for successfully highlighted
+                attr.SetTextColour(wx.Colour(33, 150, 243))  # Material Blue 500
+            else:
+                # Gray for not found
+                attr.SetTextColour(wx.Colour(158, 158, 158))  # Material Gray 500
+            
+            # Apply style to the net pattern text
+            text_range = rt.RichTextRange(start_pos, end_pos)
+            self._editor.SetStyleEx(text_range, attr, rt.RICHTEXT_SETSTYLE_WITH_UNDO)
+            
+            # Flash effect
+            wx.CallLater(150, lambda: self._flash_net(start_pos, end_pos, success))
+            
+        except Exception as e:
+            _kinotes_log(f"[KiNotes Net Linker] Style error: {e}")
+    
+    def _flash_net(self, start_pos: int, end_pos: int, success: bool):
+        """Apply final settled style to net pattern after flash."""
+        try:
+            attr = rt.RichTextAttr()
+            attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
+            
+            if success:
+                # Settled blue (darker)
+                attr.SetTextColour(wx.Colour(13, 71, 161))  # Material Blue 900
+            else:
+                # Settled gray (darker)
+                attr.SetTextColour(wx.Colour(97, 97, 97))  # Material Gray 700
+            
+            text_range = rt.RichTextRange(start_pos, end_pos)
+            self._editor.SetStyleEx(text_range, attr, rt.RICHTEXT_SETSTYLE_WITH_UNDO)
+        except:
+            pass
+
+    def _try_crossprobe(self, designator: str) -> bool:
+        """
+        Attempt to cross-probe (highlight on PCB) the given designator.
+        Returns True if successful.
+        """
+        _kinotes_log(f"[KiNotes Cross-Probe] Attempting to highlight: {designator}")
+        
+        if not self._crossprobe_enabled:
+            _kinotes_log("[KiNotes Cross-Probe] Cross-probe is disabled in settings")
+            return False
+        
+        if not self._designator_linker:
+            _kinotes_log("[KiNotes Cross-Probe] No designator linker available")
+            return False
+        
+        linker_type = type(self._designator_linker).__name__
+        _kinotes_log(f"[KiNotes Cross-Probe] Using linker: {linker_type}")
+        
+        try:
+            result = self._designator_linker.highlight(designator)
+            if result:
+                # Show visual feedback
+                self._show_crossprobe_feedback(designator, success=True)
+                _kinotes_log(f"[KiNotes Cross-Probe] Successfully highlighted {designator}")
+            else:
+                self._show_crossprobe_feedback(designator, success=False)
+                _kinotes_log(f"[KiNotes Cross-Probe] Component {designator} not found on board")
+            return result
+        except Exception as e:
+            _kinotes_log(f"[KiNotes Cross-Probe] Error: {e}")
+            return False
+    
+    def _show_crossprobe_feedback(self, designator: str, success: bool):
+        """Show visual feedback for cross-probe action."""
+        if success:
+            # Brief tooltip or status indication
+            try:
+                wx.ToolTip.Enable(True)
+                self._editor.SetToolTip(f"✓ Highlighted {designator} on PCB")
+                # Clear tooltip after 2 seconds
+                wx.CallLater(2000, lambda: self._editor.SetToolTip(""))
+            except:
+                pass
+        else:
+            try:
+                self._editor.SetToolTip(f"✗ {designator} not found on board")
+                wx.CallLater(2000, lambda: self._editor.SetToolTip(""))
+            except:
+                pass

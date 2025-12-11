@@ -1,8 +1,19 @@
 """
 KiNotes Metadata Extractor - Extract BOM, Stackup, Netlist from KiCad 9+
+With crash-safe pcbnew API wrappers
 """
 import os
+import sys
 from datetime import datetime
+
+def _kinotes_log(msg: str):
+    """Log message to console, handling KiCad's None stdout."""
+    try:
+        if sys.stdout is not None:
+            print(msg)
+            sys.stdout.flush()
+    except:
+        pass
 
 try:
     import pcbnew
@@ -20,14 +31,35 @@ class MetadataExtractor:
         self._board = None
     
     def _get_board(self):
-        """Get current PCB board."""
-        if HAS_PCBNEW:
-            return pcbnew.GetBoard()
+        """Get current PCB board safely."""
+        try:
+            if HAS_PCBNEW:
+                return pcbnew.GetBoard()
+        except Exception as e:
+            _kinotes_log(f"[KiNotes] Error getting board: {e}")
         return None
+    
+    def _safe_get_footprints(self, board):
+        """Safely get footprints list from board."""
+        try:
+            return list(board.GetFootprints())
+        except Exception as e:
+            _kinotes_log(f"[KiNotes] Error getting footprints: {e}")
+            return []
+    
+    def _safe_get_attr(self, obj, method_name, default=''):
+        """Safely call a method on an object."""
+        try:
+            method = getattr(obj, method_name, None)
+            if method:
+                return method()
+            return default
+        except:
+            return default
     
     def extract(self, meta_type):
         """
-        Extract metadata of specified type.
+        Extract metadata of specified type with full crash protection.
         
         Args:
             meta_type: One of 'bom', 'stackup', 'board_size', 'diff_pairs',
@@ -36,55 +68,72 @@ class MetadataExtractor:
         Returns:
             Formatted markdown string
         """
-        extractors = {
-            'bom': self.extract_bom,
-            'stackup': self.extract_stackup,
-            'board_size': self.extract_board_size,
-            'diff_pairs': self.extract_diff_pairs,
-            'netlist': self.extract_netlist,
-            'layers': self.extract_layers,
-            'drill_table': self.extract_drill_table,
-            'design_rules': self.extract_design_rules,
-            'all': self.extract_all,
-        }
-        
-        extractor = extractors.get(meta_type)
-        if extractor:
-            return extractor()
-        return f"Unknown metadata type: {meta_type}"
+        try:
+            extractors = {
+                'bom': self.extract_bom,
+                'stackup': self.extract_stackup,
+                'board_size': self.extract_board_size,
+                'diff_pairs': self.extract_diff_pairs,
+                'netlist': self.extract_netlist,
+                'layers': self.extract_layers,
+                'drill_table': self.extract_drill_table,
+                'design_rules': self.extract_design_rules,
+                'all': self.extract_all,
+            }
+            
+            extractor = extractors.get(meta_type)
+            if extractor:
+                return extractor()
+            return f"Unknown metadata type: {meta_type}"
+        except Exception as e:
+            _kinotes_log(f"[KiNotes] Metadata extraction error: {e}")
+            return f"<!-- Error extracting {meta_type} -->"
     
     def extract_bom(self):
-        """Extract Bill of Materials."""
-        board = self._get_board()
-        if not board:
-            return "<!-- Error: No board loaded -->"
-        
-        lines = [
-            "## Bill of Materials",
-            "",
-            "| Ref | Value | Footprint | Qty |",
-            "|-----|-------|-----------|-----|",
-        ]
-        
-        # Group by value and footprint
-        components = {}
-        for fp in board.GetFootprints():
-            ref = fp.GetReference()
-            value = fp.GetValue()
-            footprint = fp.GetFPIDAsString().split(':')[-1] if ':' in fp.GetFPIDAsString() else fp.GetFPIDAsString()
+        """Extract Bill of Materials with crash protection."""
+        try:
+            board = self._get_board()
+            if not board:
+                return "<!-- Error: No board loaded -->"
             
-            key = (value, footprint)
-            if key not in components:
-                components[key] = []
-            components[key].append(ref)
-        
-        # Sort and format
-        for (value, footprint), refs in sorted(components.items()):
-            refs_str = ", ".join(sorted(refs, key=lambda x: (x[0], int(''.join(filter(str.isdigit, x)) or 0))))
-            lines.append(f"| {refs_str} | {value} | {footprint} | {len(refs)} |")
-        
-        lines.extend(["", f"*Total components: {sum(len(r) for r in components.values())}*", ""])
-        return "\n".join(lines)
+            lines = [
+                "## Bill of Materials",
+                "",
+                "| Ref | Value | Footprint | Qty |",
+                "|-----|-------|-----------|-----|",
+            ]
+            
+            # Group by value and footprint
+            components = {}
+            for fp in self._safe_get_footprints(board):
+                try:
+                    ref = self._safe_get_attr(fp, 'GetReference', 'Unknown')
+                    value = self._safe_get_attr(fp, 'GetValue', '')
+                    fpid = self._safe_get_attr(fp, 'GetFPIDAsString', '')
+                    footprint = fpid.split(':')[-1] if ':' in fpid else fpid
+                    
+                    key = (value, footprint)
+                    if key not in components:
+                        components[key] = []
+                    components[key].append(ref)
+                except:
+                    continue
+            
+            # Sort and format
+            for (value, footprint), refs in sorted(components.items()):
+                try:
+                    refs_str = ", ".join(sorted(refs, key=lambda x: (x[0], int(''.join(filter(str.isdigit, x)) or 0))))
+                    lines.append(f"| {refs_str} | {value} | {footprint} | {len(refs)} |")
+                except:
+                    refs_str = ", ".join(refs)
+                    lines.append(f"| {refs_str} | {value} | {footprint} | {len(refs)} |")
+            
+            lines.extend(["", f"*Total components: {sum(len(r) for r in components.values())}*", ""])
+            return "\n".join(lines)
+            
+        except Exception as e:
+            _kinotes_log(f"[KiNotes] BOM extraction error: {e}")
+            return "<!-- Error extracting BOM -->"
     
     def extract_stackup(self):
         """Extract layer stackup information."""
@@ -239,7 +288,7 @@ class MetadataExtractor:
         return "\n".join(lines)
     
     def extract_diff_pairs(self):
-        """Extract differential pair information using KiCad's IsDiffPair() API."""
+        """Extract differential pair information using KiCad's IsDiffPair() API or pattern matching."""
         board = self._get_board()
         if not board:
             return "<!-- Error: No board loaded -->"
@@ -253,48 +302,84 @@ class MetadataExtractor:
             diff_pairs_found = []
             processed_nets = set()
             
-            # Use KiCad's native IsDiffPair() detection
+            # Try KiCad's native IsDiffPair() detection first
             net_info = board.GetNetInfo()
+            has_isdiffpair = False
+            
             for i in range(net_info.GetNetCount()):
                 net = net_info.GetNetItem(i)
-                if net and hasattr(net, 'IsDiffPair') and net.IsDiffPair():
-                    net_name = net.GetNetname()
-                    
-                    # Avoid duplicate pairs (both P and N will report as diff pair)
-                    if net_name not in processed_nets:
-                        # Try to get the coupled net
-                        if hasattr(net, 'GetDiffPairCoupledNet'):
-                            coupled_net = net.GetDiffPairCoupledNet()
-                            if coupled_net:
-                                coupled_name = coupled_net.GetNetname()
-                                processed_nets.add(net_name)
-                                processed_nets.add(coupled_name)
-                                
-                                # Determine which is positive/negative based on naming
-                                if net_name.endswith('+') or net_name.endswith('_P') or net_name.endswith('P'):
-                                    diff_pairs_found.append((net_name, coupled_name))
+                if net and hasattr(net, 'IsDiffPair'):
+                    has_isdiffpair = True
+                    try:
+                        if net.IsDiffPair():
+                            # Convert wxString to Python str
+                            net_name = str(net.GetNetname())
+                            
+                            # Avoid duplicate pairs (both P and N will report as diff pair)
+                            if net_name not in processed_nets:
+                                # Try to get the coupled net
+                                if hasattr(net, 'GetDiffPairCoupledNet'):
+                                    coupled_net = net.GetDiffPairCoupledNet()
+                                    if coupled_net:
+                                        coupled_name = str(coupled_net.GetNetname())
+                                        processed_nets.add(net_name)
+                                        processed_nets.add(coupled_name)
+                                        
+                                        # Determine which is positive/negative based on naming
+                                        if net_name.endswith('+') or net_name.endswith('_P') or net_name.endswith('P'):
+                                            diff_pairs_found.append((net_name, coupled_name))
+                                        else:
+                                            diff_pairs_found.append((coupled_name, net_name))
                                 else:
-                                    diff_pairs_found.append((coupled_name, net_name))
-                        else:
-                            # Fallback: just mark as diff pair without coupled info
-                            processed_nets.add(net_name)
-                            diff_pairs_found.append((net_name, "?"))
+                                    # Fallback: just mark as diff pair without coupled info
+                                    processed_nets.add(net_name)
+                                    diff_pairs_found.append((net_name, "?"))
+                    except:
+                        pass  # IsDiffPair() call failed, will use fallback
             
-            # Fallback to string pattern matching if IsDiffPair() not available
-            if not diff_pairs_found and not hasattr(net_info.GetNetItem(0) if net_info.GetNetCount() > 0 else None, 'IsDiffPair'):
+            # Fallback to string pattern matching if no pairs found
+            # This works regardless of whether IsDiffPair() exists
+            if not diff_pairs_found:
                 nets = {}
-                for net in board.GetNetInfo().NetsByName():
-                    net_name = net
-                    nets[net_name] = True
+                for i in range(net_info.GetNetCount()):
+                    net = net_info.GetNetItem(i)
+                    if net:
+                        net_name = str(net.GetNetname())
+                        nets[net_name] = True
                 
+                # Common differential pair naming patterns
                 for net_name in nets:
-                    if net_name.endswith('+') or net_name.endswith('_P'):
-                        base = net_name[:-1] if net_name.endswith('+') else net_name[:-2]
-                        pair_suffix = '-' if net_name.endswith('+') else '_N'
-                        pair_name = base + pair_suffix
-                        
-                        if pair_name in nets:
+                    if net_name in processed_nets:
+                        continue
+                    
+                    # Pattern: name+ / name- (USB_D+, USB_D-)
+                    if net_name.endswith('+'):
+                        base = net_name[:-1]
+                        pair_name = base + '-'
+                        if pair_name in nets and pair_name not in processed_nets:
                             diff_pairs_found.append((net_name, pair_name))
+                            processed_nets.add(net_name)
+                            processed_nets.add(pair_name)
+                    
+                    # Pattern: name_P / name_N (ETH_TX_P, ETH_TX_N)
+                    elif net_name.endswith('_P'):
+                        base = net_name[:-2]
+                        pair_name = base + '_N'
+                        if pair_name in nets and pair_name not in processed_nets:
+                            diff_pairs_found.append((net_name, pair_name))
+                            processed_nets.add(net_name)
+                            processed_nets.add(pair_name)
+                    
+                    # Pattern: nameP / nameN (no underscore)
+                    elif net_name.endswith('P') and not net_name.endswith('_P'):
+                        base = net_name[:-1]
+                        pair_name = base + 'N'
+                        if pair_name in nets and pair_name not in processed_nets:
+                            # Verify it looks like a diff pair (has signal-like base)
+                            if any(c.isdigit() or c == '_' for c in base):
+                                diff_pairs_found.append((net_name, pair_name))
+                                processed_nets.add(net_name)
+                                processed_nets.add(pair_name)
             
             if diff_pairs_found:
                 lines.extend([
@@ -446,7 +531,7 @@ class MetadataExtractor:
         return "\n".join(lines)
     
     def extract_design_rules(self):
-        """Extract design rules."""
+        """Extract design rules (KiCad 9 compatible)."""
         board = self._get_board()
         if not board:
             return "<!-- Error: No board loaded -->"
@@ -459,22 +544,90 @@ class MetadataExtractor:
         try:
             ds = board.GetDesignSettings()
             
-            lines.extend([
-                "### Clearances",
-                f"- **Min Track Width:** {pcbnew.ToMM(ds.GetTrackMinWidth()):.3f} mm",
-                f"- **Min Clearance:** {pcbnew.ToMM(ds.GetMinClearance()):.3f} mm",
-                f"- **Min Via Diameter:** {pcbnew.ToMM(ds.GetViasMinSize()):.3f} mm",
-                f"- **Min Via Drill:** {pcbnew.ToMM(ds.GetMinThroughDrill()):.3f} mm",
-                "",
-                "### Copper",
-                f"- **Copper Layers:** {board.GetCopperLayerCount()}",
-            ])
+            lines.append("### Clearances")
             
-            # Try to get default track width
-            try:
-                lines.append(f"- **Default Track Width:** {pcbnew.ToMM(ds.GetCurrentTrackWidth()):.3f} mm")
-            except:
-                pass
+            # KiCad 9 uses m_TrackMinWidth instead of GetTrackMinWidth()
+            # Try multiple API patterns for compatibility
+            
+            # Min Track Width
+            min_track = None
+            for attr in ['m_TrackMinWidth', 'GetTrackMinWidth']:
+                if hasattr(ds, attr):
+                    val = getattr(ds, attr)
+                    min_track = val() if callable(val) else val
+                    break
+            if min_track is not None:
+                lines.append(f"- **Min Track Width:** {pcbnew.ToMM(min_track):.3f} mm")
+            
+            # Min Clearance
+            min_clearance = None
+            for attr in ['m_MinClearance', 'GetMinClearance']:
+                if hasattr(ds, attr):
+                    val = getattr(ds, attr)
+                    min_clearance = val() if callable(val) else val
+                    break
+            if min_clearance is not None:
+                lines.append(f"- **Min Clearance:** {pcbnew.ToMM(min_clearance):.3f} mm")
+            
+            # Min Via Size
+            min_via = None
+            for attr in ['m_ViasMinSize', 'GetViasMinSize']:
+                if hasattr(ds, attr):
+                    val = getattr(ds, attr)
+                    min_via = val() if callable(val) else val
+                    break
+            if min_via is not None:
+                lines.append(f"- **Min Via Diameter:** {pcbnew.ToMM(min_via):.3f} mm")
+            
+            # Min Via Drill
+            min_drill = None
+            for attr in ['m_MinThroughDrill', 'GetMinThroughDrill', 'm_ViasMinDrill', 'GetViasMinDrill']:
+                if hasattr(ds, attr):
+                    val = getattr(ds, attr)
+                    min_drill = val() if callable(val) else val
+                    break
+            if min_drill is not None:
+                lines.append(f"- **Min Via Drill:** {pcbnew.ToMM(min_drill):.3f} mm")
+            
+            # Microvia settings
+            min_uvia = None
+            for attr in ['m_MicroViasMinSize', 'GetMicroViasMinSize']:
+                if hasattr(ds, attr):
+                    val = getattr(ds, attr)
+                    min_uvia = val() if callable(val) else val
+                    break
+            if min_uvia is not None and min_uvia > 0:
+                lines.append(f"- **Min µVia Diameter:** {pcbnew.ToMM(min_uvia):.3f} mm")
+            
+            lines.append("")
+            lines.append("### Copper")
+            lines.append(f"- **Copper Layers:** {board.GetCopperLayerCount()}")
+            
+            # Default track width
+            track_width = None
+            for attr in ['GetCurrentTrackWidth', 'm_CurrentTrackWidth']:
+                if hasattr(ds, attr):
+                    val = getattr(ds, attr)
+                    try:
+                        track_width = val() if callable(val) else val
+                        break
+                    except:
+                        pass
+            if track_width is not None:
+                lines.append(f"- **Default Track Width:** {pcbnew.ToMM(track_width):.3f} mm")
+            
+            # Default via size
+            via_size = None
+            for attr in ['GetCurrentViaSize', 'm_CurrentViaSize']:
+                if hasattr(ds, attr):
+                    val = getattr(ds, attr)
+                    try:
+                        via_size = val() if callable(val) else val
+                        break
+                    except:
+                        pass
+            if via_size is not None:
+                lines.append(f"- **Default Via Size:** {pcbnew.ToMM(via_size):.3f} mm")
             
         except Exception as e:
             lines.append(f"*Error extracting design rules: {e}*")

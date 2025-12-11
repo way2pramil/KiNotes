@@ -24,769 +24,74 @@ try:
 except ImportError:
     VISUAL_EDITOR_AVAILABLE = False
 
+# Import extracted modules
+from .themes import (
+    DARK_THEME, LIGHT_THEME,
+    BACKGROUND_COLORS, TEXT_COLORS,
+    DARK_BACKGROUND_COLORS, DARK_TEXT_COLORS,
+    hex_to_colour
+)
 
-# ============================================================
-# COLOR PRESETS - Light Mode
-# ============================================================
-BACKGROUND_COLORS = {
-    "Snow Gray": "#F8F9FA",
-    "Ivory Paper": "#FFFDF5",
-    "Mint Mist": "#EAF7F1",
-    "Sakura Mist": "#FAF1F4",
-    "Storm Fog": "#E4E7EB",
-}
+from .scaling import (
+    get_dpi_scale_factor,
+    scale_size,
+    scale_font_size,
+    get_user_scale_factor,
+    set_user_scale_factor,
+    UI_SCALE_OPTIONS
+)
 
-TEXT_COLORS = {
-    "Carbon Black": "#2B2B2B",
-    "Deep Ink": "#1A1A1A",
-    "Slate Night": "#36454F",
-    "Cocoa Brown": "#4E342E",
-    "Evergreen Ink": "#004D40",
-}
+from .time_tracker import TimeTracker
 
-# Dark Mode Colors
-# ============================================================
-# IMPROVED APPLE-STYLE THEME
-# ============================================================
-DARK_THEME = {
-    "bg_panel":     "#1C1C1E",  # Apple System Gray 6 (Dark)
-    "bg_toolbar":   "#2C2C2E",  # Apple System Gray 5 (Dark) - Slightly lighter for contrast
-    "bg_button":    "#3A3A3C",  # Apple System Gray 4 (Dark)
-    "bg_button_hover": "#48484A",
-    "bg_editor":    "#1C1C1E",  # Matches panel for seamless look
-    "text_primary": "#FFFFFF",  # Pure White
-    "text_secondary": "#98989D",# Apple System Gray (Text)
-    "border":       "#38383A",  # Subtle separators
-    "accent_blue":  "#0A84FF",  # iOS Blue (Dark Mode)
-    "accent_green": "#30D158",  # iOS Green (Dark Mode)
-    "accent_red":   "#FF453A",  # iOS Red (Dark Mode)
-}
+from .components import (
+    RoundedButton,
+    PlayPauseButton,
+    ToggleSwitch,
+    Icons
+)
 
-LIGHT_THEME = {
-    "bg_panel":     "#F2F2F7",  # Apple System Gray 6 (Light) - Not pure white!
-    "bg_toolbar":   "#FFFFFF",  # Pure white cards on light gray bg
-    "bg_button":    "#E5E5EA",  # Apple System Gray 3 (Light)
-    "bg_button_hover": "#D1D1D6",
-    "bg_editor":    "#FFFFFF",
-    "text_primary": "#000000",
-    "text_secondary": "#8E8E93",
-    "border":       "#C6C6C8",
-    "accent_blue":  "#007AFF",  # iOS Blue
-    "accent_green": "#34C759",  # iOS Green
-    "accent_red":   "#FF3B30",  # iOS Red
-}
+from .dialogs import show_settings_dialog, show_about_dialog
+from .tabs import VersionLogTabMixin, BomTabMixin, TodoTabMixin
 
-# Dark Mode Background Colors (Blender-style)
-DARK_BACKGROUND_COLORS = {
-    "Charcoal": "#1C1C1E",
-    "Obsidian": "#0D0D0D",
-    "Midnight": "#121212",
-    "Slate Dark": "#1E1E2E",
-    "Deep Space": "#0F0F1A",
-}
+# Debug logger panel (AI-friendly, modular)
+from .debug_event_logger import (
+    DebugEventLogger,
+    DebugEventPanel,
+    EventLevel,
+    get_debug_logger,
+)
 
-DARK_TEXT_COLORS = {
-    "Pure White": "#FFFFFF",
-    "Soft White": "#E5E5E5",
-    "Silver": "#C0C0C0",
-    "Light Gray": "#A0A0A0",
-    "Neon Blue": "#00D4FF",
-}
+# Import net linker for beta net cross-probe feature
+try:
+    from ..core.net_linker import NetLinker
+    HAS_NET_LINKER = True
+except ImportError:
+    HAS_NET_LINKER = False
 
+# Import net cache manager (centralized cache + board change detection)
+try:
+    from ..core.net_cache_manager import get_net_cache_manager
+    HAS_NET_CACHE_MANAGER = True
+except ImportError:
+    HAS_NET_CACHE_MANAGER = False
 
-def hex_to_colour(hex_str):
-    """Convert hex color to wx.Colour."""
-    hex_str = hex_str.lstrip("#")
-    r = int(hex_str[0:2], 16)
-    g = int(hex_str[2:4], 16)
-    b = int(hex_str[4:6], 16)
-    return wx.Colour(r, g, b)
-
-
-# ============================================================
-# DPI SCALING UTILITIES - KiCad-compatible High-DPI support
-# ============================================================
-_dpi_scale_factor = None
-_user_scale_factor = None  # User-configurable override
-
-# Available scale options for settings
-UI_SCALE_OPTIONS = {
-    "Auto (System)": None,
-    "100% (Standard)": 1.0,
-    "110%": 1.1,
-    "125%": 1.25,
-    "150%": 1.5,
-    "175%": 1.75,
-    "200% (High-DPI)": 2.0,
-}
-
-def set_user_scale_factor(factor):
-    """Set user-preferred UI scale factor.
-    
-    Args:
-        factor: Scale factor (1.0 = 100%, 1.5 = 150%, etc.) or None for auto
-    """
-    global _user_scale_factor, _dpi_scale_factor
-    _user_scale_factor = factor
-    _dpi_scale_factor = None  # Reset cached value to recalculate
-
-def get_user_scale_factor():
-    """Get the current user scale factor setting."""
-    return _user_scale_factor
-
-def get_dpi_scale_factor(window=None):
-    """Get the DPI scale factor for high-DPI displays.
-    
-    Returns a multiplier (1.0 = 96 DPI, 1.25 = 120 DPI, 1.5 = 144 DPI, 2.0 = 192 DPI)
-    If user has set a manual scale, that takes priority.
-    """
-    global _dpi_scale_factor, _user_scale_factor
-    
-    # User override takes priority
-    if _user_scale_factor is not None:
-        return _user_scale_factor
-    
-    if _dpi_scale_factor is not None:
-        return _dpi_scale_factor
-    
-    try:
-        if window:
-            # Use window's DPI if available (wxPython 4.1+)
-            if hasattr(window, 'GetDPIScaleFactor'):
-                _dpi_scale_factor = window.GetDPIScaleFactor()
-                return _dpi_scale_factor
-            elif hasattr(window, 'GetContentScaleFactor'):
-                _dpi_scale_factor = window.GetContentScaleFactor()
-                return _dpi_scale_factor
-        
-        # Fallback: use screen DPI
-        dc = wx.ScreenDC()
-        dpi = dc.GetPPI()
-        _dpi_scale_factor = dpi[0] / 96.0  # 96 DPI is standard
-    except:
-        _dpi_scale_factor = 1.0
-    
-    return _dpi_scale_factor
-
-def scale_size(size, window=None):
-    """Scale a size tuple (width, height) for DPI.
-    
-    Args:
-        size: Tuple (width, height) or single int
-        window: Optional window to get DPI from
-    
-    Returns:
-        Scaled size tuple or int
-    """
-    factor = get_dpi_scale_factor(window)
-    if isinstance(size, tuple):
-        return (int(size[0] * factor), int(size[1] * factor))
-    return int(size * factor)
-
-def scale_font_size(size, window=None):
-    """Scale font size for DPI (slightly less aggressive than UI scaling)."""
-    factor = get_dpi_scale_factor(window)
-    # Font scaling is typically less than UI scaling
-    font_factor = 1.0 + (factor - 1.0) * 0.7
-    return int(size * font_factor)
-
-
-# ============================================================
-# TIME TRACKER - Per-task stopwatch with RTC logging
-# ============================================================
-class TimeTracker:
-    """Manages per-task time tracking with session history and persistence."""
-    
-    def __init__(self):
-        self.enable_time_tracking = True
-        self.time_format_24h = True
-        self.show_work_diary_button = True
-        self.current_running_task_id = None
-        self.task_timers = {}  # {task_id: {"time_spent": seconds, "is_running": bool, ...}}
-    
-    def create_task_timer(self, task_id):
-        """Initialize timer data for a new task."""
-        self.task_timers[task_id] = {
-            "text": "",
-            "done": False,
-            "time_spent": 0,
-            "is_running": False,
-            "last_start_time": None,
-            "history": []  # [{"start": timestamp, "stop": timestamp}, ...]
-        }
-    
-    def start_task(self, task_id):
-        """Start timer for a task. Auto-stop any other running task."""
-        if self.current_running_task_id is not None and self.current_running_task_id != task_id:
-            self.stop_task(self.current_running_task_id)
-        
-        if task_id in self.task_timers:
-            self.task_timers[task_id]["is_running"] = True
-            self.task_timers[task_id]["last_start_time"] = time.time()
-            self.current_running_task_id = task_id
-    
-    def stop_task(self, task_id):
-        """Stop timer for a task and accumulate time_spent."""
-        if task_id in self.task_timers and self.task_timers[task_id]["is_running"]:
-            start = self.task_timers[task_id]["last_start_time"]
-            if start is not None:
-                elapsed = time.time() - start
-                self.task_timers[task_id]["time_spent"] += elapsed
-                
-                # Log session history
-                self.task_timers[task_id]["history"].append({
-                    "start": int(start),
-                    "stop": int(time.time())
-                })
-            
-            self.task_timers[task_id]["is_running"] = False
-            self.task_timers[task_id]["last_start_time"] = None
-            
-            if self.current_running_task_id == task_id:
-                self.current_running_task_id = None
-    
-    def get_task_time_string(self, task_id):
-        """Return formatted time string for a task."""
-        if task_id not in self.task_timers:
-            return "⏱ 00:00:00"
-        
-        data = self.task_timers[task_id]
-        total_seconds = int(data["time_spent"])
-        
-        # Add running time if currently active
-        if data["is_running"] and data["last_start_time"]:
-            total_seconds += int(time.time() - data["last_start_time"])
-        
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-        
-        return f"⏱ {hours:02d}:{minutes:02d}:{seconds:02d}"
-    
-    def get_total_time_string(self):
-        """Return total time across all tasks."""
-        total_seconds = 0
-        
-        for data in self.task_timers.values():
-            total_seconds += int(data["time_spent"])
-            
-            # Add running time if currently active
-            if data["is_running"] and data["last_start_time"]:
-                total_seconds += int(time.time() - data["last_start_time"])
-        
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-        
-        return f"⏱ Total Time: {hours:02d}:{minutes:02d}:{seconds:02d}"
-    
-    def get_total_seconds(self):
-        """Get total time in seconds."""
-        total_seconds = 0
-        for data in self.task_timers.values():
-            total_seconds += int(data["time_spent"])
-            if data["is_running"] and data["last_start_time"]:
-                total_seconds += int(time.time() - data["last_start_time"])
-        return total_seconds
-    
-    def mark_task_done(self, task_id):
-        """Mark task as done and stop timer."""
-        if task_id in self.task_timers:
-            self.task_timers[task_id]["done"] = True
-            self.stop_task(task_id)
-    
-    def delete_task(self, task_id):
-        """Remove task and subtract from total if running."""
-        if task_id in self.task_timers:
-            self.stop_task(task_id)
-            del self.task_timers[task_id]
-    
-    def export_work_diary(self, format_24h=True):
-        """Generate Markdown work diary content."""
-        total_sec = self.get_total_seconds()
-        hours = total_sec // 3600
-        minutes = (total_sec % 3600) // 60
-        
-        # Choose time format based on setting
-        time_fmt = "%H:%M" if format_24h else "%I:%M %p"
-        
-        lines = [
-            "# Work Log — KiCad Project",
-            f"**Total: {hours}h {minutes}m**",
-            ""
-        ]
-        
-        for task_id, data in self.task_timers.items():
-            if data["history"]:
-                task_sec = int(data["time_spent"])
-                t_hours = task_sec // 3600
-                t_minutes = (task_sec % 3600) // 60
-                
-                lines.append(f"## Task: {data['text']}")
-                
-                for session in data["history"]:
-                    start_dt = datetime.datetime.fromtimestamp(session['start']).strftime(time_fmt)
-                    stop_dt = datetime.datetime.fromtimestamp(session['stop']).strftime(time_fmt)
-                    sess_sec = session['stop'] - session['start']
-                    sess_min = sess_sec // 60
-                    lines.append(f"- Session: {start_dt} → {stop_dt} ({sess_min} min)")
-                
-                lines.append(f"**Total: {t_hours}h {t_minutes}m**")
-                lines.append("")
-        
-        return "\n".join(lines)
-    
-    def get_last_session_string(self, task_id, format_24h=True):
-        """
-        Get last completed session as inline display string.
-        Only returns string if session exists and is completed (not running).
-        Format: "10:12 → 10:40 (28min)"
-        Returns: "" if no sessions or task is running
-        """
-        if task_id not in self.task_timers:
-            return ""
-        
-        data = self.task_timers[task_id]
-        history = data.get("history", [])
-        
-        # Only show if task has completed sessions and is NOT running
-        if not history or data.get("is_running", False):
-            return ""
-        
-        # Get last session
-        last_session = history[-1]
-        start_ts = last_session.get("start", 0)
-        stop_ts = last_session.get("stop", 0)
-        
-        if not start_ts or not stop_ts:
-            return ""
-        
-        # Format times based on format_24h
-        if format_24h:
-            start_time = datetime.datetime.fromtimestamp(start_ts).strftime("%H:%M")
-            stop_time = datetime.datetime.fromtimestamp(stop_ts).strftime("%H:%M")
-        else:
-            start_time = datetime.datetime.fromtimestamp(start_ts).strftime("%I:%M %p")
-            stop_time = datetime.datetime.fromtimestamp(stop_ts).strftime("%I:%M %p")
-        
-        # Calculate duration
-        duration = stop_ts - start_ts
-        if duration < 60:
-            duration_str = f"{duration}s"
-        elif duration < 3600:
-            minutes = duration // 60
-            duration_str = f"{minutes}m"
-        else:
-            hours = duration // 3600
-            minutes = (duration % 3600) // 60
-            duration_str = f"{hours}h {minutes}m" if minutes else f"{hours}h"
-        
-        return f"({start_time} → {stop_time} {duration_str})"
-    
-    def get_session_history_tooltip(self, task_id, format_24h=True):
-        """
-        Generate full session history for tooltip display.
-        Returns formatted list of all sessions with total.
-        """
-        if task_id not in self.task_timers:
-            return ""
-        
-        data = self.task_timers[task_id]
-        history = data.get("history", [])
-        
-        if not history:
-            return ""
-        
-        lines = []
-        total_seconds = 0
-        
-        for session in history:
-            start_ts = session.get("start", 0)
-            stop_ts = session.get("stop", 0)
-            
-            if not start_ts or not stop_ts:
-                continue
-            
-            if format_24h:
-                start_time = datetime.datetime.fromtimestamp(start_ts).strftime("%H:%M")
-                stop_time = datetime.datetime.fromtimestamp(stop_ts).strftime("%H:%M")
-            else:
-                start_time = datetime.datetime.fromtimestamp(start_ts).strftime("%I:%M %p")
-                stop_time = datetime.datetime.fromtimestamp(stop_ts).strftime("%I:%M %p")
-            
-            duration = stop_ts - start_ts
-            total_seconds += duration
-            
-            if duration < 60:
-                duration_str = f"{duration}s"
-            elif duration < 3600:
-                minutes = duration // 60
-                duration_str = f"{minutes}m"
-            else:
-                hours = duration // 3600
-                minutes = (duration % 3600) // 60
-                duration_str = f"{hours}h {minutes}m" if minutes else f"{hours}h"
-            
-            lines.append(f"• {start_time} → {stop_time} ({duration_str})")
-        
-        # Add total
-        if total_seconds > 0:
-            t_hours = total_seconds // 3600
-            t_minutes = (total_seconds % 3600) // 60
-            total_str = f"{t_hours}h {t_minutes}m" if t_minutes else f"{t_hours}h"
-            
-            header = f"Work Sessions ({len(history)})"
-            lines.insert(0, header)
-            lines.append(f"Total: {total_str}")
-        
-        return "\n".join(lines)
-    
-    def to_json_data(self):
-        """Convert timer data to JSON-serializable format."""
-        return {
-            "current_running_task_id": self.current_running_task_id,
-            "task_timers": self.task_timers
-        }
-    
-    def from_json_data(self, data):
-        """Load timer data from JSON."""
-        if data:
-            self.current_running_task_id = data.get("current_running_task_id")
-            self.task_timers = data.get("task_timers", {})
-
-
-
-# ROUNDED BUTTON CLASS - Modern Unified Buttons
-# ============================================================
-class RoundedButton(wx.Panel):
-    """Custom rounded button with hover and press effects - KiCad DPI aware."""
-    
-    def __init__(self, parent, label="", size=(120, 44), bg_color="#4285F4", 
-                 fg_color="#FFFFFF", icon="", corner_radius=8, font_size=11,
-                 font_weight=wx.FONTWEIGHT_BOLD):
-        # Apply DPI scaling to size
-        scaled_size = scale_size(size, parent)
-        super().__init__(parent, size=scaled_size)
-        
-        self.label = label
-        self.icon = icon
-        self.bg_color = hex_to_colour(bg_color) if isinstance(bg_color, str) else bg_color
-        self.fg_color = hex_to_colour(fg_color) if isinstance(fg_color, str) else fg_color
-        self.corner_radius = scale_size(corner_radius, parent)
-        self.is_hovered = False
-        self.is_pressed = False
-        self.callback = None
-        self.button_size = scaled_size
-        self.base_font_size = scale_font_size(font_size, parent)
-        self.font_weight = font_weight
-        
-        # Use scaled size for min size
-        self.SetMinSize(scaled_size)
-        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        
-        self.font = wx.Font(self.base_font_size, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, font_weight)
-        
-        self.Bind(wx.EVT_PAINT, self._on_paint)
-        self.Bind(wx.EVT_ENTER_WINDOW, self._on_enter)
-        self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
-        self.Bind(wx.EVT_LEFT_DOWN, self._on_press)
-        self.Bind(wx.EVT_LEFT_UP, self._on_release)
-        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
-        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
-    
-    def _darken_color(self, color, amount):
-        """Darken a color by amount."""
-        r = max(0, color.Red() - amount)
-        g = max(0, color.Green() - amount)
-        b = max(0, color.Blue() - amount)
-        return wx.Colour(r, g, b)
-
-    def _on_press(self, event):
-        self.is_pressed = True
-        self.Refresh()
-        event.Skip()
-
-    def _on_release(self, event):
-        if self.is_pressed:
-            self.is_pressed = False
-            self.Refresh()
-            pos = event.GetPosition()
-            rect = self.GetClientRect()
-            if rect.Contains(pos) and self.callback:
-                self.callback(event)
-
-    def _on_paint(self, event):
-        dc = wx.AutoBufferedPaintDC(self)
-        gc = wx.GraphicsContext.Create(dc)
-        
-        # Use actual rendered size (respects KiCad DPI scaling)
-        w, h = self.GetSize()
-        
-        # Ensure minimum dimensions
-        if w <= 0 or h <= 0:
-            return
-        
-        # Clear background completely
-        parent = self.GetParent()
-        if parent:
-            parent_bg = parent.GetBackgroundColour()
-        else:
-            parent_bg = wx.Colour(255, 255, 255)
-        
-        gc.SetBrush(wx.Brush(parent_bg))
-        gc.SetPen(wx.TRANSPARENT_PEN)
-        gc.DrawRectangle(0, 0, w, h)
-        
-        # Determine button color based on state
-        if self.is_pressed:
-            bg = self._darken_color(self.bg_color, 40)
-        elif self.is_hovered:
-            bg = self._darken_color(self.bg_color, 15)
-        else:
-            bg = self.bg_color
-        
-        # Draw rounded button - scale corner radius to height
-        corner = min(self.corner_radius, h // 3)
-        gc.SetBrush(wx.Brush(bg))
-        gc.SetPen(wx.TRANSPARENT_PEN)
-        gc.DrawRoundedRectangle(0, 0, w, h, corner)
-        
-        # Draw text with icon - scale font dynamically
-        gc.SetFont(self.font, self.fg_color)
-        display_text = self.icon + "  " + self.label if self.icon else self.label
-        text_w, text_h = gc.GetTextExtent(display_text)[:2]
-        
-        # Add padding compensation
-        x = (w - text_w) / 2
-        y = (h - text_h) / 2
-        gc.DrawText(display_text, x, y)
-    
-    def _on_enter(self, event):
-        self.is_hovered = True
-        self.Refresh()
-    
-    def _on_leave(self, event):
-        self.is_hovered = False
-        self.is_pressed = False
-        self.Refresh()
-    
-    def Bind_Click(self, callback):
-        """Bind click callback."""
-        self.callback = callback
-    
-    def SetColors(self, bg_color, fg_color):
-        """Update button colors."""
-        self.bg_color = hex_to_colour(bg_color) if isinstance(bg_color, str) else bg_color
-        self.fg_color = hex_to_colour(fg_color) if isinstance(fg_color, str) else fg_color
-        self.Refresh()
-
-
-# ============================================================
-# TOGGLE SWITCH - Dark Mode Toggle
-# ============================================================
-class PlayPauseButton(wx.Panel):
-    """Play/Pause button for timer control - official wxPython compatible."""
-    
-    def __init__(self, parent, size=(42, 28), is_on=False):
-        # Apply DPI scaling
-        scaled_size = scale_size(size, parent)
-        super().__init__(parent, size=scaled_size)
-        
-        self.is_on = is_on
-        self.callback = None
-        
-        self.color_running = hex_to_colour("#34C759")  # Green when running
-        self.color_paused = hex_to_colour("#8E8E93")   # Gray when paused
-        self.text_color = wx.WHITE
-        
-        # Use scaled size for MinSize
-        self.SetMinSize(scaled_size)
-        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        
-        self.Bind(wx.EVT_PAINT, self._on_paint)
-        self.Bind(wx.EVT_LEFT_DOWN, self._on_click)
-        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
-    
-    def _on_paint(self, event):
-        dc = wx.AutoBufferedPaintDC(self)
-        gc = wx.GraphicsContext.Create(dc)
-        
-        # Use actual rendered size (respects DPI)
-        w, h = self.GetSize()
-        
-        # Ensure minimum dimensions
-        if w <= 0 or h <= 0:
-            return
-        
-        # Clear background with parent's background color
-        parent = self.GetParent()
-        if parent:
-            parent_bg = parent.GetBackgroundColour()
-        else:
-            parent_bg = wx.Colour(255, 255, 255)
-        gc.SetBrush(wx.Brush(parent_bg))
-        gc.SetPen(wx.TRANSPARENT_PEN)
-        gc.DrawRectangle(0, 0, w, h)
-        
-        # Draw rounded rectangle button
-        bg_color = self.color_running if self.is_on else self.color_paused
-        gc.SetBrush(wx.Brush(bg_color))
-        gc.SetPen(wx.TRANSPARENT_PEN)
-        corner_radius = h // 3
-        gc.DrawRoundedRectangle(0, 0, w, h, corner_radius)
-        
-        # Draw icon: ▶ (play) or ❚❚ (pause)
-        icon = "❚❚" if self.is_on else "▶"
-        
-        # Calculate text metrics
-        dc.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        text_w, text_h = dc.GetTextExtent(icon)
-        
-        # Center text
-        text_x = (w - text_w) / 2
-        text_y = (h - text_h) / 2
-        
-        # Draw icon
-        gc.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD), self.text_color)
-        gc.DrawText(icon, text_x, text_y)
-    
-    def _on_click(self, event):
-        self.is_on = not self.is_on
-        self.Refresh()
-        if self.callback:
-            self.callback(self.is_on)
-    
-    def SetValue(self, value):
-        self.is_on = value
-        self.Refresh()
-    
-    def GetValue(self):
-        return self.is_on
-    
-    def Bind_Change(self, callback):
-        self.callback = callback
-
-
-class ToggleSwitch(wx.Panel):
-    """Simple toggle switch for settings - iOS-style."""
-    
-    def __init__(self, parent, size=(50, 26), is_on=False):
-        # Apply DPI scaling
-        scaled_size = scale_size(size, parent)
-        super().__init__(parent, size=scaled_size)
-        
-        self.is_on = is_on
-        self.callback = None
-        
-        self.track_color_on = hex_to_colour("#4285F4")
-        self.track_color_off = hex_to_colour("#CCCCCC")
-        self.knob_color = wx.WHITE
-        
-        # Use scaled size for MinSize
-        self.SetMinSize(scaled_size)
-        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        
-        self.Bind(wx.EVT_PAINT, self._on_paint)
-        self.Bind(wx.EVT_LEFT_DOWN, self._on_click)
-        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
-    
-    def _on_paint(self, event):
-        dc = wx.AutoBufferedPaintDC(self)
-        gc = wx.GraphicsContext.Create(dc)
-        
-        # Use actual rendered size (respects DPI)
-        w, h = self.GetSize()
-        
-        # Ensure minimum dimensions
-        if w <= 0 or h <= 0:
-            return
-        
-        # Clear background with parent's background color
-        parent = self.GetParent()
-        if parent:
-            parent_bg = parent.GetBackgroundColour()
-        else:
-            parent_bg = wx.Colour(255, 255, 255)
-        gc.SetBrush(wx.Brush(parent_bg))
-        gc.SetPen(wx.TRANSPARENT_PEN)
-        gc.DrawRectangle(0, 0, w, h)
-        
-        # Scale track to height
-        track_h = max(h - 4, 4)
-        track_y = (h - track_h) / 2
-        knob_size = max(track_h - 4, 2)
-        
-        # Draw track
-        track_color = self.track_color_on if self.is_on else self.track_color_off
-        gc.SetBrush(wx.Brush(track_color))
-        gc.SetPen(wx.TRANSPARENT_PEN)
-        gc.DrawRoundedRectangle(0, track_y, w, track_h, track_h / 2)
-        
-        # Draw knob
-        knob_x = w - knob_size - 4 if self.is_on else 4
-        knob_y = track_y + 2
-        gc.SetBrush(wx.Brush(self.knob_color))
-        gc.DrawEllipse(knob_x, knob_y, knob_size, knob_size)
-    
-    def _on_click(self, event):
-        self.is_on = not self.is_on
-        self.Refresh()
-        if self.callback:
-            self.callback(self.is_on)
-    
-    def SetValue(self, value):
-        self.is_on = value
-        self.Refresh()
-    
-    def GetValue(self):
-        return self.is_on
-    
-    def Bind_Change(self, callback):
-        self.callback = callback
-
-
-# ============================================================
-# ICONS - Simple ASCII/Unicode icons (cross-platform compatible)
-# ============================================================
-class Icons:
-    # Tab icons
-    NOTES = "\u270F"        # 📝 Notes / Pencil
-    TODO = "\u2611"             # ☑️ Checkbox (checked)
-    BOM = "\u2630"              # ☰ Menu/List
-    
-    # Action icons
-    IMPORT = "\u21E9"           # ⇩ Import (down arrow)
-    SAVE = "\u2713"             # 💾 Save
-    PDF = "\u21B5"              # ↵ Enter-style Export
-    ADD = "+"                   # +
-    DELETE = "\U0001F5D1"       # 🗑 Delete (trash)
-    CLEAR = "\u2716"            # ✖ Clear/Remove
-    SETTINGS = "\u2699"         # ⚙ Settings
-    GENERATE = "\u25B6"         # ▶ Generate / Play
-    
-    # Theme icons
-    DARK = "\U0001F319"         # 🌙 Crescent moon
-    LIGHT = "\u2600"            # ☀ Sun
-    
-    # Import menu icons
-    BOARD = "\u25A1"            # □ Square board
-    LAYERS = "\u2261"           # ≡ Layers
-    NETLIST = "\u2194"          # ↔ Bidirectional
-    RULES = "\u2263"            # ≣ Rules / tolerance lines
-    DRILL = "\u25CE"            # ◎ Drill/Bullseye
-    ALL = "\u2606"              # ☆ Star
-    GLOBE = "\U0001F310"        # 🌐 Web/Globe
-
+# Import crash safety manager (optional)
+try:
+    from ..core.crash_safety import CrashSafetyManager, PLUGIN_VERSION
+    HAS_CRASH_SAFETY = True
+except ImportError:
+    HAS_CRASH_SAFETY = False
+    CrashSafetyManager = None
 
 
 # ============================================================
 # MAIN PANEL
 # ============================================================
-class KiNotesMainPanel(wx.Panel):
+class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
     """Main panel with tabs, color picker, dark mode toggle, and bottom action buttons."""
     
     def __init__(self, parent, notes_manager, designator_linker, metadata_extractor, pdf_exporter):
-        super().__init__(parent)
+        wx.Panel.__init__(self, parent)
         
         self.notes_manager = notes_manager
         self.designator_linker = designator_linker
@@ -797,6 +102,11 @@ class KiNotesMainPanel(wx.Panel):
         self._modified = False
         self._todo_items = []
         self._todo_id_counter = 0
+        
+        # Version log data
+        self._version_log_items = []
+        self._version_log_id_counter = 0
+        self._current_version = "0.1.0"
         self._current_tab = 0
         
         # Time tracking system
@@ -810,6 +120,37 @@ class KiNotesMainPanel(wx.Panel):
         self._dark_bg_color_name = "Charcoal"
         self._dark_text_color_name = "Pure White"
         self._use_visual_editor = VISUAL_EDITOR_AVAILABLE  # Default: Visual Editor if available
+        self._crossprobe_enabled = True  # Cross-probe enabled by default
+        self._beta_features_enabled = False  # Beta features disabled by default
+        self._beta_table = False  # Insert Table button
+        self._beta_markdown = False  # Markdown editor mode
+        self._beta_bom = False  # BOM tab
+        self._beta_version_log = False  # Version Log tab
+        self._beta_net_linker = True  # Net cross-probe linker (beta) - enabled by default
+        self._beta_debug_panel = False  # Debug panel (beta) - never default on
+        self._debug_modules = {
+            "save": False,
+            "net": False,
+            "designator": False,
+        }
+        
+        # Initialize net cache manager (centralized net caching + board change detection)
+        self.net_cache_manager = get_net_cache_manager() if HAS_NET_CACHE_MANAGER else None
+        
+        # Initialize net linker (deprecated; use net_cache_manager instead)
+        # Don't create linker at init—it requires a live KiCad board (will be created on demand when clicking nets)
+        self.net_linker = None
+        # Beta flag defaults to True; linker will be lazy-loaded when needed
+        print(f"[KiNotes] Net cache manager available: {bool(self.net_cache_manager)}. beta={self._beta_net_linker}")
+
+        # Debug logger (shared singleton)
+        self.debug_logger: DebugEventLogger = get_debug_logger()
+        
+        # Crash safety manager (initialized after UI is ready)
+        self.crash_safety = None
+        self._safe_mode_active = False
+        self._version_bumped = False
+        
         self._load_color_settings()
         
         self._theme = DARK_THEME if self._dark_mode else LIGHT_THEME
@@ -819,6 +160,13 @@ class KiNotesMainPanel(wx.Panel):
             self._init_ui()
             self._load_all_data()
             self._start_auto_save_timer()
+            
+            # Initialize crash safety AFTER UI is ready
+            self._init_crash_safety()
+            
+            # Show recovery dialog if crash detected
+            if self._safe_mode_active:
+                wx.CallAfter(self._show_crash_recovery_dialog)
         except Exception as e:
             import traceback
             print("KiNotes UI init error: " + str(e))
@@ -842,11 +190,99 @@ class KiNotesMainPanel(wx.Panel):
                 # UI Scale factor - None means auto
                 ui_scale = settings.get("ui_scale_factor", None)
                 set_user_scale_factor(ui_scale)
+                # Cross-probe setting - default enabled
+                self._crossprobe_enabled = settings.get("crossprobe_enabled", True)
+                # Custom designator prefixes
+                self._custom_designators = settings.get("custom_designators", "")
+                if self.designator_linker and self._custom_designators:
+                    self.designator_linker.set_custom_prefixes(self._custom_designators)
+                # Net cross-probe - now a main feature (enabled by default)
+                # Support both new and legacy setting names for backward compat
+                self._net_crossprobe_enabled = settings.get("net_crossprobe_enabled", 
+                    settings.get("beta_net_linker", True))
+                # Beta features - default disabled
+                self._beta_features_enabled = settings.get("beta_features_enabled", False)
+                # Individual beta features
+                self._beta_table = settings.get("beta_table", False)
+                self._beta_markdown = settings.get("beta_markdown", False)
+                self._beta_bom = settings.get("beta_bom", False)
+                self._beta_version_log = settings.get("beta_version_log", False)
+                # Legacy: keep _beta_net_linker as alias for backward compat
+                self._beta_net_linker = self._net_crossprobe_enabled
+                self._beta_debug_panel = settings.get("beta_debug_panel", False)
+                self._debug_modules = settings.get("debug_modules", self._debug_modules)
+                # Ensure required module keys exist
+                for key in ("save", "net", "designator"):
+                    if key not in self._debug_modules:
+                        self._debug_modules[key] = False
         except:
             pass
+    
+    def _handle_crash_and_version_check(self):
+        """Handle crash detection and version bump checks at startup."""
+        try:
+            # Check for version bump
+            version_changed, old_version, new_version = self.crash_safety.check_version()
+            
+            if version_changed and old_version:
+                print(f"[KiNotes] Version bump: {old_version} → {new_version}")
+                self._version_bumped = True
+                # Create backup before any changes
+                backup_ok = self.crash_safety.backup_on_version_bump()
+                if backup_ok:
+                    print(f"[KiNotes] Version backup created: {old_version} → {new_version}")
+                else:
+                    print("[KiNotes] Version backup failed")
+            
+            # Mark startup and check for crash
+            crashed = self.crash_safety.mark_startup()
+            
+            if crashed:
+                print("[KiNotes] ⚠ Previous session crashed")
+                
+                # Check if safe mode should be enabled
+                if self.crash_safety.should_use_safe_mode():
+                    self._safe_mode_active = True
+                    safe_config = self.crash_safety.get_safe_mode_config()
+                    # Apply safe configuration
+                    self._use_visual_editor = safe_config.get('use_visual_editor', False)
+                    self._beta_features_enabled = safe_config.get('beta_features_enabled', False)
+                    self._beta_table = safe_config.get('beta_table', False)
+                    self._beta_markdown = safe_config.get('beta_markdown', True)
+                    self._beta_bom = safe_config.get('beta_bom', False)
+                    self._beta_version_log = safe_config.get('beta_version_log', False)
+                    self._beta_net_linker = safe_config.get('beta_net_linker', False)
+                    self._beta_debug_panel = safe_config.get('beta_debug_panel', False)
+                    print("[KiNotes] Safe mode activated (beta features disabled)")
+            
+            # Update version file
+            self.crash_safety.update_version()
+            
+        except Exception as e:
+            print(f"[KiNotes] Error in crash/version check: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _init_crash_safety(self):
+        """Initialize crash safety after UI is ready (non-blocking)."""
+        if not HAS_CRASH_SAFETY or self.crash_safety is not None:
+            return
+        
+        try:
+            self.crash_safety = CrashSafetyManager(self.notes_manager.notes_dir)
+            self._handle_crash_and_version_check()
+            print("[KiNotes] Crash safety initialized")
+        except Exception as e:
+            print(f"[KiNotes] Crash safety init failed (non-critical): {e}")
+            self.crash_safety = None
 
-    def _save_color_settings(self):
-        """Save color and editor settings."""
+    def _save_color_settings(self, save_mode='local'):
+        """
+        Save color and editor settings.
+        
+        Args:
+            save_mode: 'local' for project-specific, 'global' for user-wide defaults
+        """
         try:
             settings = self.notes_manager.load_settings() or {}
             settings.update({
@@ -856,16 +292,35 @@ class KiNotesMainPanel(wx.Panel):
                 "dark_text_color": self._dark_text_color_name,
                 "dark_mode": self._dark_mode,
                 "use_visual_editor": self._use_visual_editor,
-                "ui_scale_factor": get_user_scale_factor()
+                "ui_scale_factor": get_user_scale_factor(),
+                "crossprobe_enabled": self._crossprobe_enabled,
+                "net_crossprobe_enabled": getattr(self, '_net_crossprobe_enabled', True),
+                "custom_designators": getattr(self, '_custom_designators', ''),
+                "beta_features_enabled": self._beta_features_enabled,
+                "beta_table": self._beta_table,
+                "beta_markdown": self._beta_markdown,
+                "beta_bom": self._beta_bom,
+                "beta_version_log": self._beta_version_log,
+                "beta_debug_panel": self._beta_debug_panel,
+                "debug_modules": self._debug_modules,
             })
             # Save panel size if settings dialog controls exist
             if hasattr(self, '_panel_width_spin') and self._panel_width_spin:
                 settings["panel_width"] = self._panel_width_spin.GetValue()
             if hasattr(self, '_panel_height_spin') and self._panel_height_spin:
                 settings["panel_height"] = self._panel_height_spin.GetValue()
-            self.notes_manager.save_settings(settings)
-        except:
-            pass
+            
+            # Save based on mode
+            if save_mode == 'global':
+                # Save to global settings (user-wide defaults)
+                self.notes_manager.save_settings_globally(settings)
+                print("[KiNotes] Settings saved globally")
+            else:
+                # Save to local project settings
+                self.notes_manager.save_settings(settings)
+                print("[KiNotes] Settings saved locally")
+        except Exception as e:
+            print(f"[KiNotes] Error saving settings: {e}")
 
     def _get_editor_bg(self):
         if self._dark_mode:
@@ -894,10 +349,12 @@ class KiNotesMainPanel(wx.Panel):
         self.notes_panel = self._create_notes_tab(self.content_panel)
         self.todo_panel = self._create_todo_tab(self.content_panel)
         self.bom_panel = self._create_bom_tab(self.content_panel)
+        self.version_log_panel = self._create_version_log_tab(self.content_panel)
         
         self.content_sizer.Add(self.notes_panel, 1, wx.EXPAND)
         self.content_sizer.Add(self.todo_panel, 1, wx.EXPAND)
         self.content_sizer.Add(self.bom_panel, 1, wx.EXPAND)
+        self.content_sizer.Add(self.version_log_panel, 1, wx.EXPAND)
         
         self.content_panel.SetSizer(self.content_sizer)
         main_sizer.Add(self.content_panel, 1, wx.EXPAND)
@@ -905,6 +362,12 @@ class KiNotesMainPanel(wx.Panel):
         # === BOTTOM BAR: pcbtools.xyz + Save + Export PDF ===
         self.bottom_bar = self._create_bottom_bar()
         main_sizer.Add(self.bottom_bar, 0, wx.EXPAND)
+
+        # === DEBUG PANEL (optional, beta) with drag resize ===
+        self.debug_panel = None
+        self._debug_sash_pos = 240  # Default height (doubled)
+        if self._beta_debug_panel:
+            self._create_resizable_debug_panel(main_sizer)
         
         self.SetSizer(main_sizer)
         self._show_tab(0)
@@ -920,18 +383,19 @@ class KiNotesMainPanel(wx.Panel):
         
         # Tab buttons - unified rounded style
         self.tab_buttons = []
-        tabs = [
-            ("Notes", 0),
-            ("Todo", 1),
-            ("BOM", 2)
-        ]
+        # Build tab list based on beta features enabled
+        tabs = [("Notes", 0), ("Todo", 1)]
+        if self._beta_bom:
+            tabs.append(("BOM", 2))
+        if self._beta_version_log:
+            tabs.append(("VLog", 3))
         
         for label, idx in tabs:
             btn = RoundedButton(
                 top_bar, 
                 label=label,
                 icon="",
-                size=(110, 42),
+                size=(100, 42),
                 bg_color=self._theme["bg_button"],
                 fg_color=self._theme["text_primary"],
                 corner_radius=10,
@@ -950,7 +414,7 @@ class KiNotesMainPanel(wx.Panel):
             top_bar,
             label="Import",
             icon="",
-            size=(130, 42),
+            size=(120, 42),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
             corner_radius=10,
@@ -961,6 +425,38 @@ class KiNotesMainPanel(wx.Panel):
         sizer.Add(self.import_btn, 0, wx.ALIGN_CENTER_VERTICAL)
         
         sizer.AddStretchSpacer()
+        
+        # Refresh Net Cache button (only show if beta net linker enabled)
+        if self._beta_net_linker:
+            self.refresh_net_btn = RoundedButton(
+                top_bar,
+                label="↻",
+                icon="",
+                size=(42, 42),
+                bg_color=self._theme["accent_blue"],
+                fg_color="#FFFFFF",
+                corner_radius=10,
+                font_size=14,
+                font_weight=wx.FONTWEIGHT_NORMAL
+            )
+            self.refresh_net_btn.SetToolTip("Refresh Net Cache")
+            self.refresh_net_btn.Bind_Click(self._on_refresh_nets)
+            sizer.Add(self.refresh_net_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        
+        # Help button with dropdown menu - before Settings
+        self.help_btn = RoundedButton(
+            top_bar,
+            label="Help",
+            icon="",
+            size=(80, 42),
+            bg_color=self._theme["bg_button"],
+            fg_color=self._theme["text_primary"],
+            corner_radius=10,
+            font_size=11,
+            font_weight=wx.FONTWEIGHT_NORMAL
+        )
+        self.help_btn.Bind_Click(self._on_help_click)
+        sizer.Add(self.help_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
         # Settings button - centered icon
         self.settings_btn = RoundedButton(
@@ -1065,6 +561,127 @@ class KiNotesMainPanel(wx.Panel):
         
         bottom_bar.SetSizer(sizer)
         return bottom_bar
+
+    def _create_resizable_debug_panel(self, main_sizer):
+        """Create resizable debug panel with drag handle."""
+        # Create a container with drag handle at top
+        self.debug_container = wx.Panel(self)
+        self.debug_container.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
+        self.debug_container.SetMinSize((-1, 80))
+        
+        container_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Drag handle bar (thicker for easier grabbing)
+        self._drag_bar = wx.Panel(self.debug_container, size=(-1, 8))
+        self._drag_bar.SetBackgroundColour(hex_to_colour(self._theme["border"]))
+        self._drag_bar.SetCursor(wx.Cursor(wx.CURSOR_SIZENS))
+        
+        # Bind drag events to the drag bar
+        self._drag_bar.Bind(wx.EVT_LEFT_DOWN, self._on_debug_drag_start)
+        self._drag_bar.Bind(wx.EVT_LEFT_UP, self._on_debug_drag_end)
+        self._drag_bar.Bind(wx.EVT_MOTION, self._on_debug_drag_move)
+        self._drag_bar.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self._on_debug_capture_lost)
+        
+        self._debug_dragging = False
+        self._debug_drag_start_y = 0
+        self._debug_drag_start_height = 0
+        
+        container_sizer.Add(self._drag_bar, 0, wx.EXPAND)
+        
+        # Create the actual debug panel content
+        self.debug_panel = self._create_debug_panel_content(self.debug_container)
+        container_sizer.Add(self.debug_panel, 1, wx.EXPAND)
+        
+        self.debug_container.SetSizer(container_sizer)
+        
+        # Set initial height from saved settings or default
+        initial_height = self._debug_sash_pos
+        self.debug_container.SetMinSize((-1, initial_height))
+        
+        main_sizer.Add(self.debug_container, 0, wx.EXPAND)
+    
+    def _on_debug_drag_start(self, event):
+        """Start dragging to resize debug panel."""
+        self._debug_dragging = True
+        # Use screen coordinates for reliable tracking
+        self._debug_drag_start_y = wx.GetMousePosition().y
+        self._debug_drag_start_height = self.debug_container.GetSize().height
+        self._drag_bar.CaptureMouse()
+        event.Skip()
+    
+    def _on_debug_capture_lost(self, event):
+        """Handle mouse capture lost."""
+        self._debug_dragging = False
+    
+    def _on_debug_drag_end(self, event):
+        """End dragging."""
+        if self._debug_dragging:
+            self._debug_dragging = False
+        if self._drag_bar.HasCapture():
+            self._drag_bar.ReleaseMouse()
+        event.Skip()
+    
+    def _on_debug_drag_move(self, event):
+        """Handle drag motion to resize debug panel."""
+        if not self._debug_dragging:
+            event.Skip()
+            return
+        
+        # Use screen coordinates for smooth tracking
+        current_y = wx.GetMousePosition().y
+        delta = self._debug_drag_start_y - current_y  # Positive = drag up = increase height
+        new_height = self._debug_drag_start_height + delta
+        
+        # Clamp height between min and max
+        new_height = max(80, min(500, new_height))
+        
+        self.debug_container.SetMinSize((-1, new_height))
+        self._debug_sash_pos = new_height
+        self.Layout()
+        self.Refresh()
+
+    def _create_debug_panel_content(self, parent):
+        """Create debug panel content (used by resizable container)."""
+        panel = wx.Panel(parent)
+        panel.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
+
+        wrapper = wx.BoxSizer(wx.VERTICAL)
+
+        header = wx.BoxSizer(wx.HORIZONTAL)
+        title = wx.StaticText(panel, label="🔍 Debug Panel (Beta)")
+        title.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        title.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        header.Add(title, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+
+        # Module toggles (select which modules emit logs)
+        self._debug_module_checkboxes = {}
+        module_labels = [
+            ("net", "Net"),
+            ("designator", "Designator"),
+            ("save", "Save"),
+        ]
+        for key, label in module_labels:
+            cb = wx.CheckBox(panel, label=label)
+            cb.SetValue(self._debug_modules.get(key, False))
+            cb.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+            cb.Bind(wx.EVT_CHECKBOX, lambda evt, k=key: self._on_debug_module_toggle(k, evt.IsChecked()))
+            self._debug_module_checkboxes[key] = cb
+            header.Add(cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+
+        header.AddStretchSpacer()
+
+        wrapper.Add(header, 0, wx.EXPAND | wx.ALL, 6)
+
+        # Event panel with filters (use dark_mode from settings)
+        self.debug_event_panel = DebugEventPanel(panel, self.debug_logger, dark_mode=self._dark_mode)
+        wrapper.Add(self.debug_event_panel, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+
+        panel.SetSizer(wrapper)
+        return panel
+
+    def _create_debug_panel(self):
+        """Create lightweight debug event panel (legacy, for dynamic enable)."""
+        return self._create_debug_panel_content(self)
     
     def _on_website_click(self, event):
         """Open pcbtools.xyz in browser."""
@@ -1074,12 +691,328 @@ class KiNotesMainPanel(wx.Panel):
         except:
             pass
     
+    def _on_help_click(self, event):
+        """Show Help dropdown menu with KiCad-style options."""
+        menu = wx.Menu()
+        
+        # Menu items with IDs
+        help_id = wx.NewIdRef()
+        involved_id = wx.NewIdRef()
+        donate_id = wx.NewIdRef()
+        bug_id = wx.NewIdRef()
+        debug_id = wx.NewIdRef()
+        refresh_nets_id = wx.NewIdRef() if self._beta_net_linker else None
+        about_id = wx.NewIdRef()
+        
+        # Add menu items with icons (using Unicode for consistency)
+        help_item = menu.Append(help_id, "❓  Help")
+        involved_item = menu.Append(involved_id, "🤝  Get Involved")
+        donate_item = menu.Append(donate_id, "💝  Donate")
+        bug_item = menu.Append(bug_id, "🐛  Report Bug")
+        
+        # Add debug option
+        debug_item = menu.Append(debug_id, "🔧  Debug Info")
+        
+        # Add refresh nets if beta net linker is enabled
+        if self._beta_net_linker and refresh_nets_id:
+            menu.AppendSeparator()
+            refresh_nets_item = menu.Append(refresh_nets_id, "↻  Refresh Nets")
+            self.Bind(wx.EVT_MENU, self._on_refresh_nets, refresh_nets_item)
+        
+        menu.AppendSeparator()
+        about_item = menu.Append(about_id, "ℹ️  About KiNotes")
+        
+        # Bind menu events
+        self.Bind(wx.EVT_MENU, lambda e: self._open_url("https://pcbtools.xyz/tools/kinotes"), help_item)
+        self.Bind(wx.EVT_MENU, lambda e: self._open_url("https://github.com/way2pramil/KiNotes"), involved_item)
+        self.Bind(wx.EVT_MENU, lambda e: self._open_url("https://pcbtools.xyz/donate"), donate_item)
+        self.Bind(wx.EVT_MENU, lambda e: self._open_url("https://pcbtools.xyz/tools/kinotes#report-bug"), bug_item)
+        self.Bind(wx.EVT_MENU, self._on_debug_info, debug_item)
+        self.Bind(wx.EVT_MENU, self._show_about_dialog, about_item)
+        
+        # Position menu below the help button
+        btn_pos = self.help_btn.GetScreenPosition()
+        btn_size = self.help_btn.GetSize()
+        self.PopupMenu(menu, self.ScreenToClient(wx.Point(btn_pos.x, btn_pos.y + btn_size.y)))
+        menu.Destroy()
+
+    def _on_debug_module_toggle(self, key: str, enabled: bool):
+        """Update active debug modules from panel toggles."""
+        self._debug_modules[key] = enabled
+        self._apply_debug_logger_targets()
+        self._save_color_settings()
+
+    def _apply_debug_logger_targets(self):
+        """Propagate debug logger module selections to subcomponents."""
+        if hasattr(self, 'visual_editor') and self.visual_editor:
+            if hasattr(self.visual_editor, 'set_debug_logging'):
+                self.visual_editor.set_debug_logging(self.debug_logger, self._debug_modules)
+
+    def _ensure_net_linker(self):
+        """Get net linker from cache manager (lazy-loaded on demand inside KiCad)."""
+        if not self.net_cache_manager:
+            print("[KiNotes] Net cache manager not available")
+            return
+        self.net_linker = self.net_cache_manager.get_linker()
+        if self.net_linker:
+            print("[KiNotes] Net linker obtained from cache manager")
+        else:
+            print("[KiNotes] Net linker unavailable (no KiCad board?)")
+
+    def _attach_net_linker_to_editor(self):
+        """Attach linker to visual editor if available. Linker may be None (lazy-loaded)."""
+        if not hasattr(self, 'visual_editor') or not self.visual_editor:
+            return
+        # Pass linker (may be None; visual editor will use it if set)
+        try:
+            if self._beta_net_linker and self.net_linker:
+                self.visual_editor.set_net_linker(self.net_linker)
+                print("[KiNotes] Net linker attached to visual editor")
+            else:
+                self.visual_editor.set_net_linker(None)
+        except Exception as e:
+            print(f"[KiNotes] Net linker attach warning: {e}")
+
+    def _should_log(self, module: str) -> bool:
+        """Return True if debug logging for the module is enabled."""
+        if not self._beta_debug_panel:
+            return False
+        return self._debug_modules.get(module, False)
+
+    def _log_event(self, module: str, level: EventLevel, message: str):
+        """Log event to debug panel if module is enabled."""
+        if not self._should_log(module):
+            return
+        try:
+            self.debug_logger.log(level, message)
+        except Exception:
+            pass
+    
+    def _open_url(self, url):
+        """Open URL in default browser."""
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except:
+            pass
+    
+    def _refresh_net_cache(self, show_message: bool = False):
+        """Refresh net cache via cache manager."""
+        if not self._beta_net_linker or not self.net_cache_manager:
+            return
+        try:
+            success = self.net_cache_manager.refresh()
+            if success:
+                # Also update our local reference
+                self.net_linker = self.net_cache_manager.get_linker()
+                if show_message:
+                    wx.MessageBox("Net cache refreshed. Ready for net cross-probe.", "Net Linker", wx.OK | wx.ICON_INFORMATION)
+                self._log_event("net", EventLevel.SUCCESS, "Net cache refreshed")
+            else:
+                if show_message:
+                    wx.MessageBox("Net cache refresh failed (no board or linker unavailable).", "Error", wx.OK | wx.ICON_ERROR)
+                self._log_event("net", EventLevel.WARNING, "Net cache refresh failed")
+        except Exception as e:
+            if show_message:
+                wx.MessageBox(f"Net refresh error: {e}", "Error", wx.OK | wx.ICON_ERROR)
+            self._log_event("net", EventLevel.ERROR, f"Net cache refresh failed: {e}")
+
+    def _on_refresh_nets(self, event):
+        """Refresh net cache (beta feature) - show visual feedback."""
+        print("[KiNotes] Refresh button clicked")
+        try:
+            # Change button color to green to show active state
+            if hasattr(self, 'refresh_net_btn') and self.refresh_net_btn:
+                self.refresh_net_btn.SetBackgroundColour(hex_to_colour(self._theme["accent_green"]))
+                self.refresh_net_btn.Refresh()
+        except Exception:
+            pass
+        
+        # Perform refresh with message
+        self._refresh_net_cache(show_message=True)
+        
+        try:
+            # Revert button color back to blue
+            if hasattr(self, 'refresh_net_btn') and self.refresh_net_btn:
+                wx.CallLater(1000, lambda: self._reset_refresh_btn_color())
+        except Exception:
+            pass
+
+    def _reset_refresh_btn_color(self):
+        """Reset refresh button color back to blue."""
+        try:
+            if hasattr(self, 'refresh_net_btn') and self.refresh_net_btn:
+                self.refresh_net_btn.SetBackgroundColour(hex_to_colour(self._theme["accent_blue"]))
+                self.refresh_net_btn.Refresh()
+        except Exception:
+            pass
+    
+    def _on_debug_info(self, event):
+        """Show debug information popup."""
+        debug_info = "KiNotes Debug Information\n"
+        debug_info += "=" * 50 + "\n\n"
+        
+        # Editor mode
+        debug_info += f"Editor Mode: {'Visual' if self._use_visual_editor else 'Markdown'}\n"
+        debug_info += f"Visual Editor Available: {VISUAL_EDITOR_AVAILABLE}\n\n"
+        
+        # Cross-probe info
+        debug_info += "Cross-Probe Status:\n"
+        debug_info += f"  Designator Cross-Probe: {self._crossprobe_enabled}\n"
+        debug_info += f"  Designator Linker: {'✓' if self.designator_linker else '✗'}\n\n"
+        
+        # Net linker info (Beta)
+        debug_info += "Net Linker (Beta):\n"
+        debug_info += f"  Net Linker Beta Enabled: {self._beta_net_linker}\n"
+        debug_info += f"  Net Linker Instance: {'✓' if self.net_linker else '✗'}\n"
+        
+        if self.net_linker:
+            net_cache_size = len(self.net_linker._net_map) if hasattr(self.net_linker, '_net_map') else 0
+            debug_info += f"  Cached Nets: {net_cache_size}\n"
+            if net_cache_size > 0 and net_cache_size <= 10:
+                nets = list(self.net_linker._net_map.keys())
+                debug_info += f"  Sample Nets: {', '.join(nets[:5])}\n"
+        
+        debug_info += f"  Visual Editor has Net Linker: {'✓' if (self.visual_editor and hasattr(self.visual_editor, '_net_linker') and self.visual_editor._net_linker) else '✗'}\n\n"
+        
+        # UI State
+        debug_info += "UI State:\n"
+        debug_info += f"  Dark Mode: {self._dark_mode}\n"
+        debug_info += f"  Beta Table: {self._beta_table}\n"
+        debug_info += f"  Beta Markdown: {self._beta_markdown}\n"
+        debug_info += f"  Beta BOM: {self._beta_bom}\n"
+        debug_info += f"  Beta Version Log: {self._beta_version_log}\n\n"
+        
+        # Data files
+        debug_info += "Data Storage:\n"
+        try:
+            kinotes_dir = os.path.join(os.path.dirname(self.current_project_path), '.kinotes')
+            if os.path.exists(kinotes_dir):
+                files = os.listdir(kinotes_dir)
+                debug_info += f"  .kinotes folder: {len(files)} files\n"
+                for f in files[:5]:
+                    debug_info += f"    - {f}\n"
+            else:
+                debug_info += f"  .kinotes folder: NOT FOUND\n"
+        except Exception as e:
+            debug_info += f"  .kinotes folder: Error - {e}\n"
+        
+        # Show popup
+        dlg = wx.Dialog(self, title="Debug Information", size=(600, 500))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Text control
+        text_ctrl = wx.TextCtrl(dlg, value=debug_info, style=wx.TE_MULTILINE | wx.TE_READONLY)
+        text_ctrl.SetFont(wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        sizer.Add(text_ctrl, 1, wx.EXPAND | wx.ALL, 10)
+        
+        # Close button
+        close_btn = wx.Button(dlg, wx.ID_CLOSE)
+        sizer.Add(close_btn, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
+        close_btn.Bind(wx.EVT_BUTTON, lambda e: dlg.Close())
+        
+        dlg.SetSizer(sizer)
+        dlg.ShowModal()
+        dlg.Destroy()
+    
+    def _show_about_dialog(self, event):
+        """Show About KiNotes dialog with project story."""
+        show_about_dialog(self, self._theme, self._open_url)
+    
+    def _show_crash_recovery_dialog(self):
+        """Show crash recovery information dialog."""
+        try:
+            crash_summary = self.crash_safety.get_crash_summary()
+            total_crashes = crash_summary.get('total_crashes', 0)
+            
+            dlg = wx.Dialog(self, title="Crash Recovery", size=(500, 400))
+            dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+            
+            sizer = wx.BoxSizer(wx.VERTICAL)
+            
+            # Warning icon and title
+            title_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            warning_text = wx.StaticText(dlg, label="⚠")
+            warning_text.SetFont(wx.Font(24, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            warning_text.SetForegroundColour(hex_to_colour(self._theme["accent_red"]))
+            title_sizer.Add(warning_text, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+            
+            title_label = wx.StaticText(dlg, label="KiNotes Recovered from Crash")
+            title_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            title_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+            title_sizer.Add(title_label, 0, wx.ALIGN_CENTER_VERTICAL)
+            sizer.Add(title_sizer, 0, wx.ALL, 20)
+            
+            # Message
+            message = f"""The previous KiNotes session ended unexpectedly.
+
+Safe Mode is now active:
+• Beta features temporarily disabled
+• Using stable Markdown editor
+• All project data preserved
+
+Crash count: {total_crashes} recent incident(s)
+
+Your notes, todos, and settings have been automatically backed up.
+You can safely continue working."""
+            
+            msg_text = wx.TextCtrl(dlg, value=message, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP)
+            msg_text.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+            msg_text.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+            msg_text.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            sizer.Add(msg_text, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 20)
+            
+            # Buttons
+            btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            btn_sizer.AddStretchSpacer()
+            
+            clear_btn = RoundedButton(
+                dlg, label="Clear Crash History", size=(180, 36),
+                bg_color=self._theme["bg_button"], fg_color=self._theme["text_primary"],
+                corner_radius=8, font_size=10
+            )
+            clear_btn.Bind_Click(lambda e: self._on_clear_crash_history(dlg))
+            btn_sizer.Add(clear_btn, 0, wx.RIGHT, 10)
+            
+            ok_btn = RoundedButton(
+                dlg, label="Continue", size=(120, 36),
+                bg_color=self._theme["accent_blue"], fg_color="#FFFFFF",
+                corner_radius=8, font_size=10, font_weight=wx.FONTWEIGHT_BOLD
+            )
+            ok_btn.Bind_Click(lambda e: dlg.Close())
+            btn_sizer.Add(ok_btn, 0)
+            
+            sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, 20)
+            
+            dlg.SetSizer(sizer)
+            dlg.CenterOnParent()
+            dlg.ShowModal()
+            dlg.Destroy()
+            
+        except Exception as e:
+            print(f"[KiNotes] Error showing crash dialog: {e}")
+    
+    def _on_clear_crash_history(self, dialog):
+        """Clear crash history and disable safe mode."""
+        try:
+            self.crash_safety.clear_crash_history()
+            self.crash_safety.disable_safe_mode()
+            self._safe_mode_active = False
+            self._log_event("save", EventLevel.SUCCESS, "Crash history cleared")
+            wx.MessageBox(
+                "Crash history cleared. You can re-enable beta features in Settings.\n\nRestart KiNotes for changes to take effect.",
+                "Cleared",
+                wx.OK | wx.ICON_INFORMATION
+            )
+            dialog.Close()
+        except Exception as e:
+            print(f"[KiNotes] Error clearing crash history: {e}")
+    
     def _get_work_diary_path(self):
         """
         Get the work diary file path in .kinotes directory.
-        Uses project name (or generic name) and date/time.
-        Creates .kinotes directory if it doesn't exist.
-        Handles duplicate files by appending -01, -02, etc.
+        Uses a SINGLE daily file per project - overwrites on each save.
+        Format: <project>_worklog_<YYYYMMDD>.md
         """
         # Try to get KiCad project directory, fallback to home directory
         try:
@@ -1100,57 +1033,78 @@ class KiNotesMainPanel(wx.Panel):
         kinotes_dir = os.path.join(project_dir, ".kinotes")
         os.makedirs(kinotes_dir, exist_ok=True)
         
-        # Generate filename with date and time
-        # Format: <project_title>_worklog_<YYYYMMDD_HHMMSS>.md
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_filename = f"{project_name}_worklog_{timestamp}.md"
-        base_path = os.path.join(kinotes_dir, base_filename)
-        
-        # Handle duplicate files by appending -01, -02, etc.
-        filepath = base_path
-        counter = 0
-        
-        # If exact file already exists (rare but possible), add counter
-        while os.path.exists(filepath) and counter < 100:
-            counter += 1
-            # Insert counter before .md extension
-            name_without_ext = base_path[:-3]  # Remove .md
-            filepath = f"{name_without_ext}-{counter:02d}.md"
+        # Generate filename with DATE ONLY (not time) - one file per day
+        # Format: <project_title>_worklog_<YYYYMMDD>.md
+        date_str = datetime.datetime.now().strftime("%Y%m%d")
+        filename = f"{project_name}_worklog_{date_str}.md"
+        filepath = os.path.join(kinotes_dir, filename)
         
         return filepath, kinotes_dir
     
     def _on_export_work_diary(self):
-        """Export work diary to .kinotes directory with smart naming."""
+        """Insert work diary at cursor position in notes and refresh display."""
         try:
             content = self.time_tracker.export_work_diary(format_24h=self.time_tracker.time_format_24h)
-            filepath, kinotes_dir = self._get_work_diary_path()
+            if not content.strip():
+                wx.MessageBox("No tasks to export.", "Export Diary", wx.OK | wx.ICON_INFORMATION)
+                return
             
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(content)
+            # Switch to Notes tab
+            self._show_tab(0)
             
-            wx.MessageBox(f"Work diary exported to:\n{filepath}", "Export Success", wx.OK | wx.ICON_INFORMATION)
+            # Insert diary content at cursor position
+            if hasattr(self, 'visual_editor') and self.visual_editor:
+                # Get current content, insert diary, then reload to parse markdown
+                current_md = self.visual_editor.GetValue()
+                
+                # Find insertion point - append at end with separator
+                if current_md.strip():
+                    new_content = current_md + "\n\n---\n\n" + content
+                else:
+                    new_content = content
+                
+                # Reload content to properly parse markdown formatting
+                self.visual_editor.SetValue(new_content)
+                
+                # Scroll to bottom to show new content
+                try:
+                    editor = self.visual_editor._editor
+                    editor.ShowPosition(editor.GetLastPosition())
+                except:
+                    pass
+                
+                self._modified = True
+                wx.MessageBox("Work diary inserted in Notes.", "Export Diary", wx.OK | wx.ICON_INFORMATION)
+            else:
+                wx.MessageBox("Visual editor not available.", "Export Error", wx.OK | wx.ICON_ERROR)
         except Exception as e:
-            wx.MessageBox(f"Error exporting diary: {str(e)}", "Export Error", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(f"Error inserting diary: {str(e)}", "Export Error", wx.OK | wx.ICON_ERROR)
+    
+    def _auto_export_diary_on_close(self):
+        """Automatically save work diary to file on close - safe, no UI operations."""
+        try:
+            # Only export to file, don't touch UI during close
+            content = self.time_tracker.export_work_diary(format_24h=self.time_tracker.time_format_24h)
+            if content and content.strip():
+                filepath, kinotes_dir = self._get_work_diary_path()
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print(f"[KiNotes] Work diary auto-saved to: {filepath}")
+        except Exception as e:
+            print(f"[KiNotes] Auto-save diary warning: {e}")
     
     def _on_open_work_logs_folder(self, event):
         """Open the .kinotes work logs folder in file explorer."""
-        try:
-            _, kinotes_dir = self._get_work_diary_path()
-            
-            # Windows
-            if sys.platform.startswith("win"):
-                import subprocess
-                subprocess.Popen(f'explorer "{kinotes_dir}"')
-            # Mac
-            elif sys.platform == "darwin":
-                import subprocess
-                subprocess.Popen(["open", kinotes_dir])
-            # Linux
-            else:
-                import subprocess
-                subprocess.Popen(["xdg-open", kinotes_dir])
-        except Exception as e:
-            wx.MessageBox(f"Error opening folder: {str(e)}", "Error", wx.OK | wx.ICON_ERROR)
+        _, kinotes_dir = self._get_work_diary_path()
+        
+        # Open folder in system file explorer
+        import subprocess
+        if sys.platform.startswith("win"):
+            subprocess.Popen(f'explorer "{kinotes_dir}"')
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", kinotes_dir])
+        else:
+            subprocess.Popen(["xdg-open", kinotes_dir])
     
     def _update_tab_styles(self, active_idx):
         """Update tab button styles."""
@@ -1174,6 +1128,7 @@ class KiNotesMainPanel(wx.Panel):
         self.notes_panel.Hide()
         self.todo_panel.Hide()
         self.bom_panel.Hide()
+        self.version_log_panel.Hide()
         
         # Show/hide buttons based on tab
         if idx == 0:  # Notes tab
@@ -1205,8 +1160,15 @@ class KiNotesMainPanel(wx.Panel):
                 self.bom_panel.FitInside()
             except:
                 pass
+        elif idx == 3:  # Version Log tab
+            self.version_log_panel.Show()
+            self.import_btn.Hide()
+            self.save_btn.Hide()
+            self.pdf_btn.Hide()
+            self.export_diary_btn.Hide()
+            self.global_time_label.Hide()
             try:
-                self.bom_panel.FitInside()
+                self.version_log_scroll.FitInside()
             except:
                 pass
         
@@ -1217,558 +1179,220 @@ class KiNotesMainPanel(wx.Panel):
         self.Refresh()
     
     # ============================================================
-    # SETTINGS DIALOG - With Dark Mode Toggle
+    # SETTINGS DIALOG
     # ============================================================
     
     def _on_settings_click(self, event):
-        """Show color settings dialog with Light/Dark theme buttons and time tracking options."""
-        # Use scrolled dialog to ensure all content is always accessible
-        dlg = wx.Dialog(self, title="Settings", size=(780, 850),
-                       style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        dlg.SetMinSize((700, 550))
-        dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        """Show settings dialog and apply changes."""
+        # Build config dict for settings dialog
+        config = {
+            'theme': self._theme,
+            'dark_mode': self._dark_mode,
+            'bg_color_name': self._bg_color_name,
+            'text_color_name': self._text_color_name,
+            'dark_bg_color_name': self._dark_bg_color_name,
+            'dark_text_color_name': self._dark_text_color_name,
+            'time_tracker': self.time_tracker,
+            'crossprobe_enabled': self._crossprobe_enabled,
+            'net_crossprobe_enabled': getattr(self, '_net_crossprobe_enabled', True),
+            'custom_designators': getattr(self, '_custom_designators', ''),
+            'use_visual_editor': self._use_visual_editor,
+            'visual_editor_available': VISUAL_EDITOR_AVAILABLE,
+            'beta_markdown': self._beta_markdown,
+            'beta_table': self._beta_table,
+            'beta_bom': self._beta_bom,
+            'beta_version_log': self._beta_version_log,
+            'beta_net_linker': True,  # Always on - no longer beta
+            'beta_debug_panel': self._beta_debug_panel,
+            'debug_modules': self._debug_modules,
+            'notes_manager': self.notes_manager,
+        }
         
-        # Initialize selected theme state
-        self._selected_theme_dark = self._dark_mode
+        result, save_mode = show_settings_dialog(self, config)
         
-        # Main sizer for dialog (scroll area + buttons)
-        dialog_sizer = wx.BoxSizer(wx.VERTICAL)
+        if result:
+            self._apply_settings_result(result, save_mode)
+    
+    def _apply_settings_result(self, result, save_mode='local'):
+        """Apply settings from dialog result.
         
-        # Create scrolled window for all settings content
-        scroll_win = wx.ScrolledWindow(dlg, style=wx.VSCROLL)
-        scroll_win.SetScrollRate(0, 20)
-        scroll_win.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        Args:
+            result: Settings dict from dialog
+            save_mode: 'local' for project-specific, 'global' for user-wide
+        """
+        # Store save mode for later use
+        self._last_save_mode = save_mode
         
-        # Content sizer inside scroll window
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.AddSpacer(24)
-        
-        # Dark Mode Toggle Section
-        mode_panel = wx.Panel(scroll_win)
-        mode_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        mode_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        mode_label = wx.StaticText(mode_panel, label="Select Theme")
-        mode_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        mode_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        mode_sizer.Add(mode_label, 0, wx.ALIGN_CENTER_VERTICAL)
-        
-        mode_sizer.AddStretchSpacer()
-        
-        # Light button
-        light_bg = self._theme["bg_button"] if self._dark_mode else self._theme["accent_blue"]
-        light_fg = self._theme["text_primary"] if self._dark_mode else "#FFFFFF"
-        self._light_btn = RoundedButton(
-            mode_panel,
-            label="Light",
-            icon="",
-            size=(90, 36),
-            bg_color=light_bg,
-            fg_color=light_fg,
-            corner_radius=8,
-            font_size=11,
-            font_weight=wx.FONTWEIGHT_BOLD if not self._dark_mode else wx.FONTWEIGHT_NORMAL
-        )
-        self._light_btn.Bind_Click(lambda e: self._on_theme_select(dlg, sizer, False))
-        mode_sizer.Add(self._light_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        
-        # Dark button
-        dark_bg = self._theme["accent_blue"] if self._dark_mode else self._theme["bg_button"]
-        dark_fg = "#FFFFFF" if self._dark_mode else self._theme["text_primary"]
-        self._dark_btn = RoundedButton(
-            mode_panel,
-            label="Dark",
-            icon="",
-            size=(90, 36),
-            bg_color=dark_bg,
-            fg_color=dark_fg,
-            corner_radius=8,
-            font_size=11,
-            font_weight=wx.FONTWEIGHT_BOLD if self._dark_mode else wx.FONTWEIGHT_NORMAL
-        )
-        self._dark_btn.Bind_Click(lambda e: self._on_theme_select(dlg, sizer, True))
-        mode_sizer.Add(self._dark_btn, 0, wx.ALIGN_CENTER_VERTICAL)
-        
-        mode_panel.SetSizer(mode_sizer)
-        sizer.Add(mode_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
-        
-        sizer.AddSpacer(16)
-        
-        # Colors panel - immediately below theme selection
-        self._colors_panel = wx.Panel(scroll_win)
-        self._colors_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        self._rebuild_color_options(self._colors_panel, self._dark_mode)
-        sizer.Add(self._colors_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 0)
-        
-        sizer.AddSpacer(20)
-        
-        # Separator
-        sep = wx.StaticLine(scroll_win)
-        sizer.Add(sep, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
-        
-        sizer.AddSpacer(20)
-        
-        # Time Tracking Settings Section
-        time_header = wx.StaticText(scroll_win, label="⏱ Time Tracking Options")
-        time_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        time_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        sizer.Add(time_header, 0, wx.LEFT | wx.BOTTOM, 24)
-        
-        # Enable time tracking checkbox
-        time_track_panel = wx.Panel(scroll_win)
-        time_track_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        time_track_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        self._enable_time_tracking = wx.CheckBox(time_track_panel, label="  Enable Time Tracking")
-        self._enable_time_tracking.SetValue(self.time_tracker.enable_time_tracking)
-        self._enable_time_tracking.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        time_track_sizer.Add(self._enable_time_tracking, 0, wx.ALL, 10)
-        
-        # Time format option
-        format_panel = wx.Panel(time_track_panel)
-        format_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        format_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        format_label = wx.StaticText(format_panel, label="Time Format:")
-        format_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        format_sizer.Add(format_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
-        
-        self._time_format_choice = wx.Choice(format_panel, choices=["24-hour", "12-hour (AM/PM)"])
-        self._time_format_choice.SetSelection(0 if self.time_tracker.time_format_24h else 1)
-        format_sizer.Add(self._time_format_choice, 1, wx.EXPAND)
-        
-        format_panel.SetSizer(format_sizer)
-        time_track_sizer.Add(format_panel, 0, wx.EXPAND | wx.ALL, 10)
-        
-        # Show work diary button checkbox
-        self._show_work_diary = wx.CheckBox(time_track_panel, label="  Show Work Diary Button")
-        self._show_work_diary.SetValue(self.time_tracker.show_work_diary_button)
-        self._show_work_diary.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        time_track_sizer.Add(self._show_work_diary, 0, wx.ALL, 10)
-        
-        time_track_panel.SetSizer(time_track_sizer)
-        sizer.Add(time_track_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
-        
-        sizer.AddSpacer(20)
-        
-        # Separator
-        sep2 = wx.StaticLine(scroll_win)
-        sizer.Add(sep2, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
-        
-        sizer.AddSpacer(20)
-        
-        # Editor Mode Settings Section
-        editor_header = wx.StaticText(scroll_win, label="📝 Editor Mode")
-        editor_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        editor_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        sizer.Add(editor_header, 0, wx.LEFT | wx.BOTTOM, 24)
-        
-        editor_panel = wx.Panel(scroll_win)
-        editor_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        editor_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Visual Editor Mode (Default) checkbox - unchecked means Markdown mode
-        self._markdown_mode_checkbox = wx.CheckBox(editor_panel, label="  Use Markdown Editor (Power User Mode)")
-        self._markdown_mode_checkbox.SetValue(not self._use_visual_editor)
-        self._markdown_mode_checkbox.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        editor_sizer.Add(self._markdown_mode_checkbox, 0, wx.ALL, 10)
-        
-        # Disable if visual editor not available
-        if not VISUAL_EDITOR_AVAILABLE:
-            self._markdown_mode_checkbox.SetValue(True)
-            self._markdown_mode_checkbox.Enable(False)
-            unavail_label = wx.StaticText(editor_panel, label="      (Visual Editor not available)")
-            unavail_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-            editor_sizer.Add(unavail_label, 0, wx.LEFT | wx.BOTTOM, 10)
+        # Update theme
+        self._dark_mode = result['dark_mode']
+        if self._dark_mode:
+            self._dark_bg_color_name = result['dark_bg_color_name']
+            self._dark_text_color_name = result['dark_text_color_name']
         else:
-            hint_label = wx.StaticText(editor_panel, 
-                label="      Visual Editor: WYSIWYG formatting with toolbar\n      Markdown Editor: Raw markdown with syntax")
-            hint_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-            editor_sizer.Add(hint_label, 0, wx.LEFT | wx.BOTTOM, 10)
+            self._bg_color_name = result['bg_color_name']
+            self._text_color_name = result['text_color_name']
         
-        editor_panel.SetSizer(editor_sizer)
-        sizer.Add(editor_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
+        # Update time tracking settings
+        self.time_tracker.enable_time_tracking = result['enable_time_tracking']
+        self.time_tracker.time_format_24h = result['time_format_24h']
+        self.time_tracker.show_work_diary_button = result['show_work_diary']
         
-        sizer.AddSpacer(20)
-        
-        # Separator
-        sep3 = wx.StaticLine(scroll_win)
-        sizer.Add(sep3, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 24)
-        
-        sizer.AddSpacer(20)
-        
-        # UI Scale Settings Section
-        scale_header = wx.StaticText(scroll_win, label="🔍 UI Scale (High-DPI)")
-        scale_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        scale_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        sizer.Add(scale_header, 0, wx.LEFT | wx.BOTTOM, 24)
-        
-        scale_panel = wx.Panel(scroll_win)
-        scale_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        scale_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Auto checkbox
-        self._scale_auto_checkbox = wx.CheckBox(scale_panel, label="  Auto (Use System DPI)")
-        current_scale = get_user_scale_factor()
-        self._scale_auto_checkbox.SetValue(current_scale is None)
-        self._scale_auto_checkbox.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        self._scale_auto_checkbox.Bind(wx.EVT_CHECKBOX, self._on_scale_auto_toggle)
-        scale_sizer.Add(self._scale_auto_checkbox, 0, wx.ALL, 10)
-        
-        # Scale slider row
-        slider_row = wx.BoxSizer(wx.HORIZONTAL)
-        
-        # Min label
-        min_label = wx.StaticText(scale_panel, label="100%")
-        min_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        slider_row.Add(min_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        
-        # Slider: 100% to 200% (values 100-200)
-        self._scale_slider = wx.Slider(scale_panel, value=100, minValue=100, maxValue=200,
-                                        style=wx.SL_HORIZONTAL)
-        if current_scale is not None:
-            self._scale_slider.SetValue(int(current_scale * 100))
+        # Show/hide export diary button based on setting AND current tab
+        if self.time_tracker.show_work_diary_button and self._current_tab == 1:
+            self.export_diary_btn.Show()
         else:
-            # Show system DPI value when auto
-            system_scale = get_dpi_scale_factor(self)
-            self._scale_slider.SetValue(int(system_scale * 100))
-        self._scale_slider.Enable(current_scale is not None)  # Disabled when auto
-        self._scale_slider.Bind(wx.EVT_SLIDER, self._on_scale_slider_change)
-        slider_row.Add(self._scale_slider, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+            self.export_diary_btn.Hide()
         
-        # Max label
-        max_label = wx.StaticText(scale_panel, label="200%")
-        max_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        slider_row.Add(max_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 8)
+        # Update cross-probe setting
+        self._crossprobe_enabled = result['crossprobe_enabled']
+        self._custom_designators = result.get('custom_designators', '')
+        if self.designator_linker:
+            self.designator_linker.set_custom_prefixes(self._custom_designators)
+        if hasattr(self, 'visual_editor') and self.visual_editor:
+            self.visual_editor.set_crossprobe_enabled(self._crossprobe_enabled)
+            self.visual_editor.set_designator_linker(
+                self.designator_linker if self._crossprobe_enabled else None
+            )
         
-        scale_sizer.Add(slider_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        # Update editor mode setting
+        old_visual_editor = self._use_visual_editor
+        self._use_visual_editor = result['use_visual_editor']
         
-        # Current value display
-        current_factor = get_dpi_scale_factor(self)
-        self._scale_value_label = wx.StaticText(scale_panel, 
-            label=f"Current: {int(current_factor * 100)}%")
-        self._scale_value_label.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        self._scale_value_label.SetForegroundColour(hex_to_colour(self._theme["accent_blue"]))
-        scale_sizer.Add(self._scale_value_label, 0, wx.ALIGN_CENTER | wx.TOP, 8)
+        # Update UI scale factor
+        old_scale_factor = get_user_scale_factor()
+        new_scale_factor = result['scale_factor']
+        set_user_scale_factor(new_scale_factor)
         
-        # Scale hint
-        scale_hint = wx.StaticText(scale_panel, 
-            label="Restart KiNotes for changes to take effect")
-        scale_hint.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        scale_sizer.Add(scale_hint, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, 10)
-        
-        scale_panel.SetSizer(scale_sizer)
-        sizer.Add(scale_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
-        
-        sizer.AddSpacer(20)
-        
-        # Panel Size Settings Section
-        panel_size_header = wx.StaticText(scroll_win, label="📐 Default Panel Size")
-        panel_size_header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        panel_size_header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        sizer.Add(panel_size_header, 0, wx.LEFT | wx.BOTTOM, 24)
-        
-        panel_size_panel = wx.Panel(scroll_win)
-        panel_size_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        panel_size_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Load current panel size settings
+        # Check panel size changes
         current_settings = self.notes_manager.load_settings() or {}
-        current_width = current_settings.get("panel_width", 1092)
-        current_height = current_settings.get("panel_height", 1170)
+        old_width = current_settings.get("panel_width", 1300)
+        old_height = current_settings.get("panel_height", 1170)
+        new_width = result['panel_width']
+        new_height = result['panel_height']
+        panel_size_changed = (old_width != new_width or old_height != new_height)
         
-        # Horizontal row: [Width: spin px] | [Height: spin px]
-        size_row = wx.BoxSizer(wx.HORIZONTAL)
+        # Update beta feature settings
+        old_beta_table = self._beta_table
+        old_beta_markdown = self._beta_markdown
+        old_beta_bom = self._beta_bom
+        old_beta_version_log = self._beta_version_log
+        old_net_crossprobe = getattr(self, '_net_crossprobe_enabled', True)
+        old_beta_debug_panel = self._beta_debug_panel
+        old_use_visual_editor = self._use_visual_editor
+        old_debug_modules = dict(self._debug_modules)
         
-        # Width section
-        width_label = wx.StaticText(panel_size_panel, label="Width:")
-        width_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        size_row.Add(width_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        self._beta_table = result['beta_table']
+        self._beta_markdown = result['beta_markdown']
+        self._beta_bom = result['beta_bom']
+        self._beta_version_log = result['beta_version_log']
+        # Net cross-probe is now a main feature
+        self._net_crossprobe_enabled = result.get('net_crossprobe_enabled', True)
+        self._beta_net_linker = self._net_crossprobe_enabled  # Legacy alias
+        self._beta_debug_panel = result.get('beta_debug_panel', False)
+        self._debug_modules = result.get('debug_modules', self._debug_modules)
+        for key in ("save", "net", "designator"):
+            if key not in self._debug_modules:
+                self._debug_modules[key] = False
         
-        self._panel_width_spin = wx.SpinCtrl(panel_size_panel, min=800, max=2000, initial=max(800, current_width))
-        self._panel_width_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        self._panel_width_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
-        size_row.Add(self._panel_width_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        # IMPORTANT: beta_markdown checkbox controls the actual editor mode
+        # If beta_markdown is enabled, use Markdown editor (set use_visual_editor to False)
+        # If beta_markdown is disabled, use Visual editor (set use_visual_editor to True)
+        if self._beta_markdown:
+            self._use_visual_editor = False
+        else:
+            # If markdown beta is disabled but visual editor is available, use visual
+            self._use_visual_editor = VISUAL_EDITOR_AVAILABLE
         
-        width_px_label = wx.StaticText(panel_size_panel, label="px")
-        width_px_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        size_row.Add(width_px_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
+        # Refresh nets if net linker is enabled
+        if self._beta_net_linker and self.net_linker:
+            try:
+                self.net_linker.refresh_nets()
+                print("[KiNotes] Net linker cache refreshed")
+            except Exception as e:
+                print(f"[KiNotes] Net linker refresh warning: {e}")
+
+        # Re-attach net linker to editor after settings changes
+        self._attach_net_linker_to_editor()
         
-        # Separator
-        sep_label = wx.StaticText(panel_size_panel, label="|")
-        sep_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        size_row.Add(sep_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
-        
-        # Height section (min 600px - Windows standard for 768px screens)
-        height_label = wx.StaticText(panel_size_panel, label="Height:")
-        height_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        size_row.Add(height_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        
-        self._panel_height_spin = wx.SpinCtrl(panel_size_panel, min=600, max=2000, initial=max(600, current_height))
-        self._panel_height_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        self._panel_height_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
-        size_row.Add(self._panel_height_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
-        
-        height_px_label = wx.StaticText(panel_size_panel, label="px")
-        height_px_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        size_row.Add(height_px_label, 0, wx.ALIGN_CENTER_VERTICAL)
-        
-        panel_size_sizer.Add(size_row, 0, wx.ALL, 10)
-        
-        # Panel size hint
-        panel_size_hint = wx.StaticText(panel_size_panel, 
-            label="Restart KiNotes for size changes to take effect (Min: 800×600)")
-        panel_size_hint.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        panel_size_sizer.Add(panel_size_hint, 0, wx.LEFT | wx.BOTTOM, 10)
-        
-        panel_size_panel.SetSizer(panel_size_sizer)
-        sizer.Add(panel_size_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 16)
-        
-        sizer.AddSpacer(20)
-        
-        # Set up scroll window with content sizer
-        scroll_win.SetSizer(sizer)
-        scroll_win.FitInside()
-        
-        # Add scroll window to dialog (expands to fill)
-        dialog_sizer.Add(scroll_win, 1, wx.EXPAND)
-        
-        # Buttons panel - OUTSIDE scroll area, always visible at bottom
-        btn_panel = wx.Panel(dlg)
-        btn_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        btn_sizer.AddStretchSpacer()
-        
-        # Store result for dialog
-        self._settings_result = None
-        
-        def on_cancel(e):
-            self._settings_result = wx.ID_CANCEL
-            dlg.EndModal(wx.ID_CANCEL)
-        
-        def on_apply(e):
-            self._settings_result = wx.ID_OK
-            dlg.EndModal(wx.ID_OK)
-        
-        cancel_btn = RoundedButton(
-            btn_panel,
-            label="Cancel",
-            icon="",
-            size=(110, 42),
-            bg_color=self._theme["bg_button"],
-            fg_color=self._theme["text_primary"],
-            corner_radius=10,
-            font_size=11,
-            font_weight=wx.FONTWEIGHT_NORMAL
+        beta_features_changed = (
+            old_beta_table != self._beta_table or
+            old_beta_markdown != self._beta_markdown or
+            old_beta_bom != self._beta_bom or
+            old_beta_version_log != self._beta_version_log or
+            old_net_crossprobe != self._net_crossprobe_enabled or
+            old_beta_debug_panel != self._beta_debug_panel or
+            old_debug_modules != self._debug_modules
         )
-        cancel_btn.Bind_Click(on_cancel)
-        btn_sizer.Add(cancel_btn, 0, wx.RIGHT, 12)
         
-        apply_btn = RoundedButton(
-            btn_panel,
-            label="Save & Apply",
-            icon="",
-            size=(220, 42),
-            bg_color=self._theme["accent_blue"],
-            fg_color="#FFFFFF",
-            corner_radius=10,
-            font_size=11,
-            font_weight=wx.FONTWEIGHT_BOLD
-        )
-        apply_btn.Bind_Click(on_apply)
-        btn_sizer.Add(apply_btn, 0)
+        # Check if restart is required
+        needs_restart = False
+        restart_reasons = []
         
-        btn_panel.SetSizer(btn_sizer)
-        dialog_sizer.Add(btn_panel, 0, wx.EXPAND | wx.ALL, 24)
+        # Editor mode changed
+        if old_use_visual_editor != self._use_visual_editor:
+            needs_restart = True
+            restart_reasons.append("Editor mode")
         
-        dlg.SetSizer(dialog_sizer)
+        if old_scale_factor != new_scale_factor:
+            needs_restart = True
+            restart_reasons.append("UI scale")
         
-        if dlg.ShowModal() == wx.ID_OK:
-            # Update theme - check which button is highlighted (dark_btn has accent = dark selected)
-            self._dark_mode = hasattr(self, '_selected_theme_dark') and self._selected_theme_dark
-            if self._dark_mode:
-                # Get dark theme color selections
-                dark_bg_choices = list(DARK_BACKGROUND_COLORS.keys())
-                dark_txt_choices = list(DARK_TEXT_COLORS.keys())
-                self._dark_bg_color_name = dark_bg_choices[self._bg_choice.GetSelection()]
-                self._dark_text_color_name = dark_txt_choices[self._txt_choice.GetSelection()]
-            else:
-                # Get light theme color selections
-                bg_choices = list(BACKGROUND_COLORS.keys())
-                txt_choices = list(TEXT_COLORS.keys())
-                self._bg_color_name = bg_choices[self._bg_choice.GetSelection()]
-                self._text_color_name = txt_choices[self._txt_choice.GetSelection()]
-            
-            # Update time tracking settings
-            self.time_tracker.enable_time_tracking = self._enable_time_tracking.GetValue()
-            self.time_tracker.time_format_24h = self._time_format_choice.GetSelection() == 0
-            self.time_tracker.show_work_diary_button = self._show_work_diary.GetValue()
-            
-            # Show/hide export diary button based on setting AND current tab
-            # Only show on Todo tab (idx==1) when setting is enabled
-            if self.time_tracker.show_work_diary_button and self._current_tab == 1:
-                self.export_diary_btn.Show()
-            else:
-                self.export_diary_btn.Hide()
-            
-            # Update editor mode setting
-            old_visual_editor = self._use_visual_editor
-            new_use_markdown = self._markdown_mode_checkbox.GetValue()
-            self._use_visual_editor = not new_use_markdown
-            
-            # Update UI scale factor setting
-            old_scale_factor = get_user_scale_factor()
-            if self._scale_auto_checkbox.GetValue():
-                new_scale_factor = None  # Auto mode
-            else:
-                new_scale_factor = self._scale_slider.GetValue() / 100.0
-            set_user_scale_factor(new_scale_factor)
-            
-            # Check panel size changes
-            current_settings = self.notes_manager.load_settings() or {}
-            old_width = current_settings.get("panel_width", 1092)
-            old_height = current_settings.get("panel_height", 1170)
-            new_width = self._panel_width_spin.GetValue()
-            new_height = self._panel_height_spin.GetValue()
-            panel_size_changed = (old_width != new_width or old_height != new_height)
-            
-            # Check if editor mode or scale changed - requires restart notification
-            needs_restart = False
-            restart_reasons = []
-            
-            if old_visual_editor != self._use_visual_editor:
-                needs_restart = True
-                restart_reasons.append("Editor mode")
-            
-            if old_scale_factor != new_scale_factor:
-                needs_restart = True
-                restart_reasons.append("UI scale")
-            
-            if panel_size_changed:
-                needs_restart = True
-                restart_reasons.append("Panel size")
-            
-            if needs_restart:
-                reasons_str = " and ".join(restart_reasons)
-                wx.MessageBox(
-                    f"{reasons_str} change will take effect after restarting KiNotes.",
-                    "Restart Required",
-                    wx.OK | wx.ICON_INFORMATION
-                )
-            
-            self._theme = DARK_THEME if self._dark_mode else LIGHT_THEME
-            self._apply_theme()
-            self._apply_editor_colors()
-            self._save_color_settings()
-            self.Layout()
+        if panel_size_changed:
+            needs_restart = True
+            restart_reasons.append("Panel size")
         
-        dlg.Destroy()
-    
-    def _on_scale_auto_toggle(self, event):
-        """Handle auto scale checkbox toggle."""
-        is_auto = self._scale_auto_checkbox.GetValue()
-        self._scale_slider.Enable(not is_auto)
+        if beta_features_changed:
+            needs_restart = True
+            restart_reasons.append("Beta features")
         
-        if is_auto:
-            # Show system DPI value on slider
-            system_scale = get_dpi_scale_factor(self)
-            self._scale_slider.SetValue(int(system_scale * 100))
-            self._scale_value_label.SetLabel(f"Current: {int(system_scale * 100)}% (Auto)")
-        else:
-            # Use slider value
-            slider_val = self._scale_slider.GetValue()
-            self._scale_value_label.SetLabel(f"Current: {slider_val}%")
-    
-    def _on_scale_slider_change(self, event):
-        """Handle scale slider value change."""
-        slider_val = self._scale_slider.GetValue()
-        self._scale_value_label.SetLabel(f"Current: {slider_val}%")
-    
-    def _on_theme_select(self, dlg, sizer, is_dark):
-        """Handle theme button selection in settings dialog."""
-        # Track the selected theme
-        self._selected_theme_dark = is_dark
+        if needs_restart:
+            reasons_str = " and ".join(restart_reasons)
+            wx.MessageBox(
+                f"{reasons_str} change will take effect after restarting KiNotes.",
+                "Restart Required",
+                wx.OK | wx.ICON_INFORMATION
+            )
+
+        # Handle debug panel visibility and module toggles
+        if old_beta_debug_panel != self._beta_debug_panel:
+            if self._beta_debug_panel and not self.debug_panel:
+                try:
+                    # Create resizable debug panel
+                    main_sizer = self.GetSizer()
+                    self._create_resizable_debug_panel(main_sizer)
+                    self.Layout()
+                except Exception as e:
+                    print(f"[KiNotes] Debug panel create warning: {e}")
+            elif not self._beta_debug_panel and self.debug_panel:
+                try:
+                    if hasattr(self, 'debug_container') and self.debug_container:
+                        self.debug_container.Destroy()
+                        self.debug_container = None
+                    elif self.debug_panel:
+                        self.debug_panel.Destroy()
+                except Exception:
+                    pass
+                self.debug_panel = None
+                self.Layout()
+
+        # Sync module checkbox UI if panel exists
+        if getattr(self, "_debug_module_checkboxes", None):
+            for key, cb in self._debug_module_checkboxes.items():
+                cb.SetValue(self._debug_modules.get(key, False))
+
+        # Propagate logger targets to editors
+        self._apply_debug_logger_targets()
         
-        # Update button appearances
-        if is_dark:
-            # Dark selected - highlight dark button
-            self._dark_btn.SetColors(self._theme["accent_blue"], "#FFFFFF")
-            self._light_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
-        else:
-            # Light selected - highlight light button
-            self._light_btn.SetColors(self._theme["accent_blue"], "#FFFFFF")
-            self._dark_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
-        
-        # Rebuild color options for selected theme
-        self._rebuild_color_options(self._colors_panel, is_dark)
-        dlg.Layout()
-    
-    def _on_theme_toggle(self, dlg, sizer, is_dark):
-        """Handle theme toggle in settings dialog - rebuild color options."""
-        self._rebuild_color_options(self._colors_panel, is_dark)
-        dlg.Layout()
-    
-    def _rebuild_color_options(self, panel, is_dark):
-        """Rebuild color options based on theme."""
-        # Clear existing children
-        for child in panel.GetChildren():
-            child.Destroy()
-        
-        panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Header
-        theme_name = "Dark" if is_dark else "Light"
-        header = wx.StaticText(panel, label=f"{theme_name} Theme Colors")
-        header.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        header.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        panel_sizer.Add(header, 0, wx.LEFT, 24)
-        panel_sizer.AddSpacer(12)
-        
-        # Horizontal row: [Background: dropdown] space [Text: dropdown]
-        color_row = wx.BoxSizer(wx.HORIZONTAL)
-        
-        # Background color section
-        bg_label = wx.StaticText(panel, label="Background:")
-        bg_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        bg_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        color_row.Add(bg_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        
-        if is_dark:
-            dark_bg_choices = list(DARK_BACKGROUND_COLORS.keys())
-            self._bg_choice = wx.Choice(panel, choices=dark_bg_choices)
-            dark_bg_name = getattr(self, '_dark_bg_color_name', 'Charcoal')
-            self._bg_choice.SetSelection(dark_bg_choices.index(dark_bg_name) if dark_bg_name in dark_bg_choices else 0)
-        else:
-            bg_choices = list(BACKGROUND_COLORS.keys())
-            self._bg_choice = wx.Choice(panel, choices=bg_choices)
-            self._bg_choice.SetSelection(bg_choices.index(self._bg_color_name) if self._bg_color_name in bg_choices else 0)
-        
-        self._bg_choice.SetMinSize((140, -1))
-        color_row.Add(self._bg_choice, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 30)
-        
-        # Text color section
-        txt_label = wx.StaticText(panel, label="Text:")
-        txt_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        txt_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        color_row.Add(txt_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        
-        if is_dark:
-            dark_txt_choices = list(DARK_TEXT_COLORS.keys())
-            self._txt_choice = wx.Choice(panel, choices=dark_txt_choices)
-            dark_txt_name = getattr(self, '_dark_text_color_name', 'Pure White')
-            self._txt_choice.SetSelection(dark_txt_choices.index(dark_txt_name) if dark_txt_name in dark_txt_choices else 0)
-        else:
-            txt_choices = list(TEXT_COLORS.keys())
-            self._txt_choice = wx.Choice(panel, choices=txt_choices)
-            self._txt_choice.SetSelection(txt_choices.index(self._text_color_name) if self._text_color_name in txt_choices else 0)
-        
-        self._txt_choice.SetMinSize((140, -1))
-        color_row.Add(self._txt_choice, 0, wx.ALIGN_CENTER_VERTICAL)
-        
-        panel_sizer.Add(color_row, 0, wx.LEFT | wx.RIGHT, 24)
-        
-        panel.SetSizer(panel_sizer)
-        panel.Layout()
+        self._theme = DARK_THEME if self._dark_mode else LIGHT_THEME
+        self._apply_theme()
+        self._apply_editor_colors()
+        self._save_color_settings(save_mode)
+        # Persist everything immediately to avoid data loss before restart/close
+        try:
+            self.force_save()
+        except Exception as e:
+            print(f"[KiNotes] Settings apply save warning: {e}")
+        self.Layout()
     
     def _apply_theme_to_panel(self, panel):
         """Apply current theme to a panel and all its children recursively."""
@@ -1815,6 +1439,7 @@ class KiNotesMainPanel(wx.Panel):
         self._apply_theme_to_panel(self.notes_panel)
         self._apply_theme_to_panel(self.todo_panel)
         self._apply_theme_to_panel(self.bom_panel)
+        self._apply_theme_to_panel(self.version_log_panel)
         
         # Update tab buttons
         for btn in self.tab_buttons:
@@ -1825,6 +1450,7 @@ class KiNotesMainPanel(wx.Panel):
         
         # Update other buttons
         self.import_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
+        self.help_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
         self.settings_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
         self.save_btn.SetColors(self._theme["accent_green"], "#FFFFFF")
         self.pdf_btn.SetColors(self._theme["accent_blue"], "#FFFFFF")
@@ -1927,22 +1553,75 @@ class KiNotesMainPanel(wx.Panel):
             self.visual_editor = VisualNoteEditor(
                 panel,
                 dark_mode=self._dark_mode,
-                style=wx.BORDER_NONE
+                style=wx.BORDER_NONE,
+                beta_features=self._beta_table  # Table button controlled by beta_table setting
             )
             print("[KiNotes] Visual editor created successfully")
             
             # Apply user's custom colors immediately after creation
-            bg = self._get_editor_bg()
-            fg = self._get_editor_text()
-            self.visual_editor.set_custom_colors(bg, fg)
-            print(f"[KiNotes] Custom colors applied: bg={bg}, fg={fg}")
+            try:
+                bg = self._get_editor_bg()
+                fg = self._get_editor_text()
+                self.visual_editor.set_custom_colors(bg, fg)
+                print(f"[KiNotes] Custom colors applied: bg={bg}, fg={fg}")
+            except Exception as e:
+                print(f"[KiNotes] Custom colors warning: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Apply user's font size setting
+            print("[KiNotes] About to set font size...")
+            try:
+                settings = self.notes_manager.load_settings() or {}
+                font_size = settings.get("font_size", 11)
+                print(f"[KiNotes] Font size setting: {font_size}")
+                self.visual_editor.set_font_size(font_size)
+                print("[KiNotes] Font size applied")
+            except Exception as e:
+                print(f"[KiNotes] Font size warning: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Set up cross-probe functionality
+            print("[KiNotes] About to setup crossprobe...")
+            try:
+                self.visual_editor.set_crossprobe_enabled(self._crossprobe_enabled)
+                if self._crossprobe_enabled and self.designator_linker:
+                    self.visual_editor.set_designator_linker(self.designator_linker)
+                print("[KiNotes] Crossprobe setup complete")
+            except Exception as e:
+                print(f"[KiNotes] Crossprobe setup warning: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Set up net highlighting (Beta)
+            # Note: net linker is lazy-loaded on first click (inside KiCad only)
+            print("[KiNotes] Net linker setup deferred to first click")
+            try:
+                self.visual_editor.set_net_linker(None)  # Start with no linker; will be created on demand
+            except Exception as e:
+                print(f"[KiNotes] Net linker setup warning: {e}")
+
+            # Attach debug logger if enabled
+            print("[KiNotes] About to setup debug logger...")
+            try:
+                self._apply_debug_logger_targets()
+                print("[KiNotes] Debug logger setup complete")
+            except Exception as e:
+                print(f"[KiNotes] Debug logger setup warning: {e}")
+                import traceback
+                traceback.print_exc()
             
             # Reference for unified API
             self.text_editor = None  # Not using markdown editor
             self.format_toolbar = None  # Visual editor has integrated toolbar
             
             # Bind text change event for auto-save
-            self.visual_editor.editor.Bind(wx.EVT_TEXT, self._on_text_changed)
+            print("[KiNotes] About to bind text change event...")
+            try:
+                self.visual_editor.editor.Bind(wx.EVT_TEXT, self._on_text_changed)
+            except Exception as e:
+                print(f"[KiNotes] Text change binding warning: {e}")
             
             sizer.Add(self.visual_editor, 1, wx.EXPAND | wx.ALL, 0)
             print("[KiNotes] Visual editor added to sizer")
@@ -2245,585 +1924,11 @@ class KiNotesMainPanel(wx.Panel):
     # TAB 2: TODO LIST
     # ============================================================
     
-    def _create_todo_tab(self, parent):
-        """Create Todo tab with checkboxes."""
-        panel = wx.Panel(parent)
-        panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # Toolbar
-        toolbar = wx.Panel(panel)
-        toolbar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
-        toolbar.SetMinSize((-1, 60))
-        tb_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        tb_sizer.AddSpacer(16)
-        
-        # Add task button - unified rounded style
-        self.add_todo_btn = RoundedButton(
-            toolbar,
-            label="Add Task",
-            icon="",
-            size=(130, 42),
-            bg_color=self._theme["bg_button"],
-            fg_color=self._theme["text_primary"],
-            corner_radius=10,
-            font_size=11,
-            font_weight=wx.FONTWEIGHT_NORMAL
-        )
-        self.add_todo_btn.Bind_Click(self._on_add_todo)
-        tb_sizer.Add(self.add_todo_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
-        
-        # Clear task button - unified rounded style
-        self.clear_done_btn = RoundedButton(
-            toolbar,
-            label="Clear Task",
-            icon="",
-            size=(140, 42),
-            bg_color=self._theme["bg_button"],
-            fg_color=self._theme["text_primary"],
-            corner_radius=10,
-            font_size=11,
-            font_weight=wx.FONTWEIGHT_NORMAL
-        )
-        self.clear_done_btn.Bind_Click(self._on_clear_done)
-        tb_sizer.Add(self.clear_done_btn, 0, wx.ALIGN_CENTER_VERTICAL)
-        
-        tb_sizer.AddStretchSpacer()
-        
-        # Counter
-        self.todo_count = wx.StaticText(toolbar, label="0 / 0")
-        self.todo_count.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        self.todo_count.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        tb_sizer.Add(self.todo_count, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 20)
-        
-        toolbar.SetSizer(tb_sizer)
-        sizer.Add(toolbar, 0, wx.EXPAND)
-        
-        # Todo list scroll area
-        self.todo_scroll = scrolled.ScrolledPanel(panel)
-        self.todo_scroll.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        self.todo_scroll.SetupScrolling(scroll_x=False)
-        
-        self.todo_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.todo_sizer.AddSpacer(12)
-        self.todo_scroll.SetSizer(self.todo_sizer)
-        sizer.Add(self.todo_scroll, 1, wx.EXPAND | wx.ALL, 12)
-        
-        panel.SetSizer(sizer)
-        return panel
+    # TAB 2: TODO LIST - Implemented in TodoTabMixin (see tabs/todo_tab.py)
     
-    def _add_todo_item(self, text="", done=False, time_spent=0, history=None):
-        """Add a todo item with time tracking."""
-        item_id = self._todo_id_counter
-        self._todo_id_counter += 1
-        
-        # Initialize timer for this task
-        self.time_tracker.create_task_timer(item_id)
-        if time_spent > 0:
-            self.time_tracker.task_timers[item_id]["time_spent"] = time_spent
-        if history:
-            self.time_tracker.task_timers[item_id]["history"] = history
-        if text:
-            self.time_tracker.task_timers[item_id]["text"] = text
-        if done:
-            self.time_tracker.task_timers[item_id]["done"] = done
-        
-        item_panel = wx.Panel(self.todo_scroll)
-        # Use theme-appropriate background for todo items
-        if self._dark_mode:
-            item_panel.SetBackgroundColour(hex_to_colour("#2D2D2D"))
-        else:
-            item_panel.SetBackgroundColour(wx.WHITE)
-        item_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        # Checkbox
-        cb = wx.CheckBox(item_panel)
-        cb.SetValue(done)
-        cb.Bind(wx.EVT_CHECKBOX, lambda e, iid=item_id: self._on_todo_toggle(iid))
-        item_sizer.Add(cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 14)
-        
-        # Spacing between checkbox and timer button
-        item_sizer.AddSpacer(12)
-        
-        # Timer play/pause button
-        timer_btn = PlayPauseButton(item_panel, size=(42, 28), is_on=False)
-        timer_btn.Bind_Change(lambda is_on, iid=item_id: self._on_timer_toggle(iid, is_on))
-        item_sizer.Add(timer_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 15)
-        
-        # Text input with strikethrough support
-        txt = wx.TextCtrl(item_panel, value=text, style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER)
-        # Match item panel background
-        if self._dark_mode:
-            txt.SetBackgroundColour(hex_to_colour("#2D2D2D"))
-        else:
-            txt.SetBackgroundColour(wx.WHITE)
-        
-        # Apply strikethrough font if done
-        if done:
-            font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-            font.SetStrikethrough(True)
-            txt.SetFont(font)
-            txt.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        else:
-            txt.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            txt.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        
-        txt.Bind(wx.EVT_TEXT, lambda e, iid=item_id: self._on_todo_text_change(iid))
-        txt.Bind(wx.EVT_TEXT_ENTER, lambda e: self._on_add_todo(None))
-        item_sizer.Add(txt, 1, wx.EXPAND | wx.ALL, 12)
-        # Spacing between checkbox and timer button
-        item_sizer.AddSpacer(12)
-        # Timer label - fixed width display
-        timer_label = wx.StaticText(item_panel, label="⏱ 00:00:00")
-        timer_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        timer_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        timer_label.SetMinSize((120, -1))  # Increased from 110 to prevent overlap
-        item_sizer.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 15)
-        # Spacing between Timer label and session label
-        item_sizer.AddSpacer(12)
-        # RTC inline session label - shows last completed session if exists
-        # Format: "(10:12 → 10:40 28min)"
-        rtc_label = wx.StaticText(item_panel, label="")
-        rtc_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        rtc_label.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        rtc_label.SetMinSize((160, -1))  # Increased from 120 to prevent overlap in KiCad
-        
-        # Add tooltip for full session history
-        if history and len(history) > 0:
-            tooltip_text = self.time_tracker.get_session_history_tooltip(item_id, self.time_tracker.time_format_24h)
-            if tooltip_text:
-                rtc_label.SetToolTip(tooltip_text)
-        
-        item_sizer.Add(rtc_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 35)
-        item_sizer.AddSpacer(12)
-        # Delete button with icon
-        del_btn = wx.Button(item_panel, label=Icons.DELETE, size=(40, 40), style=wx.BORDER_NONE)
-        # Match item panel background
-        if self._dark_mode:
-            del_btn.SetBackgroundColour(hex_to_colour("#2D2D2D"))
-        else:
-            del_btn.SetBackgroundColour(wx.WHITE)
-        del_btn.SetForegroundColour(hex_to_colour(self._theme["accent_red"]))
-        del_btn.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        del_btn.Bind(wx.EVT_BUTTON, lambda e, iid=item_id: self._on_delete_todo(iid))
-        item_sizer.Add(del_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        
-        item_panel.SetSizer(item_sizer)
-        
-        self._todo_items.append({
-            "id": item_id,
-            "panel": item_panel,
-            "checkbox": cb,
-            "timer_switch": timer_btn,
-            "text": txt,
-            "timer_label": timer_label,
-            "rtc_label": rtc_label,
-            "del_btn": del_btn,
-            "done": done
-        })
-        
-        self.todo_sizer.Add(item_panel, 0, wx.EXPAND | wx.BOTTOM, 8)
-
-        self.todo_scroll.FitInside()
-        self.todo_scroll.Layout()
-        self._update_todo_count()
-        return txt
+    # TAB 3: BOM TOOL - Implemented in BomTabMixin (see tabs/bom_tab.py)
     
-    def _on_add_todo(self, event):
-        txt = self._add_todo_item()
-        txt.SetFocus()
-        self._save_todos()
-    
-    def _on_timer_toggle(self, item_id, is_on):
-        """
-        Handle timer start/stop for a task.
-        If turning ON: auto-stop any other running task + update its toggle switch.
-        If turning OFF: normal pause + log session.
-        """
-        if is_on:
-            # Starting new task timer
-            prev_running = self.time_tracker.current_running_task_id
-            
-            # This will auto-stop any other running task
-            self.time_tracker.start_task(item_id)
-            
-            # If we just auto-stopped another task, update its toggle switch UI
-            if prev_running is not None and prev_running != item_id:
-                for item in self._todo_items:
-                    if item["id"] == prev_running:
-                        item["timer_switch"].SetValue(False)
-                        break
-        else:
-            # Stopping current task timer
-            self.time_tracker.stop_task(item_id)
-        
-        # Force immediate UI refresh of timer displays
-        self._update_timer_displays()
-        self._save_todos()
-    
-    def _on_todo_text_change(self, item_id):
-        """Update timer text data when task text changes."""
-        for item in self._todo_items:
-            if item["id"] == item_id:
-                self.time_tracker.task_timers[item_id]["text"] = item["text"].GetValue()
-                break
-        self._save_todos()
-    
-    def _on_todo_toggle(self, item_id):
-        for item in self._todo_items:
-            if item["id"] == item_id:
-                item["done"] = item["checkbox"].GetValue()
-                
-                # Stop timer if marking as done
-                if item["done"]:
-                    self.time_tracker.mark_task_done(item_id)
-                    item["timer_switch"].SetValue(False)
-                
-                # Apply strikethrough when done
-                font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-                if item["done"]:
-                    font.SetStrikethrough(True)
-                    item["text"].SetFont(font)
-                    item["text"].SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-                else:
-                    font.SetStrikethrough(False)
-                    item["text"].SetFont(font)
-                    item["text"].SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-                
-                item["text"].Refresh()
-                break
-        self._update_todo_count()
-        self._save_todos()
-    
-    def _on_delete_todo(self, item_id):
-        for i, item in enumerate(self._todo_items):
-            if item["id"] == item_id:
-                item["panel"].Destroy()
-                self._todo_items.pop(i)
-                self.time_tracker.delete_task(item_id)
-                break
-        self.todo_scroll.FitInside()
-        self._update_todo_count()
-        self._save_todos()
-    
-    def _on_clear_done(self, event):
-        to_remove = [item for item in self._todo_items if item["done"]]
-        for item in to_remove:
-            item["panel"].Destroy()
-            self.time_tracker.delete_task(item["id"])
-            self._todo_items.remove(item)
-        self.todo_scroll.FitInside()
-        self._update_todo_count()
-        self._save_todos()
-    
-    def _update_todo_count(self):
-        total = len(self._todo_items)
-        done = sum(1 for item in self._todo_items if item["done"])
-        self.todo_count.SetLabel(str(done) + " / " + str(total))
-    
-    def _update_timer_displays(self):
-        """Update all timer labels and RTC inline displays with current state."""
-        for item in self._todo_items:
-            item_id = item["id"]
-            
-            # Update live timer display
-            time_str = self.time_tracker.get_task_time_string(item_id)
-            item["timer_label"].SetLabel(time_str)
-            
-            # Update RTC inline session display (only when task is not running)
-            rtc_str = self.time_tracker.get_last_session_string(item_id, self.time_tracker.time_format_24h)
-            item["rtc_label"].SetLabel(rtc_str)
-            
-            # Update tooltip if history exists
-            task_data = self.time_tracker.task_timers.get(item_id, {})
-            history = task_data.get("history", [])
-            if history and len(history) > 0:
-                tooltip_text = self.time_tracker.get_session_history_tooltip(item_id, self.time_tracker.time_format_24h)
-                if tooltip_text:
-                    item["rtc_label"].SetToolTip(tooltip_text)
-
-    
-    # ============================================================
-    # TAB 3: BOM TOOL
-    # ============================================================
-    
-    def _create_bom_tab(self, parent):
-        """Create BOM Tool tab."""
-        panel = scrolled.ScrolledPanel(parent)
-        panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        panel.SetupScrolling(scroll_x=False)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.AddSpacer(20)
-        
-        # Section helper
-        def add_section(title, checkboxes):
-            header = wx.StaticText(panel, label=title)
-            header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-            header.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-            sizer.Add(header, 0, wx.LEFT | wx.BOTTOM, 16)
-            
-            opt_panel = wx.Panel(panel)
-            # Use darker shade for section panels in both modes
-            if self._dark_mode:
-                opt_panel.SetBackgroundColour(hex_to_colour("#2D2D2D"))
-            else:
-                opt_panel.SetBackgroundColour(hex_to_colour("#F5F5F5"))
-            opt_sizer = wx.BoxSizer(wx.VERTICAL)
-            
-            widgets = []
-            for label, default in checkboxes:
-                cb = wx.CheckBox(opt_panel, label="  " + label)
-                cb.SetValue(default)
-                cb.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-                cb.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-                opt_sizer.Add(cb, 0, wx.ALL, 12)
-                widgets.append(cb)
-            
-            opt_panel.SetSizer(opt_sizer)
-            sizer.Add(opt_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 16)
-            return widgets
-        
-        # Columns section
-        cols = add_section("COLUMNS", [
-            ("Show quantity", True),
-            ("Show value", True),
-            ("Show footprint", True),
-            ("Show references", True),
-        ])
-        self.bom_show_qty, self.bom_show_value, self.bom_show_fp, self.bom_show_refs = cols
-        
-        # Filters section
-        filters = add_section("FILTERS", [
-            ("Exclude DNP", True),
-            ("Exclude virtual", True),
-            ("Exclude fiducials (FID*)", True),
-            ("Exclude test points (TP*)", True),
-            ("Exclude mounting holes (MH*)", True),
-        ])
-        self.bom_exclude_dnp, self.bom_exclude_virtual, self.bom_exclude_fid, self.bom_exclude_tp, self.bom_exclude_mh = filters
-        
-        # Grouping
-        grp_header = wx.StaticText(panel, label="GROUPING")
-        grp_header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        grp_header.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        sizer.Add(grp_header, 0, wx.LEFT | wx.BOTTOM, 16)
-        
-        self.bom_group_by = wx.Choice(panel, choices=[
-            "Value + Footprint",
-            "Value only",
-            "Footprint only",
-            "No grouping"
-        ])
-        self.bom_group_by.SetSelection(0)
-        self.bom_group_by.SetBackgroundColour(hex_to_colour(self._theme["bg_button"]))
-        self.bom_group_by.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        sizer.Add(self.bom_group_by, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 16)
-        
-        # Sort
-        sort_header = wx.StaticText(panel, label="SORT BY")
-        sort_header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        sort_header.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        sizer.Add(sort_header, 0, wx.LEFT | wx.BOTTOM, 16)
-        
-        self.bom_sort_by = wx.Choice(panel, choices=[
-            "Reference (natural)",
-            "Value",
-            "Footprint",
-            "Quantity"
-        ])
-        self.bom_sort_by.SetSelection(0)
-        self.bom_sort_by.SetBackgroundColour(hex_to_colour(self._theme["bg_button"]))
-        self.bom_sort_by.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        sizer.Add(self.bom_sort_by, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 16)
-        
-        # Blacklist
-        bl_header = wx.StaticText(panel, label="CUSTOM BLACKLIST (one per line)")
-        bl_header.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        bl_header.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        sizer.Add(bl_header, 0, wx.LEFT | wx.BOTTOM, 16)
-        
-        self.bom_blacklist = wx.TextCtrl(panel, style=wx.TE_MULTILINE, size=(-1, 80))
-        self.bom_blacklist.SetBackgroundColour(self._get_editor_bg())
-        self.bom_blacklist.SetForegroundColour(self._get_editor_text())
-        self.bom_blacklist.SetHint("e.g. LOGO*, H*")
-        sizer.Add(self.bom_blacklist, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 16)
-        
-        # Export BOM button - unified rounded style
-        self.gen_bom_btn = RoundedButton(
-            panel,
-            label="Export BOM -> Notes",
-            icon="",
-            size=(-1, 52),
-            bg_color=self._theme["accent_blue"],
-            fg_color="#FFFFFF",
-            corner_radius=10,
-            font_size=12,
-            font_weight=wx.FONTWEIGHT_BOLD
-        )
-        self.gen_bom_btn.Bind_Click(self._on_generate_bom)
-        sizer.Add(self.gen_bom_btn, 0, wx.EXPAND | wx.ALL, 20)
-        
-        panel.SetSizer(sizer)
-        return panel
-    
-    def _on_generate_bom(self, event):
-        """Generate BOM and insert into Notes."""
-        try:
-            bom_text = self._generate_bom_text()
-            if bom_text:
-                current = self._get_note_content()
-                if current and not current.endswith("\n"):
-                    current += "\n"
-                current += "\n" + bom_text
-                self._set_note_content(current)
-                if self.text_editor:
-                    self.text_editor.SetInsertionPointEnd()
-                self._apply_editor_colors()
-                self._show_tab(0)
-        except Exception as e:
-            pass
-    
-    def _generate_bom_text(self):
-        """Generate BOM text."""
-        try:
-            import pcbnew
-            import fnmatch
-        except ImportError:
-            return "## BOM\n\n*pcbnew not available*\n"
-        
-        try:
-            board = pcbnew.GetBoard()
-            if not board:
-                return "## BOM\n\n*No board loaded*\n"
-        except:
-            return "## BOM\n\n*Could not access board*\n"
-        
-        blacklist = []
-        if self.bom_exclude_fid.GetValue():
-            blacklist.append("FID*")
-        if self.bom_exclude_tp.GetValue():
-            blacklist.append("TP*")
-        if self.bom_exclude_mh.GetValue():
-            blacklist.append("MH*")
-        
-        custom_bl = self.bom_blacklist.GetValue().strip()
-        if custom_bl:
-            blacklist.extend([p.strip() for p in custom_bl.split("\n") if p.strip()])
-        
-        components = []
-        try:
-            for fp in board.GetFootprints():
-                ref = fp.GetReference()
-                value = fp.GetValue()
-                footprint = fp.GetFPIDAsString().split(":")[-1] if fp.GetFPIDAsString() else ""
-                
-                if self.bom_exclude_dnp.GetValue():
-                    try:
-                        attrs = fp.GetAttributes()
-                        if hasattr(pcbnew, "FP_EXCLUDE_FROM_BOM") and (attrs & pcbnew.FP_EXCLUDE_FROM_BOM):
-                            continue
-                    except:
-                        pass
-                
-                if self.bom_exclude_virtual.GetValue():
-                    try:
-                        attrs = fp.GetAttributes()
-                        if hasattr(pcbnew, "FP_BOARD_ONLY") and (attrs & pcbnew.FP_BOARD_ONLY):
-                            continue
-                    except:
-                        pass
-                
-                skip = False
-                for pattern in blacklist:
-                    if fnmatch.fnmatch(ref.upper(), pattern.upper()):
-                        skip = True
-                        break
-                if skip:
-                    continue
-                
-                components.append({"ref": ref, "value": value, "footprint": footprint})
-        except:
-            return "## BOM\n\n*Error reading components*\n"
-        
-        if not components:
-            return "## BOM\n\n*No components found*\n"
-        
-        # Group
-        group_mode = self.bom_group_by.GetSelection()
-        grouped = {}
-        
-        for comp in components:
-            if group_mode == 0:
-                key = (comp["value"], comp["footprint"])
-            elif group_mode == 1:
-                key = (comp["value"], "")
-            elif group_mode == 2:
-                key = ("", comp["footprint"])
-            else:
-                key = (comp["ref"], comp["value"], comp["footprint"])
-            
-            if key not in grouped:
-                grouped[key] = {"refs": [], "value": comp["value"], "footprint": comp["footprint"]}
-            grouped[key]["refs"].append(comp["ref"])
-        
-        # Sort refs naturally
-        import re
-        def natural_key(s):
-            return [int(c) if c.isdigit() else c.lower() for c in re.split(r"(\d+)", s)]
-        
-        for data in grouped.values():
-            data["refs"].sort(key=natural_key)
-        
-        # Sort groups
-        sort_mode = self.bom_sort_by.GetSelection()
-        items = list(grouped.values())
-        
-        if sort_mode == 0:
-            items.sort(key=lambda x: natural_key(x["refs"][0]))
-        elif sort_mode == 1:
-            items.sort(key=lambda x: x["value"].lower())
-        elif sort_mode == 2:
-            items.sort(key=lambda x: x["footprint"].lower())
-        elif sort_mode == 3:
-            items.sort(key=lambda x: -len(x["refs"]))
-        
-        # Build output
-        lines = ["## BOM - " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), ""]
-        
-        # Header
-        header_parts = []
-        if self.bom_show_qty.GetValue():
-            header_parts.append("Qty")
-        if self.bom_show_value.GetValue():
-            header_parts.append("Value")
-        if self.bom_show_fp.GetValue():
-            header_parts.append("Footprint")
-        if self.bom_show_refs.GetValue():
-            header_parts.append("References")
-        
-        lines.append("| " + " | ".join(header_parts) + " |")
-        lines.append("|" + "|".join(["---"] * len(header_parts)) + "|")
-        
-        for item in items:
-            row = []
-            if self.bom_show_qty.GetValue():
-                row.append(str(len(item["refs"])))
-            if self.bom_show_value.GetValue():
-                row.append(item["value"])
-            if self.bom_show_fp.GetValue():
-                row.append(item["footprint"])
-            if self.bom_show_refs.GetValue():
-                refs_str = ", ".join(["@" + r for r in item["refs"][:5]])
-                if len(item["refs"]) > 5:
-                    refs_str += " +" + str(len(item["refs"])-5) + " more"
-                row.append(refs_str)
-            lines.append("| " + " | ".join(row) + " |")
-        
-        lines.append("")
-        lines.append("**Total unique groups:** " + str(len(items)))
-        lines.append("**Total components:** " + str(sum(len(i["refs"]) for i in items)))
-        
-        return "\n".join(lines)
+    # Version Log Tab methods are provided by VersionLogTabMixin
     
     # ============================================================
     # IMPORT HANDLER
@@ -2964,25 +2069,16 @@ class KiNotesMainPanel(wx.Panel):
             wx.MessageBox(f"Error importing all metadata: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
     
     def _insert_text(self, text):
-        """Insert text at cursor or end, handling tables properly for Visual Editor."""
+        """Insert text at cursor or end, handling markdown formatting for Visual Editor."""
         try:
             # Check if we're in Visual Editor mode
             if self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor:
-                # Check if text contains markdown table
-                has_markdown_table = '|' in text and any(
-                    line.strip().startswith('|') and line.strip().endswith('|') 
-                    for line in text.split('\n')
-                )
-                
-                if has_markdown_table:
-                    # Use the visual editor's markdown formatter for proper table rendering
-                    try:
-                        self.visual_editor.insert_markdown_as_formatted(text)
-                    except Exception as table_err:
-                        # Fallback: insert as plain text if table parsing fails
-                        self.visual_editor.editor.WriteText(text + "\n")
-                else:
-                    # No tables - insert directly into editor
+                # Always use markdown formatter for proper rendering of headings, tables, bold, etc.
+                try:
+                    self.visual_editor.insert_markdown_as_formatted(text)
+                except Exception as format_err:
+                    # Fallback: insert as plain text if parsing fails
+                    print(f"[KiNotes] Markdown format error: {format_err}")
                     self.visual_editor.editor.WriteText(text + "\n")
                     
                 # Move cursor to end and mark as modified
@@ -3020,7 +2116,9 @@ class KiNotesMainPanel(wx.Panel):
             self._save_notes()
             self._save_todos()
             wx.MessageBox("Notes saved successfully!", "Saved", wx.OK | wx.ICON_INFORMATION)
+            self._log_event("save", EventLevel.SAVE, "Manual save completed")
         except:
+            self._log_event("save", EventLevel.ERROR, "Manual save failed")
             pass
     
     def _on_text_changed(self, event):
@@ -3110,15 +2208,28 @@ class KiNotesMainPanel(wx.Panel):
         
         try:
             todos = self.notes_manager.load_todos()
-            for todo in todos:
-                time_spent = todo.get("time_spent", 0)
-                history = todo.get("history", [])
-                self._add_todo_item(
-                    todo.get("text", ""), 
-                    todo.get("done", False),
-                    time_spent,
-                    history
-                )
+            if todos:
+                for todo in todos:
+                    time_spent = todo.get("time_spent", 0)
+                    history = todo.get("history", [])
+                    self._add_todo_item(
+                        todo.get("text", ""), 
+                        todo.get("done", False),
+                        time_spent,
+                        history
+                    )
+            else:
+                # Create 3 default template tasks for new projects
+                self._add_todo_item("Schematic Review", False)
+                self._add_todo_item("Layout Check", False)
+                self._add_todo_item("Design Verification", False)
+                self._save_todos()  # Save defaults
+        except:
+            pass
+        
+        # Load version log
+        try:
+            self._load_version_log()
         except:
             pass
         
@@ -3146,25 +2257,162 @@ class KiNotesMainPanel(wx.Panel):
                     "is_running": timer_data.get("is_running", False)
                 })
             self.notes_manager.save_todos(todos)
-        except:
-            pass
+        except Exception as e:
+            print(f"[KiNotes] Todo save warning: {e}")
     
     def force_save(self):
-        """Force save all data."""
-        self._save_notes()
-        self._save_todos()
-    
-    def cleanup(self):
-        """Cleanup timer resources and stop running timers."""
-        # Stop any running task timers
-        if self.time_tracker.current_running_task_id is not None:
-            self.time_tracker.stop_task(self.time_tracker.current_running_task_id)
-        
-        # Save any pending data
-        self.force_save()
+        """Force save all data with full error protection."""
+        try:
+            self._save_notes()
+        except Exception as e:
+            print(f"[KiNotes] Notes save error: {e}")
         
         try:
-            if self._auto_save_timer:
+            self._save_todos()
+        except Exception as e:
+            print(f"[KiNotes] Todos save error: {e}")
+        
+        try:
+            self._save_version_log()
+        except Exception as e:
+            print(f"[KiNotes] Version log save error: {e}")
+        
+        try:
+            # CRITICAL: Save settings to prevent corruption on restart
+            self._save_color_settings()
+        except Exception as e:
+            print(f"[KiNotes] Settings save error: {e}")
+        
+        try:
+            # Auto-export work diary on save
+            self._auto_export_diary_on_close()
+        except Exception as e:
+            print(f"[KiNotes] Diary export error: {e}")
+    
+    def cleanup(self):
+        """Cleanup ALL resources - critical for repeated open/close cycles."""
+        print("[KiNotes] Starting comprehensive cleanup...")
+        
+        # 1. Stop task timer
+        try:
+            if hasattr(self, 'time_tracker') and self.time_tracker:
+                if self.time_tracker.current_running_task_id is not None:
+                    self.time_tracker.stop_task(self.time_tracker.current_running_task_id)
+                print("[KiNotes] Task timer stopped")
+        except Exception as e:
+            print(f"[KiNotes] Task timer cleanup error: {e}")
+        
+        # 2. Stop auto-save timer
+        try:
+            if hasattr(self, '_auto_save_timer') and self._auto_save_timer:
                 self._auto_save_timer.Stop()
-        except:
-            pass
+                self._auto_save_timer = None
+                print("[KiNotes] Auto-save timer stopped")
+        except Exception as e:
+            print(f"[KiNotes] Auto-save timer cleanup error: {e}")
+        
+        # 3. Unbind all event handlers
+        try:
+            self.Unbind(wx.EVT_TIMER)
+            self.Unbind(wx.EVT_TEXT)
+            self.Unbind(wx.EVT_TEXT_ENTER)
+            print("[KiNotes] Event handlers unbound")
+        except Exception as e:
+            print(f"[KiNotes] Event unbind warning: {e}")
+        
+        # 4. Save final data
+        try:
+            self.force_save()
+            print("[KiNotes] Final data saved")
+        except Exception as e:
+            print(f"[KiNotes] Final save error: {e}")
+        
+        # 5. Cleanup visual editor (release wx resources)
+        try:
+            if hasattr(self, 'visual_editor') and self.visual_editor:
+                # Call the visual editor's cleanup method
+                try:
+                    self.visual_editor.cleanup()
+                except Exception as e:
+                    print(f"[KiNotes] Visual editor cleanup method warning: {e}")
+                
+                # Destroy the editor
+                try:
+                    self.visual_editor.Destroy()
+                except Exception as e:
+                    print(f"[KiNotes] Visual editor destroy warning: {e}")
+                
+                self.visual_editor = None
+                print("[KiNotes] Visual editor cleaned up")
+        except Exception as e:
+            print(f"[KiNotes] Visual editor cleanup warning: {e}")
+        
+        # 6. Cleanup markdown editor (release wx resources)
+        try:
+            if hasattr(self, '_text_control') and self._text_control:
+                self._text_control.Unbind(wx.EVT_TEXT)
+                print("[KiNotes] Markdown editor cleaned up")
+        except Exception as e:
+            print(f"[KiNotes] Markdown editor cleanup warning: {e}")
+        
+        # 7. Cleanup color picker (release wx resources)
+        try:
+            if hasattr(self, '_bg_color_picker'):
+                if hasattr(self._bg_color_picker, 'Unbind'):
+                    self._bg_color_picker.Unbind(wx.EVT_COLOURPICKER_CHANGED)
+            if hasattr(self, '_text_color_picker'):
+                if hasattr(self._text_color_picker, 'Unbind'):
+                    self._text_color_picker.Unbind(wx.EVT_COLOURPICKER_CHANGED)
+            print("[KiNotes] Color pickers cleaned up")
+        except Exception as e:
+            print(f"[KiNotes] Color picker cleanup warning: {e}")
+        
+        # 8. Cleanup net linker (if active)
+        try:
+            if hasattr(self, 'net_linker') and self.net_linker:
+                self.net_linker = None
+                print("[KiNotes] Net linker cleaned up")
+        except Exception as e:
+            print(f"[KiNotes] Net linker cleanup warning: {e}")
+        
+        # 9. Cleanup designator linker (if active)
+        try:
+            if hasattr(self, 'designator_linker') and self.designator_linker:
+                self.designator_linker = None
+                print("[KiNotes] Designator linker cleaned up")
+        except Exception as e:
+            print(f"[KiNotes] Designator linker cleanup warning: {e}")
+        
+        # 10. Cleanup notes manager
+        try:
+            if hasattr(self, 'notes_manager') and self.notes_manager:
+                self.notes_manager = None
+                print("[KiNotes] Notes manager cleaned up")
+        except Exception as e:
+            print(f"[KiNotes] Notes manager cleanup warning: {e}")
+        
+        # 11. Cleanup debug logger
+        try:
+            if hasattr(self, 'debug_logger') and self.debug_logger:
+                self.debug_logger = None
+                print("[KiNotes] Debug logger cleaned up")
+        except Exception as e:
+            print(f"[KiNotes] Debug logger cleanup warning: {e}")
+        
+        # 12. Mark clean shutdown for crash detection (last)
+        try:
+            if self.crash_safety and hasattr(self.crash_safety, 'mark_clean_shutdown'):
+                self.crash_safety.mark_clean_shutdown()
+                print("[KiNotes] Crash safety marked clean shutdown")
+        except Exception as e:
+            print(f"[KiNotes] Crash safety cleanup warning: {e}")
+        
+        # 13. Clear crash safety reference
+        try:
+            self.crash_safety = None
+            print("[KiNotes] Crash safety reference cleared")
+        except Exception as e:
+            print(f"[KiNotes] Crash safety cleanup error: {e}")
+        
+        print("[KiNotes] Cleanup complete")
+

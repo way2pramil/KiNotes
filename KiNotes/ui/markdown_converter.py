@@ -293,16 +293,21 @@ class MarkdownToRichText:
     Convert Markdown text to wx.richtext.RichTextCtrl formatting.
     """
     
-    def __init__(self, editor: rt.RichTextCtrl, dark_mode: bool = False):
+    def __init__(self, editor: rt.RichTextCtrl, dark_mode: bool = False, 
+                 text_color: wx.Colour = None, bg_color: wx.Colour = None):
         """
         Initialize converter.
         
         Args:
             editor: Target RichTextCtrl
             dark_mode: Use dark theme colors
+            text_color: Custom text color (uses theme default if None)
+            bg_color: Custom background color (uses theme default if None)
         """
         self.editor = editor
         self.dark_mode = dark_mode
+        self.custom_text_color = text_color
+        self.custom_bg_color = bg_color
         self.parser = MarkdownParser()
     
     def convert(self, markdown_text: str):
@@ -345,48 +350,57 @@ class MarkdownToRichText:
     
     def _get_text_color(self) -> wx.Colour:
         """Get appropriate text color for theme."""
+        if self.custom_text_color:
+            return self.custom_text_color
         if self.dark_mode:
             return wx.Colour(230, 230, 230)
         return wx.Colour(50, 50, 50)
     
     def _get_heading_color(self) -> wx.Colour:
-        """Get heading text color."""
+        """Get heading text color - uses custom theme color if available."""
+        if self.custom_text_color:
+            return self.custom_text_color
         if self.dark_mode:
             return wx.Colour(255, 255, 255)
         return wx.Colour(30, 30, 30)
     
     def _write_heading(self, block: MarkdownBlock):
         """Write heading block."""
-        # Set heading style
-        attr = rt.RichTextAttr()
-        
+        # Determine font size based on heading level
         if block.level == 1:
-            attr.SetFontSize(22)
+            font_size = 22
         elif block.level == 2:
-            attr.SetFontSize(18)
+            font_size = 18
         else:
-            attr.SetFontSize(14)
+            font_size = 14
         
-        attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
-        attr.SetTextColour(self._get_heading_color())
-        attr.SetParagraphSpacingBefore(16)
-        attr.SetParagraphSpacingAfter(8)
+        heading_color = self._get_heading_color()
         
-        self.editor.BeginStyle(attr)
-        self._write_inline_text(block.content)
+        # Set paragraph attributes (spacing)
+        para_attr = rt.RichTextAttr()
+        para_attr.SetParagraphSpacingBefore(16)
+        para_attr.SetParagraphSpacingAfter(8)
+        self.editor.BeginStyle(para_attr)
+        
+        # Write inline text with heading's font size and bold
+        self._write_inline_text(block.content, base_font_size=font_size, base_bold=True, base_color=heading_color)
+        
         self.editor.EndStyle()
         self.editor.Newline()
     
     def _write_paragraph(self, block: MarkdownBlock):
         """Write paragraph block."""
-        attr = rt.RichTextAttr()
-        attr.SetFontSize(11)
-        attr.SetTextColour(self._get_text_color())
-        attr.SetParagraphSpacingBefore(4)
-        attr.SetParagraphSpacingAfter(4)
+        text_color = self._get_text_color()
         
-        self.editor.BeginStyle(attr)
-        self._write_inline_text(block.content)
+        # Set paragraph attributes
+        para_attr = rt.RichTextAttr()
+        para_attr.SetParagraphSpacingBefore(4)
+        para_attr.SetParagraphSpacingAfter(4)
+        self.editor.BeginStyle(para_attr)
+        
+        # Write inline text with normal font size
+        self._write_inline_text(block.content, base_font_size=11, base_bold=False, base_color=text_color)
+        
         self.editor.EndStyle()
         self.editor.Newline()
     
@@ -394,45 +408,54 @@ class MarkdownToRichText:
         """Write bullet list item."""
         indent = "  " * block.level
         bullet = "•"
+        text_color = self._get_text_color()
         
         attr = rt.RichTextAttr()
         attr.SetFontSize(11)
-        attr.SetTextColour(self._get_text_color())
+        attr.SetTextColour(text_color)
         
         self.editor.BeginStyle(attr)
         self.editor.WriteText(f"{indent}{bullet} ")
-        self._write_inline_text(block.content)
         self.editor.EndStyle()
+        
+        # Write content with inline formatting
+        self._write_inline_text(block.content, base_font_size=11, base_bold=False, base_color=text_color)
         self.editor.Newline()
     
     def _write_numbered(self, block: MarkdownBlock):
         """Write numbered list item."""
         indent = "  " * block.level
+        text_color = self._get_text_color()
         
         attr = rt.RichTextAttr()
         attr.SetFontSize(11)
-        attr.SetTextColour(self._get_text_color())
+        attr.SetTextColour(text_color)
         
         self.editor.BeginStyle(attr)
         # We don't track actual numbers, just use placeholder
         self.editor.WriteText(f"{indent}1. ")
-        self._write_inline_text(block.content)
         self.editor.EndStyle()
+        
+        # Write content with inline formatting
+        self._write_inline_text(block.content, base_font_size=11, base_bold=False, base_color=text_color)
         self.editor.Newline()
     
     def _write_checkbox(self, block: MarkdownBlock):
         """Write checkbox list item."""
         indent = "  " * block.level
         checkbox = "☑" if block.checked else "☐"
+        text_color = self._get_text_color()
         
         attr = rt.RichTextAttr()
         attr.SetFontSize(11)
-        attr.SetTextColour(self._get_text_color())
+        attr.SetTextColour(text_color)
         
         self.editor.BeginStyle(attr)
         self.editor.WriteText(f"{indent}{checkbox} ")
-        self._write_inline_text(block.content)
         self.editor.EndStyle()
+        
+        # Write content with inline formatting
+        self._write_inline_text(block.content, base_font_size=11, base_bold=False, base_color=text_color)
         self.editor.Newline()
     
     def _write_code(self, block: MarkdownBlock):
@@ -510,15 +533,31 @@ class MarkdownToRichText:
         
         self.editor.Newline()
     
-    def _write_inline_text(self, text: str):
-        """Write text with inline formatting."""
+    def _write_inline_text(self, text: str, base_font_size: int = 11, base_bold: bool = False, base_color: wx.Colour = None):
+        """
+        Write text with inline formatting.
+        
+        Args:
+            text: The text to write with inline markdown parsed
+            base_font_size: Font size to use (inherited from parent block like heading)
+            base_bold: Whether base text should be bold (e.g., headings)
+            base_color: Base text color (if None, uses theme default)
+        """
         spans = self.parser.parse_inline(text)
+        
+        if base_color is None:
+            base_color = self._get_text_color()
         
         for span in spans:
             attr = rt.RichTextAttr()
-            attr.SetFontSize(11)
-            attr.SetTextColour(self._get_text_color())
+            attr.SetFontSize(base_font_size)
+            attr.SetTextColour(base_color)
             
+            # Apply base bold if specified (for headings)
+            if base_bold:
+                attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
+            
+            # Apply inline formatting on top of base
             if span.bold:
                 attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
             if span.italic:
@@ -724,7 +763,8 @@ class RichTextToMarkdown:
 # UTILITY FUNCTIONS
 # ============================================================
 
-def markdown_to_richtext(editor: rt.RichTextCtrl, markdown_text: str, dark_mode: bool = False):
+def markdown_to_richtext(editor: rt.RichTextCtrl, markdown_text: str, dark_mode: bool = False,
+                         text_color: wx.Colour = None, bg_color: wx.Colour = None):
     """
     Convenience function to convert Markdown to RichText.
     
@@ -732,8 +772,10 @@ def markdown_to_richtext(editor: rt.RichTextCtrl, markdown_text: str, dark_mode:
         editor: Target RichTextCtrl
         markdown_text: Markdown string
         dark_mode: Use dark theme colors
+        text_color: Custom text color (optional)
+        bg_color: Custom background color (optional)
     """
-    converter = MarkdownToRichText(editor, dark_mode)
+    converter = MarkdownToRichText(editor, dark_mode, text_color, bg_color)
     converter.convert(markdown_text)
 
 

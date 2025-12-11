@@ -4,78 +4,108 @@
   <img src="KiNotes/resources/icon.png" alt="KiNotes" width="64"/>
 </p>
 
-**KiNotes** brings real engineering notes **directly inside KiCad pcbnew** — with zero friction.  
-Write design decisions, link components with `@R1` syntax, import board metadata, and export beautiful PDFs.
+**Your design decisions shouldn't live in a separate notepad.** KiNotes keeps engineering notes right inside KiCad—where they belong.
 
-> 🎯 **Target:** KiCad 9.0+ only — built for modern KiCad with Python 3 and wxPython 4.
+> 🎯 **For KiCad 9.0+** — Built for modern KiCad with Python 3 and wxPython 4.
+
+---
+
+## The Problem We Solve
+
+Every PCB designer has been there:
+
+*"Why did I choose this capacitor value?"*  
+*"What was wrong with Rev A again?"*  
+*"Where did I write down that test result?"*
+
+Design notes end up scattered across text files, sticky notes, emails, and memory. When you need them months later—during a redesign or debugging session—they're either lost or useless without context.
+
+**KiNotes fixes this by keeping notes where they matter: inside your KiCad project.**
+
+---
+
+## 🔗 Smart-Link: Click to Highlight
+
+This is what makes KiNotes different. When you mention a component or net in your notes, it becomes **clickable**.
+
+**Type naturally:**
+> "The filtering on the ADC input needs work. R23 and C45 values might be too aggressive for the signal bandwidth we need."
+
+**Click `R23` → that resistor lights up on your PCB.** No searching. No scrolling through the schematic. One click.
+
+This works with:
+- **Component designators**: R1, C5, U3, LED1, SW2, Q7...
+- **Net names**: VCC, GND, SDA, UART_TX, Motor_PWM...
+- **Custom prefixes**: Add your own (MOV, NTC, PTC, whatever you use)
+
+The link works both ways—your notes stay connected to your design, not floating in a separate file.
+
+---
+
+## 📋 Task Tracking That Stays With Your PCB
+
+Hardware projects have TODOs that span weeks or months. "Fix thermal relief on U5" doesn't belong in a generic task app—it belongs with the board.
+
+KiNotes includes a simple todo list:
+- Tasks saved in `.kinotes/` folder alongside your project
+- Check off items as you complete them
+- Optional time tracking per task (for billing or personal records)
+- Everything stays local—no cloud, no accounts, no sync issues
+
+---
+
+## 💾 Stay Local, Stay With Your PCB
+
+KiNotes stores everything in a `.kinotes/` folder inside your project directory:
+
+```
+my_project/
+├── my_project.kicad_pcb
+├── my_project.kicad_sch
+└── .kinotes/
+    ├── KiNotes_my_project.md    ← Your notes
+    ├── todos.json                ← Task list
+    └── settings.json             ← Preferences
+```
+
+**Why this matters:**
+- **Git-friendly**: Notes version with your design
+- **Portable**: Move project = move notes
+- **No cloud dependency**: Works offline, forever
+- **No accounts**: Just files on your disk
 
 ---
 
 ## ✨ Features
 
-### 📝 Dual-Mode Notes Editor
-- **Visual Editor (WYSIWYG)** — Notion-like rich text editing with toolbar
-  - Bold, Italic, Underline, Strikethrough formatting
-  - Headings (H1, H2, H3)
-  - Bullet lists, numbered lists, checkboxes
-  - Insert tables, images, links, dividers, timestamps
-  - Keyboard shortcuts (Ctrl+B, Ctrl+I, etc.)
-- **Markdown Editor** — Power user mode with raw markdown
-  - Live preview formatting
-  - `- [ ]` / `- [x]` checkboxes with strikethrough
-- **Auto-link designators** — type `@R1`, `@U3`, `@C5` → highlights component on PCB
-- **Auto-save** on every change, close, or outside click
-- **Git-friendly** `.kinotes/` folder in project directory
+### Core (Stable)
+| Feature | What It Does |
+|---------|--------------|
+| **Visual Editor** | Notion-like rich text—bold, lists, headings, tables |
+| **Smart-Link Designators** | Click R1, U3, C5 → highlight on PCB |
+| **Smart-Link Nets** | Click GND, VCC, SDA → highlight traces and pads |
+| **Auto-Save** | Never lose work—saves on every change |
+| **Dark/Light Mode** | Custom color schemes for both themes |
+| **Import Metadata** | Pull BOM, stackup, board size into notes |
+| **Export PDF** | Print-ready documentation |
+| **Task List** | Simple todos that live with your project |
+| **Time Tracking** | Per-task stopwatch with session history |
 
-### 🎨 Modern UI & Theming
-- **Dark/Light mode** toggle with custom color schemes
-- **iOS-inspired** clean, minimal interface
-- **User-selectable colors** — 5 background + 5 text color presets per theme
-- **Dockable panel** — dock left/right like Properties panel, or use popup
-- **Icon-based toolbar** — intuitive buttons
+### Beta (Experimental)
+| Feature | Status |
+|---------|--------|
+| **Markdown Editor Mode** | Toggle between visual and raw markdown |
+| **Table Insert** | Add tables in visual editor |
+| **BOM Tab** | Dedicated Bill of Materials generator |
+| **Changelog Tab** | Version log for design revisions |
+| **Debug Panel** | Event logging for troubleshooting |
 
-### 🔗 PCB Integration (KiCad 9+)
-- **Import Board Metadata** with one-click dropdown:
-  - **BOM (Interactive)** — IBOM-style dialog with column selection, grouping, and filtering
-  - BOM (Quick Insert)
-  - Stackup configuration
-  - Board size & parameters
-  - Differential pairs
-  - Netlist summary
-  - Layer information
-  - Drill table
-  - Design rules
-- **Click `@REF`** → jump to and highlight component in pcbnew
-- **Component metadata preview** — value, footprint, layer, nets
-
-> **Note:** Table-based imports (BOM, Layers, Stackup, Drill Table) currently require Markdown mode
-
-### 📋 IBOM-Style BOM Generator
-- **Column Selection** — Reference, Value, Footprint, Qty, Description, Manufacturer, MPN, Supplier, SPN, Layer, Position, Rotation, DNP
-- **Grouping Options** — By Value+Footprint, Value only, Footprint only, or No grouping
-- **Sort Options** — By Reference, Value, Footprint, or Quantity
-- **Filters** — Exclude DNP, Fiducials, Test Points
-- **Output Formats** — Markdown Table, Simple List, CSV-style
-
-### 📤 Export
-- **Export to PDF** with PCB project name as filename
-- **Export to Markdown** for documentation
-- **Print-ready** formatting
-
-### 🎨 Modern UI
-- **iOS-inspired** clean, minimal interface
-- **Follows KiCad UI** patterns for natural integration
-- **Dockable panel** — dock left/right like Properties panel, or use popup
-- **Icon-based toolbar** — intuitive buttons
-- **Dark/Light mode** — with customizable color schemes
-- **PCBtools.xyz branding** in footer
-- **Time tracking** — per-task stopwatch with work diary export
-
----
-
-## 📸 Screenshots
-
-*(Coming soon)*
+### Planned
+| Feature | Status |
+|---------|--------|
+| **KiCad Plugin Manager** | Pending submission |
+| **Table rendering in Visual** | In development |
+| **Image embed** | Planned |
 
 ---
 
@@ -83,12 +113,7 @@ Write design decisions, link components with `@R1` syntax, import board metadata
 
 ### Installation
 
-**Option 1: KiCad Plugin Manager** *(Recommended)*
-1. KiCad → **Tools → Plugin and Content Manager**
-2. Search **KiNotes**
-3. Click **Install**
-
-**Option 2: Manual Installation**
+**Manual Installation** (until PCM approval)
 1. Download the latest release
 2. Copy `KiNotes/` folder to:
    - **Windows:** `%APPDATA%\kicad\9.0\scripting\plugins\`
@@ -96,103 +121,74 @@ Write design decisions, link components with `@R1` syntax, import board metadata
    - **Linux:** `~/.config/kicad/9.0/scripting/plugins/`
 3. Restart KiCad
 
-### Usage
-1. Open a PCB in pcbnew
-2. Click the **KiNotes** toolbar button (or **Tools → External Plugins → KiNotes**)
-3. Start writing notes!
+### First Use
+1. Open any PCB in pcbnew
+2. Click **KiNotes** button in toolbar (or Tools → External Plugins → KiNotes)
+3. Start writing
+
+That's it. Notes auto-save. Links work immediately.
 
 ---
 
-## 📖 Syntax Guide
+## 📖 The Story Behind KiNotes
 
-### To-Do Lists
-```markdown
-- [ ] Review power section
-- [x] Verify differential pairs
-- [ ] Check thermal reliefs
-```
+Every hardware project starts with excitement—that rush when a new board idea clicks into place. But somewhere between the first schematic and the final layout, things get messy. You're routing traces at 2 AM, chasing DRC errors, fixing the same footprint issue for the third time.
 
-### Component Links
-```markdown
-Check @U3 orientation before assembly.
-The decoupling caps @C1 @C2 @C3 should be close to @U1.
-```
-> Click any `@REF` to highlight it on the PCB!
+Here's what I noticed after years of PCB work: **the projects that succeeded weren't always the most clever designs. They were the ones with clear notes.** The ones where I could remember why I chose that capacitor value, or what test failed on Rev A.
 
-### Insert Metadata
-Click the **Import Metadata** dropdown and select:
-- `${BOM}` — Insert BOM table
-- `${STACKUP}` — Insert layer stackup
-- `${BOARD_SIZE}` — Insert board dimensions
-- `${DIFF_PAIRS}` — Insert differential pairs
-- `${NETLIST}` — Insert net summary
-- `${DRILL_TABLE}` — Insert drill information
+KiNotes started as a simple text file I kept open next to KiCad. Nothing fancy—just a scratch pad for design decisions. But I kept losing it, forgetting to save, opening the wrong version. The notes lived outside the project, and that was the problem.
 
-### Images
-```markdown
-![Block Diagram](./images/block_diagram.png)
-```
+**So I built this.** A notes panel that lives inside KiCad, saves automatically with your project, and stays out of your way until you need it. No cloud accounts, no sync conflicts, no friction.
+
+The philosophy hasn't changed: **a note written today saves hours tomorrow.** A design decision documented now prevents the same argument six months later. It's not about being organized—it's about not repeating your own mistakes.
+
+KiNotes is open source because good tools should be shared. If it helps you ship better boards, that's the goal.
+
+*Built for engineers who've learned that memory is unreliable, but good notes aren't.*
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Project Structure
 
 ```
 KiNotes/
-├── __init__.py              # Package init & plugin registration
-├── kinotes_action.py        # Main action plugin entry point
+├── kinotes_action.py        # Plugin entry point
 ├── metadata.json            # KiCad PCM metadata
-├── ui/
-│   ├── main_panel.py        # Main notes panel UI
-│   ├── visual_editor.py     # WYSIWYG rich text editor
-│   ├── markdown_converter.py# Markdown ↔ RichText conversion
-│   ├── toolbar.py           # Icon toolbar
-│   ├── bom_dialog.py        # IBOM-style BOM generator
-│   └── styles.py            # iOS-like styling
 ├── core/
-│   ├── notes_manager.py     # Load/save notes
-│   ├── designator_linker.py # @REF → PCB highlight
-│   ├── metadata_extractor.py# BOM, stackup, netlist extraction
+│   ├── notes_manager.py     # File I/O for .kinotes/
+│   ├── designator_linker.py # Smart-link: click → highlight component
+│   ├── net_linker.py        # Smart-link: click → highlight net
+│   ├── metadata_extractor.py# BOM, stackup extraction
 │   └── pdf_exporter.py      # PDF export
-├── resources/
-│   ├── icon.png             # Toolbar icon (24x24)
-│   ├── icon.svg             # PCM icon (64x64)
-│   └── icons/               # Additional icons
-└── .kinotes/                # Per-project notes storage
-    └── KiNotes_<project>.md # Project-named notes file
+├── ui/
+│   ├── main_panel.py        # Main coordinator
+│   ├── visual_editor.py     # Rich text editor
+│   ├── themes.py            # Dark/Light color schemes
+│   ├── dialogs/             # Settings, About
+│   ├── tabs/                # Todo, BOM, Changelog
+│   └── components/          # Buttons, icons
+└── resources/
+    └── icon.png             # Toolbar icon
 ```
-
----
-
-## 🗺️ Roadmap
-
-| Version | Features | Status |
-|---------|----------|:------:|
-| **v1.0** | Notes panel, auto-save, basic Markdown | 🟢 Done |
-| **v1.1** | `@REF` linking, component highlight | 🟢 Done |
-| **v1.2** | Metadata import (BOM, stackup, etc.) | 🟢 Done |
-| **v1.3** | Dark/Light mode, custom colors, time tracking | 🟢 Done |
-| **v1.4** | **Visual Editor (WYSIWYG)**, DPI scaling, UI scale settings | 🟢 Done |
-| **v1.4.1** | **PCM Ready**, Insert Table improvements, icon consistency | 🟢 Done |
-| **v1.5** | Table rendering in Visual Editor | 🔄 In Progress |
-| **v2.0** | KiCad Plugin Manager release | 🔄 Planned |
 
 ---
 
 ## 🔧 Requirements
 
 - **KiCad 9.0+** (Python 3.9+, wxPython 4.2+)
-- No external dependencies — pure Python + wxWidgets
+- No external dependencies
 
 ---
 
 ## 🤝 Contributing
 
-Contributions welcome!
+Contributions welcome! The codebase follows an **AI-friendly architecture**—small, focused modules that fit in a single context window.
 
 1. Fork the repository
 2. Create a feature branch
 3. Submit a pull request
+
+See `.github/copilot-instructions.md` for architecture details.
 
 ---
 
@@ -200,16 +196,16 @@ Contributions welcome!
 
 **MIT License** — free for personal and commercial use.
 
-See [LICENSE](LICENSE) for details.
-
 ---
 
 ## 👨‍💻 Author
 
 **KiNotes** by [PCBtools.xyz](https://pcbtools.xyz)
 
+Current version: **v1.4.2**
+
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by PCBtools.xyz</sub>
+  <sub>Built with ❤️ for hardware engineers who take notes</sub>
 </p>

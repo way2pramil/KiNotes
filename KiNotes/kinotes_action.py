@@ -20,11 +20,77 @@ import wx
 import wx.aui as aui
 import os
 import sys
+import traceback
+import threading
 
 # Add package to path for imports
 _plugin_dir = os.path.dirname(os.path.abspath(__file__))
 if _plugin_dir not in sys.path:
     sys.path.insert(0, _plugin_dir)
+
+
+# ============================================================
+# GLOBAL EXCEPTION HANDLER - Prevents KiCad crashes
+# ============================================================
+_original_excepthook = sys.excepthook
+
+def _kinotes_exception_handler(exc_type, exc_value, exc_tb):
+    """Global exception handler to prevent KiNotes from crashing KiCad."""
+    try:
+        # Log to console
+        error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        print(f"[KiNotes ERROR] Caught exception:\n{error_msg}")
+        
+        # Try to save user data before anything else
+        _emergency_save()
+        
+        # Show user-friendly error (non-blocking)
+        try:
+            wx.CallAfter(_show_error_dialog, str(exc_value))
+        except:
+            pass
+            
+    except Exception as e:
+        print(f"[KiNotes] Exception handler error: {e}")
+    
+    # Don't call original hook to prevent KiCad crash
+    # Only log, don't propagate
+
+
+def _emergency_save():
+    """Emergency save of user data on crash."""
+    try:
+        frame = _kinotes_instance.get('frame')
+        if frame and hasattr(frame, 'main_panel'):
+            try:
+                frame.main_panel.force_save()
+                print("[KiNotes] Emergency save completed")
+            except:
+                pass
+    except:
+        pass
+
+
+def _show_error_dialog(error_msg):
+    """Show error dialog to user."""
+    try:
+        wx.MessageBox(
+            f"KiNotes encountered an error:\n{error_msg[:200]}\n\nYour notes have been saved.",
+            "KiNotes Error",
+            wx.OK | wx.ICON_WARNING
+        )
+    except:
+        pass
+
+
+# Install global exception handler for KiNotes
+sys.excepthook = _kinotes_exception_handler
+
+
+# ============================================================
+# THREAD-SAFE LOCK FOR SINGLETON MANAGEMENT
+# ============================================================
+_instance_lock = threading.Lock()
 
 # Force reload of modules to get latest changes
 import importlib
@@ -52,16 +118,20 @@ from core.pdf_exporter import PDFExporter
 from ui.main_panel import KiNotesMainPanel
 
 # Plugin version - change this to force reload
-_PLUGIN_VERSION = "1.3.2"
-print(f"KiNotes v{_PLUGIN_VERSION} loaded - Visual Editor enabled")
+_PLUGIN_VERSION = "1.5.0"
+print(f"KiNotes v{_PLUGIN_VERSION} loaded - Crash-safe edition with atomic saves")
 
 
 # Global singleton - ensures only ONE window ever
-_kinotes_instance = {'frame': None, 'pane': None}
+_kinotes_instance = {'frame': None, 'pane': None, 'closing': False, 'opening': False}
 
 
 def get_kinotes_frame():
     """Get existing KiNotes frame if it exists and is valid."""
+    # Don't return frame during close/open operations
+    if _kinotes_instance.get('closing') or _kinotes_instance.get('opening'):
+        return None
+    
     frame = _kinotes_instance.get('frame')
     if frame is not None:
         try:
@@ -81,27 +151,54 @@ def set_kinotes_frame(frame):
     _kinotes_instance['frame'] = frame
 
 
+def is_kinotes_busy():
+    """Check if KiNotes is currently opening or closing."""
+    return _kinotes_instance.get('closing', False) or _kinotes_instance.get('opening', False)
+
+
 def close_all_kinotes_windows():
-    """Close any existing KiNotes windows."""
-    # Close tracked frame
-    frame = _kinotes_instance.get('frame')
-    if frame:
+    """Close any existing KiNotes windows safely."""
+    if _kinotes_instance.get('closing'):
+        return  # Already closing
+    
+    _kinotes_instance['closing'] = True
+    
+    try:
+        # Close tracked frame
+        frame = _kinotes_instance.get('frame')
+        if frame:
+            try:
+                if hasattr(frame, 'IsBeingDeleted') and frame.IsBeingDeleted():
+                    pass  # Already being deleted
+                else:
+                    frame.Destroy()
+            except (RuntimeError, wx.PyDeadObjectError, Exception):
+                pass
+        _kinotes_instance['frame'] = None
+        
+        # Also search for any orphaned windows - be careful with iteration
         try:
-            frame.Destroy()
+            windows_to_close = []
+            for win in wx.GetTopLevelWindows():
+                try:
+                    if win and 'KiNotes' in win.GetTitle():
+                        windows_to_close.append(win)
+                except:
+                    pass
+            
+            for win in windows_to_close:
+                try:
+                    win.Destroy()
+                except:
+                    pass
         except:
             pass
-    _kinotes_instance['frame'] = None
-    
-    # Also search for any orphaned windows
-    try:
-        for win in wx.GetTopLevelWindows():
-            try:
-                if 'KiNotes' in win.GetTitle():
-                    win.Destroy()
-            except:
-                pass
-    except:
-        pass
+        
+        # Allow pending events to process
+        wx.SafeYield()
+        
+    finally:
+        _kinotes_instance['closing'] = False
 
 
 class KiNotesFrame(wx.Frame):
@@ -121,13 +218,13 @@ class KiNotesFrame(wx.Frame):
             version = "1.4.1"
         
         # Load panel size from settings
-        panel_width = 1092  # Default width
+        panel_width = 1300  # Default width
         panel_height = 1170  # Default height
         try:
             notes_manager = NotesManager(self.project_dir)
             settings = notes_manager.load_settings()
             if settings:
-                panel_width = settings.get("panel_width", 1092)
+                panel_width = settings.get("panel_width", 1300)
                 panel_height = settings.get("panel_height", 1170)
         except:
             pass
@@ -214,14 +311,74 @@ class KiNotesFrame(wx.Frame):
         self.Bind(wx.EVT_ACTIVATE, self._on_activate)
     
     def _on_close(self, event):
-        """Handle close - save and hide."""
+        """Handle close - save and cleanup safely with full error protection."""
+        # Prevent re-entry during close
+        with _instance_lock:
+            if _kinotes_instance.get('closing'):
+                event.Skip()
+                return
+            _kinotes_instance['closing'] = True
+        
         try:
-            self.main_panel.force_save()
-            self.main_panel.cleanup()
-        except:
-            pass
-        set_kinotes_frame(None)
-        self.Destroy()
+            # PRIORITY 1: Save KiNotes data first
+            try:
+                if hasattr(self, 'main_panel') and self.main_panel:
+                    self.main_panel.force_save()
+                    print("[KiNotes] Data saved on close")
+            except Exception as e:
+                print(f"[KiNotes] Save warning: {e}")
+            
+            # PRIORITY 2: Cleanup timers and resources
+            try:
+                if hasattr(self, 'main_panel') and self.main_panel:
+                    self.main_panel.cleanup()
+            except Exception as e:
+                print(f"[KiNotes] Cleanup warning: {e}")
+            
+            # Clear global reference BEFORE destroying
+            set_kinotes_frame(None)
+            
+            # Use CallAfter for safer destruction
+            wx.CallAfter(self._safe_destroy)
+            
+        except Exception as e:
+            print(f"[KiNotes] Close error: {e}")
+            set_kinotes_frame(None)
+            with _instance_lock:
+                _kinotes_instance['closing'] = False
+        
+        # Don't skip - we handle destruction ourselves
+        event.Veto()
+    
+    def _safe_destroy(self):
+        """Safely destroy the frame after pending events."""
+        try:
+            # NOTE: force_save() already called in _on_close() before cleanup()
+            # Calling it again here would fail since cleanup() sets notes_manager = None
+            # So we skip the redundant save and just proceed to destruction cleanup
+            
+            # Unbind frame events before destroy
+            try:
+                self.Unbind(wx.EVT_CLOSE)
+                self.Unbind(wx.EVT_ACTIVATE)
+            except:
+                pass
+            
+            # Destroy main_panel reference
+            try:
+                if hasattr(self, 'main_panel'):
+                    self.main_panel = None
+            except:
+                pass
+            
+            # Destroy frame
+            self.Destroy()
+            print("[KiNotes] Frame destroyed successfully")
+        except Exception as e:
+            print(f"[KiNotes] Destroy warning: {e}")
+        finally:
+            with _instance_lock:
+                _kinotes_instance['closing'] = False
     
     def _on_activate(self, event):
         """Auto-save on deactivation."""
@@ -392,8 +549,13 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
             self.dark_icon_file_name = ""
     
     def Run(self):
-        """Run the plugin - ensures only one frame is open."""
+        """Run the plugin - ensures only one frame is open with race condition protection."""
         print("KiNotes: Run() called")
+        
+        # Prevent rapid clicking crashes
+        if is_kinotes_busy():
+            print("KiNotes: Busy (opening/closing), ignoring click")
+            return
         
         # Validate environment
         if not self._validate_environment():
@@ -421,15 +583,28 @@ class KiNotesActionPlugin(pcbnew.ActionPlugin):
                 print("KiNotes: Existing frame invalid, clearing")
                 set_kinotes_frame(None)
         
-        # Close any orphaned KiNotes windows before creating new one
-        close_all_kinotes_windows()
+        # Mark as opening to prevent race conditions
+        _kinotes_instance['opening'] = True
         
-        # Create new floating window - only one allowed
-        print("KiNotes: Creating new frame")
-        new_frame = KiNotesFrame(None, project_dir)
-        set_kinotes_frame(new_frame)
-        new_frame.Show(True)
-        print("KiNotes: Frame shown")
+        try:
+            # Close any orphaned KiNotes windows before creating new one
+            close_all_kinotes_windows()
+            
+            # Small delay to ensure cleanup is complete
+            wx.SafeYield()
+            
+            # Create new floating window - only one allowed
+            print("KiNotes: Creating new frame")
+            new_frame = KiNotesFrame(None, project_dir)
+            set_kinotes_frame(new_frame)
+            new_frame.Show(True)
+            print("KiNotes: Frame shown")
+            
+        except Exception as e:
+            print(f"KiNotes: Error creating frame: {e}")
+            set_kinotes_frame(None)
+        finally:
+            _kinotes_instance['opening'] = False
     
     def _validate_environment(self):
         """Validate environment."""
