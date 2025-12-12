@@ -30,6 +30,10 @@ functionChecklist.md
 # Local development scripts (contain user-specific paths)
 *.bat
 
+# Debug and test scripts (development only)
+debug_standalone.py
+test_*.py
+
 # KiNotes project data (project-local notes)
 .kinotes/
 
