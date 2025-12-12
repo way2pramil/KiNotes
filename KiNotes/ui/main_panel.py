@@ -1095,16 +1095,36 @@ You can safely continue working."""
     
     def _on_open_work_logs_folder(self, event):
         """Open the .kinotes work logs folder in file explorer."""
-        _, kinotes_dir = self._get_work_diary_path()
+        # Use notes_manager's project directory for consistency
+        kinotes_dir = os.path.join(self.notes_manager.project_dir, ".kinotes")
+        
+        # Ensure directory exists
+        if not os.path.exists(kinotes_dir):
+            try:
+                os.makedirs(kinotes_dir, exist_ok=True)
+            except Exception as e:
+                wx.MessageBox(
+                    f"Could not create .kinotes directory:\n{e}",
+                    "Directory Error",
+                    wx.OK | wx.ICON_ERROR
+                )
+                return
         
         # Open folder in system file explorer
         import subprocess
-        if sys.platform.startswith("win"):
-            subprocess.Popen(f'explorer "{kinotes_dir}"')
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", kinotes_dir])
-        else:
-            subprocess.Popen(["xdg-open", kinotes_dir])
+        try:
+            if sys.platform.startswith("win"):
+                subprocess.Popen(f'explorer "{kinotes_dir}"')
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", kinotes_dir])
+            else:
+                subprocess.Popen(["xdg-open", kinotes_dir])
+        except Exception as e:
+            wx.MessageBox(
+                f"Could not open directory:\n{kinotes_dir}\n\nError: {e}",
+                "Directory Error",
+                wx.OK | wx.ICON_ERROR
+            )
     
     def _update_tab_styles(self, active_idx):
         """Update tab button styles."""
