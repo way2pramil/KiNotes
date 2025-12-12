@@ -24,6 +24,9 @@ ENV/
 # GitHub and development instructions
 .github/copilot-instructions.md
 
+# Testing artifacts
+functionChecklist.md
+
 # KiNotes project data (project-local notes)
 .kinotes/
 
