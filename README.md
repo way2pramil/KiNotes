@@ -97,7 +97,7 @@ my_project/
 | **Markdown Editor Mode** | Toggle between visual and raw markdown |
 | **Table Insert** | Add tables in visual editor |
 | **BOM Tab** | Dedicated Bill of Materials generator |
-| **Changelog Tab** | Version log for design revisions |
+| **Version Log Tab** | Design revision tracking (in progress) |
 | **Debug Panel** | Event logging for troubleshooting |
 
 ### Planned
@@ -106,6 +106,8 @@ my_project/
 | **KiCad Plugin Manager** | Pending submission |
 | **Table rendering in Visual** | In development |
 | **Image embed** | Planned |
+| **Voice Input** | Speech-to-text for hands-free notes |
+| **Smart-Link Tooltips** | Hover over R1/GND → show component/net attributes |
 
 ---
 
