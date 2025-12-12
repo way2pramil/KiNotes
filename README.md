@@ -73,6 +73,7 @@ my_project/
 - **Portable**: Move project = move notes
 - **No cloud dependency**: Works offline, forever
 - **No accounts**: Just files on your disk
+- **Plain Markdown format**: Notes readable by any text editor, easy for future tools and analysis
 
 ---
 
