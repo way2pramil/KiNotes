@@ -21,6 +21,9 @@ ENV/
 .vscode/
 .idea/
 
+# GitHub and development instructions
+.github/copilot-instructions.md
+
 # KiNotes project data (project-local notes)
 .kinotes/
 
