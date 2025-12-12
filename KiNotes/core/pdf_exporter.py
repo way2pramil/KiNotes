@@ -74,7 +74,9 @@ class PDFExporter:
     def _prompt_save_location(self):
         """Show save dialog and return chosen path."""
         default_name = self._get_default_filename()
-        default_dir = self.project_dir
+        # Default to .kinotes/ folder if it exists, otherwise project root
+        kinotes_dir = os.path.join(self.project_dir, '.kinotes')
+        default_dir = kinotes_dir if os.path.exists(kinotes_dir) else self.project_dir
         
         with wx.FileDialog(
             None,

@@ -1050,9 +1050,17 @@ class VisualNoteEditor(wx.Panel):
         """Insert an image."""
         wildcard = "Image files (*.png;*.jpg;*.jpeg;*.gif;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.bmp"
         
+        # Default to .kinotes/ folder if available
+        default_dir = ""
+        if hasattr(self, 'project_dir') and self.project_dir:
+            kinotes_dir = os.path.join(self.project_dir, '.kinotes')
+            if os.path.exists(kinotes_dir):
+                default_dir = kinotes_dir
+        
         dlg = wx.FileDialog(
             self,
             "Select Image",
+            defaultDir=default_dir,
             wildcard=wildcard,
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
         )

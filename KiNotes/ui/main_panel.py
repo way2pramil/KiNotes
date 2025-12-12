@@ -1556,6 +1556,10 @@ You can safely continue working."""
                 style=wx.BORDER_NONE,
                 beta_features=self._beta_table  # Table button controlled by beta_table setting
             )
+            
+            # Set project directory for file dialogs
+            self.visual_editor.project_dir = self.notes_manager.project_dir
+            
             print("[KiNotes] Visual editor created successfully")
             
             # Apply user's custom colors immediately after creation
