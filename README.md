@@ -1,7 +1,7 @@
 # KiNotes — Smart Engineering Notes for KiCad 9+
 
 <p align="center">
-  <img src="KiNotes/resources/icon.png" alt="KiNotes" width="64"/>
+  <img src="KiNotes/resources/icon.svg" alt="KiNotes" width="220"/>
 </p>
 
 **Your design decisions shouldn't live in a separate notepad.** KiNotes keeps engineering notes right inside KiCad—where they belong.
@@ -68,12 +68,12 @@ my_project/
     └── settings.json             ← Preferences
 ```
 
-**What each file contains:**
-- **`KiNotes_<projectname>.md`** — Your engineering notes in Markdown format (supports both visual editor and raw markdown editing)
-- **`todos.json`** — Task list with completion status, optional time tracking data, and session history
-- **`settings.json`** — UI preferences (dark/light mode, panel size, editor mode, Smart-Link settings, beta feature toggles)
+**What each file contains :**
+- **`KiNotes_<projectname>.md`** — Your KiNotes in Markdown format (supports both visual editor and raw markdown editing) with Autosave
+- **`todos.json`** — Task list with completion status, optional time tracking data, and session history with Autosave
+- **`settings.json`** — Your UI preferences (theme, panel size, editor mode, Smart-Link options, beta toggles)
 
-> 💡 **Tip:** When you use the "Export Diary" button in the Todo tab, it generates a formatted work log showing time spent per task with session details and inserts it directly into your notes as Markdown. Perfect for timesheets or project documentation.
+> 💡 **Tip:** Tip: The Export Diary button in the Todo tab creates a clean work-log summary (time spent per task, session details) and inserts it directly into your Markdown notes. Perfect for quick reports or timesheets.
 
 **Why this matters:**
 - **Git-friendly**: Notes version with your design
@@ -81,7 +81,6 @@ my_project/
 - **No cloud dependency**: Works offline, forever
 - **No accounts**: Just files on your disk
 - **Plain Markdown format**: Notes readable by any text editor, easy for future tools and analysis
-
 ---
 
 ## ✨ Features
@@ -98,13 +97,15 @@ my_project/
 | **Export PDF** | Print-ready documentation |
 | **Task List** | Simple todos that live with your project |
 | **Time Tracking** | Per-task stopwatch with session history |
+| **Auto-saves** | KiNotes auto-saves as you work |
+    
 
 ### Beta (Experimental)
 | Feature | Status |
 |---------|--------|
 | **Markdown Editor Mode** | Toggle between visual and raw markdown |
 | **Table Insert** | Add tables in visual editor |
-| **BOM Tab** | Dedicated Bill of Materials generator |
+| **BOM Tab** | Dedicated Bill of Materials generator | Thaks for *iBOM*
 | **Version Log Tab** | Design revision tracking (in progress) |
 | **Debug Panel** | Event logging for troubleshooting |
 
@@ -112,7 +113,6 @@ my_project/
 | Feature | Status |
 |---------|--------|
 | **KiCad Plugin Manager** | Pending submission |
-| **Table rendering in Visual** | In development |
 | **Image embed** | Planned |
 | **Voice Input** | Speech-to-text for hands-free notes |
 | **Smart-Link Tooltips** | Hover over R1/GND → show component/net attributes |
