@@ -73,6 +73,8 @@ my_project/
 - **`todos.json`** — Task list with completion status, optional time tracking data, and session history
 - **`settings.json`** — UI preferences (dark/light mode, panel size, editor mode, Smart-Link settings, beta feature toggles)
 
+> 💡 **Tip:** When you use the "Export Diary" button in the Todo tab, it generates a formatted work log showing time spent per task with session details and inserts it directly into your notes as Markdown. Perfect for timesheets or project documentation.
+
 **Why this matters:**
 - **Git-friendly**: Notes version with your design
 - **Portable**: Move project = move notes
