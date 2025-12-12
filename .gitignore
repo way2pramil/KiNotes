@@ -27,6 +27,9 @@ ENV/
 # Testing artifacts
 functionChecklist.md
 
+# Local development scripts (contain user-specific paths)
+*.bat
+
 # KiNotes project data (project-local notes)
 .kinotes/
 
