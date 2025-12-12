@@ -80,6 +80,28 @@ main_panel.py: 1605 lines ✅ Coordinator only
    └─ version_log_tab.py: 260 lines ✅ Changelog mixin
 ```
 
+## 🏗️ Project Structure
+
+```
+KiNotes/
+├── kinotes_action.py        # Plugin entry point
+├── metadata.json            # KiCad PCM metadata
+├── core/
+│   ├── notes_manager.py     # File I/O for .kinotes/
+│   ├── designator_linker.py # Smart-link: click → highlight component
+│   ├── net_linker.py        # Smart-link: click → highlight net
+│   ├── metadata_extractor.py# BOM, stackup extraction
+│   └── pdf_exporter.py      # PDF export
+├── ui/
+│   ├── main_panel.py        # Main coordinator
+│   ├── visual_editor.py     # Rich text editor
+│   ├── themes.py            # Dark/Light color schemes
+│   ├── dialogs/             # Settings, About
+│   ├── tabs/                # Todo, BOM, Changelog
+│   └── components/          # Buttons, icons
+└── resources/
+    └── icon.png             # Toolbar icon
+```
 ### Architecture Benefits
 
 **✅ AI-Friendly**
@@ -222,3 +244,16 @@ The `pcbnew` module only exists inside KiCad. For standalone testing:
 - Todos: `<project>/.kinotes/todos.json`  
 - Settings: `<project>/.kinotes/settings.json`
 - Icons: `KiNotes/resources/icon.png` (24x24), `KiNotes/resources/icons/icon.png` (64x64)
+
+## Documentation Rules
+
+**IMPORTANT**: Never mention AI, AI-generated, AI-friendly, or similar terms in user-facing documentation (README.md, About dialog, comments visible to end users). 
+
+- ❌ "AI-friendly architecture"
+- ❌ "Built with AI assistance"
+- ❌ "Context window optimized"
+- ✅ "Modular architecture"
+- ✅ "Small, focused files"
+- ✅ "Easy to understand"
+
+This file (.github/copilot-instructions.md) is for developers/AI agents only and can reference AI concepts.

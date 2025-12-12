@@ -148,41 +148,16 @@ KiNotes is open source because good tools should be shared. If it helps you ship
 
 ---
 
-## 🏗️ Project Structure
-
-```
-KiNotes/
-├── kinotes_action.py        # Plugin entry point
-├── metadata.json            # KiCad PCM metadata
-├── core/
-│   ├── notes_manager.py     # File I/O for .kinotes/
-│   ├── designator_linker.py # Smart-link: click → highlight component
-│   ├── net_linker.py        # Smart-link: click → highlight net
-│   ├── metadata_extractor.py# BOM, stackup extraction
-│   └── pdf_exporter.py      # PDF export
-├── ui/
-│   ├── main_panel.py        # Main coordinator
-│   ├── visual_editor.py     # Rich text editor
-│   ├── themes.py            # Dark/Light color schemes
-│   ├── dialogs/             # Settings, About
-│   ├── tabs/                # Todo, BOM, Changelog
-│   └── components/          # Buttons, icons
-└── resources/
-    └── icon.png             # Toolbar icon
-```
-
----
-
 ## 🔧 Requirements
 
-- **KiCad 9.0+** (Python 3.9+, wxPython 4.2+)
+- **KiCad 9.0** (Python 3.9+, wxPython 4.2+)
 - No external dependencies
 
 ---
 
 ## 🤝 Contributing
 
-Contributions welcome! The codebase follows an **AI-friendly architecture**—small, focused modules that fit in a single context window.
+Contributions welcome! The codebase is modular—small, focused files that are easy to understand and modify.
 
 1. Fork the repository
 2. Create a feature branch
