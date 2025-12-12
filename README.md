@@ -68,6 +68,11 @@ my_project/
     └── settings.json             ← Preferences
 ```
 
+**What each file contains:**
+- **`KiNotes_<projectname>.md`** — Your engineering notes in Markdown format (supports both visual editor and raw markdown editing)
+- **`todos.json`** — Task list with completion status, optional time tracking data, and session history
+- **`settings.json`** — UI preferences (dark/light mode, panel size, editor mode, Smart-Link settings, beta feature toggles)
+
 **Why this matters:**
 - **Git-friendly**: Notes version with your design
 - **Portable**: Move project = move notes
