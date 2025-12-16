@@ -16,6 +16,11 @@ import time
 import re
 import fnmatch
 
+# Import centralized defaults
+from ..core.defaultsConfig import (
+    DEFAULTS, BETA_DEFAULTS, WINDOW_DEFAULTS, DEBUG_MODULES
+)
+
 # Visual Note Editor for WYSIWYG mode
 try:
     from .visual_editor import VisualNoteEditor
@@ -106,34 +111,32 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         # Version log data
         self._version_log_items = []
         self._version_log_id_counter = 0
-        self._current_version = "0.1.0"
+        self._current_version = DEFAULTS['current_version']
         self._current_tab = 0
         
         # Time tracking system
         self.time_tracker = TimeTracker()
         self._timer_update_tick = 0
         
-        # Theme settings
-        self._dark_mode = False
-        self._bg_color_name = "Ivory Paper"
-        self._text_color_name = "Carbon Black"
-        self._dark_bg_color_name = "Charcoal"
-        self._dark_text_color_name = "Pure White"
-        self._use_visual_editor = VISUAL_EDITOR_AVAILABLE  # Default: Visual Editor if available
-        self._crossprobe_enabled = True  # Cross-probe enabled by default
-        self._beta_features_enabled = False  # Beta features disabled by default
-        self._beta_table = False  # Insert Table button
-        self._beta_markdown = False  # Markdown editor mode
-        self._beta_bom = False  # BOM tab
-        self._beta_version_log = False  # Version Log tab
-        self._beta_net_linker = True  # Net cross-probe linker (beta) - enabled by default
-        self._beta_debug_panel = False  # Debug panel (beta) - never default on
-        self._debug_modules = {
-            "save": False,
-            "net": False,
-            "designator": False,
-        }
-        self._pdf_format = "markdown"  # PDF export format: 'markdown' or 'visual'
+        # Theme settings (from centralized defaults)
+        self._dark_mode = DEFAULTS['dark_mode']
+        self._bg_color_name = DEFAULTS['bg_color_name']
+        self._text_color_name = DEFAULTS['text_color_name']
+        self._dark_bg_color_name = DEFAULTS['dark_bg_color_name']
+        self._dark_text_color_name = DEFAULTS['dark_text_color_name']
+        self._use_visual_editor = DEFAULTS['use_visual_editor'] and VISUAL_EDITOR_AVAILABLE
+        self._crossprobe_enabled = DEFAULTS['crossprobe_enabled']
+        
+        # Beta features (from centralized defaults)
+        self._beta_features_enabled = BETA_DEFAULTS['beta_features_enabled']
+        self._beta_table = BETA_DEFAULTS['beta_table']
+        self._beta_markdown = BETA_DEFAULTS['beta_markdown']
+        self._beta_bom = BETA_DEFAULTS['beta_bom']
+        self._beta_version_log = BETA_DEFAULTS['beta_version_log']
+        self._beta_net_linker = BETA_DEFAULTS['beta_net_linker']
+        self._beta_debug_panel = BETA_DEFAULTS['beta_debug_panel']
+        self._debug_modules = DEBUG_MODULES.copy()
+        self._pdf_format = DEFAULTS['pdf_format']
         
         # Initialize net cache manager (centralized net caching + board change detection)
         self.net_cache_manager = get_net_cache_manager() if HAS_NET_CACHE_MANAGER else None

@@ -34,6 +34,9 @@ from ..themes import (
 from ..scaling import get_dpi_scale_factor, get_user_scale_factor, set_user_scale_factor
 from ..components import RoundedButton
 
+# Import centralized defaults
+from ...core.defaultsConfig import WINDOW_DEFAULTS
+
 
 # ------------------------------ Helpers ---------------------------------
 
@@ -117,18 +120,25 @@ class SettingsDialog(wx.Dialog):
         super().__init__(parent, title="Settings",
                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         
-        # Industry standard: Use reasonable minimum size that fits most screens
-        # Minimum: 500x400 (compact), preferred: 600x700 (comfortable)
-        # Let the dialog size to content but cap at screen size
+        # Get screen info and DPI scale
         display = wx.Display(wx.Display.GetFromWindow(parent) if parent else 0)
         screen_rect = display.GetClientArea()
+        dpi_scale = get_dpi_scale_factor(parent) if parent else 1.0
+        
+        # Scale sizes based on DPI
+        min_width = int(450 * dpi_scale)
+        min_height = int(400 * dpi_scale)  # Enough for buttons to always show
         
         # Calculate preferred size (70% of screen, capped at reasonable max)
-        preferred_width = min(650, int(screen_rect.width * 0.7))
-        preferred_height = min(750, int(screen_rect.height * 0.8))
+        preferred_width = min(int(650 * dpi_scale), int(screen_rect.width * 0.7))
+        preferred_height = min(int(750 * dpi_scale), int(screen_rect.height * 0.8))
+        
+        # Ensure minimum size is not larger than screen
+        min_width = min(min_width, screen_rect.width - 50)
+        min_height = min(min_height, screen_rect.height - 100)
         
         # Set minimum and preferred sizes
-        self.SetSizeHints(minW=450, minH=350)  # Minimum usable size
+        self.SetSizeHints(minW=min_width, minH=min_height)
         self.SetSize((preferred_width, preferred_height))
         
         # Center on screen
@@ -422,11 +432,11 @@ class SettingsDialog(wx.Dialog):
         panel_size_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         panel_size_sizer = wx.BoxSizer(wx.VERTICAL)
         
-        # Get current settings
+        # Get current settings (use centralized defaults)
         notes_manager = self._config.get('notes_manager')
         current_settings = notes_manager.load_settings() if notes_manager else {}
-        current_width = current_settings.get("panel_width", 1300)
-        current_height = current_settings.get("panel_height", 1170)
+        current_width = current_settings.get("panel_width", WINDOW_DEFAULTS['panel_width'])
+        current_height = current_settings.get("panel_height", WINDOW_DEFAULTS['panel_height'])
         
         size_row = wx.BoxSizer(wx.HORIZONTAL)
         
@@ -592,7 +602,11 @@ class SettingsDialog(wx.Dialog):
         
         btn_panel = wx.Panel(self)
         btn_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
-        btn_panel.SetMinSize((-1, 60))  # Ensure minimum height for buttons
+        
+        # Fixed height for button area - ensures it's always visible
+        btn_height = 70  # Generous space for buttons + padding
+        btn_panel.SetMinSize((-1, btn_height))
+        
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         btn_sizer.AddStretchSpacer()
         
@@ -602,7 +616,7 @@ class SettingsDialog(wx.Dialog):
             corner_radius=10, font_size=11, font_weight=wx.FONTWEIGHT_NORMAL
         )
         cancel_btn.Bind_Click(lambda e: self.EndModal(wx.ID_CANCEL))
-        btn_sizer.Add(cancel_btn, 0, wx.RIGHT, 10)
+        btn_sizer.Add(cancel_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
         
         # Modern split button: "Save" + dropdown arrow
         split_panel = wx.Panel(btn_panel)
@@ -632,7 +646,7 @@ class SettingsDialog(wx.Dialog):
         split_sizer.Add(self._save_dropdown_btn, 0, wx.LEFT, 1)
         
         split_panel.SetSizer(split_sizer)
-        btn_sizer.Add(split_panel, 0, wx.RIGHT, SCROLLBAR_MARGIN)
+        btn_sizer.Add(split_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, SCROLLBAR_MARGIN)
         
         btn_panel.SetSizer(btn_sizer)
         dialog_sizer.Add(btn_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, SECTION_MARGIN)

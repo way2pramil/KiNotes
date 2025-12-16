@@ -17,14 +17,17 @@ Usage:
 import time
 import datetime
 
+from ..core.defaultsConfig import TIME_TRACKER_DEFAULTS
+
 
 class TimeTracker:
     """Manages per-task time tracking with session history and persistence."""
     
     def __init__(self):
-        self.enable_time_tracking = True
-        self.time_format_24h = True
-        self.show_work_diary_button = True
+        # Load defaults from centralized config
+        self.enable_time_tracking = TIME_TRACKER_DEFAULTS['enable_time_tracking']
+        self.time_format_24h = TIME_TRACKER_DEFAULTS['time_format_24h']
+        self.show_work_diary_button = TIME_TRACKER_DEFAULTS['show_work_diary_button']
         self.current_running_task_id = None
         self.task_timers = {}  # {task_id: {"time_spent": seconds, "is_running": bool, ...}}
     

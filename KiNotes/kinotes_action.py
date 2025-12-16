@@ -28,6 +28,9 @@ _plugin_dir = os.path.dirname(os.path.abspath(__file__))
 if _plugin_dir not in sys.path:
     sys.path.insert(0, _plugin_dir)
 
+# Import centralized defaults
+from core.defaultsConfig import WINDOW_DEFAULTS
+
 
 # ============================================================
 # GLOBAL EXCEPTION HANDLER - Prevents KiCad crashes
@@ -217,15 +220,15 @@ class KiNotesFrame(wx.Frame):
         except:
             version = "1.4.1"
         
-        # Load panel size from settings
-        panel_width = 1300  # Default width
-        panel_height = 1170  # Default height
+        # Load panel size from settings (use centralized defaults)
+        panel_width = WINDOW_DEFAULTS['panel_width']
+        panel_height = WINDOW_DEFAULTS['panel_height']
         try:
             notes_manager = NotesManager(self.project_dir)
             settings = notes_manager.load_settings()
             if settings:
-                panel_width = settings.get("panel_width", 1300)
-                panel_height = settings.get("panel_height", 1170)
+                panel_width = settings.get("panel_width", WINDOW_DEFAULTS['panel_width'])
+                panel_height = settings.get("panel_height", WINDOW_DEFAULTS['panel_height'])
         except:
             pass
         

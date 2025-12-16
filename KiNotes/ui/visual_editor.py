@@ -27,6 +27,7 @@ import datetime
 from typing import Optional, Tuple, List
 
 from .debug_event_logger import EventLevel
+from ..core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS
 
 
 def _kinotes_log(msg: str):
@@ -82,25 +83,25 @@ def scale_size(size, window=None):
 class VisualEditorStyles:
     """Style definitions for the visual editor."""
     
-    # Font sizes in points (FONT_SIZE_NORMAL can be overridden by user settings)
-    FONT_SIZE_NORMAL = 11  # Default, can be changed via settings (8-24)
-    FONT_SIZE_H1 = 22
-    FONT_SIZE_H2 = 18
-    FONT_SIZE_H3 = 14
-    FONT_SIZE_CODE = 10
+    # Font sizes in points (from centralized config)
+    FONT_SIZE_NORMAL = FONT_DEFAULTS['normal']
+    FONT_SIZE_H1 = FONT_DEFAULTS['h1']
+    FONT_SIZE_H2 = FONT_DEFAULTS['h2']
+    FONT_SIZE_H3 = FONT_DEFAULTS['h3']
+    FONT_SIZE_CODE = FONT_DEFAULTS['code']
     
     @classmethod
     def set_normal_font_size(cls, size: int):
         """Set the normal font size (8-24 points)."""
-        cls.FONT_SIZE_NORMAL = max(8, min(24, size))
+        cls.FONT_SIZE_NORMAL = max(FONT_DEFAULTS['min'], min(FONT_DEFAULTS['max'], size))
     
-    # List markers
-    BULLET_CHARS = ["•", "◦", "▪"]
-    CHECKBOX_UNCHECKED = "☐"
-    CHECKBOX_CHECKED = "☑"
+    # List markers (from centralized config)
+    BULLET_CHARS = EDITOR_MARKERS['bullet_chars']
+    CHECKBOX_UNCHECKED = EDITOR_MARKERS['checkbox_unchecked']
+    CHECKBOX_CHECKED = EDITOR_MARKERS['checkbox_checked']
     
     # Divider
-    DIVIDER_CHAR = "─" * 40
+    DIVIDER_CHAR = EDITOR_MARKERS['divider_char'] * EDITOR_MARKERS['divider_length']
     
     @classmethod
     def get_heading_style(cls, level: int, dark_mode: bool = False, text_color: wx.Colour = None) -> rt.RichTextAttr:

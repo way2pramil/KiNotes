@@ -9,6 +9,12 @@ import shutil
 import tempfile
 from datetime import datetime
 
+# Import centralized defaults
+from .defaultsConfig import (
+    DEFAULTS, get_default_settings, get_notes_template, 
+    get_version_log_template
+)
+
 
 class NotesManager:
     """Manages loading and saving notes, todos, version log, and settings for a KiCad project."""
@@ -241,33 +247,7 @@ class NotesManager:
     
     def _get_default_template(self):
         """Return default notes template."""
-        project_name = os.path.basename(self.project_dir)
-        return f"""# {project_name} - Design Notes
-
-## Overview
-<!-- Brief description of the PCB project -->
-
-## Schematic Notes
-<!-- Key circuit blocks, design rationale -->
-
-## Layout Considerations
-<!-- Layer stackup, impedance, keep-outs -->
-
-## Component Notes
-<!-- Click on designators like R1, C5, U3 to highlight on PCB -->
-
-## Power Distribution
-<!-- Power rails, decoupling strategy -->
-
-## Signal Integrity
-<!-- Critical nets, routing constraints -->
-
-## References
-<!-- Datasheets, application notes, calculations -->
-
----
-*KiNotes - PCBtools.xyz*
-"""
+        return get_notes_template(self.project_name)
     
     def get_notes_path(self):
         """Return the full path to notes file."""
@@ -352,10 +332,7 @@ class NotesManager:
     
     def _get_default_version_log(self):
         """Return default version log structure."""
-        return {
-            "current_version": "0.1.0",
-            "entries": []
-        }
+        return get_version_log_template()
     
     def export_changelog(self):
         """Export version log to CHANGELOG.md format (Keep a Changelog standard)."""
@@ -482,18 +459,5 @@ class NotesManager:
     
     def _get_default_settings(self):
         """Return default settings."""
-        return {
-            'autosave_interval': 5,
-            'font_size': 11,
-            'bom_exclude_dnp': True,
-            'bom_exclude_fid': True,
-            'bom_exclude_tp': True,
-            'bom_group': 0,
-            'sort_order': ['C', 'R', 'L', 'D', 'U', 'Y', 'X', 'F', 'SW', 'A', 'J', 'TP'],
-            'blacklist': '',
-            'blacklist_virtual': True,
-            'blacklist_empty': False,
-            'background_color': 'Snow Gray',
-            'text_color': 'Carbon Black',
-        }
+        return get_default_settings()
 

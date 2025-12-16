@@ -23,6 +23,8 @@ import re
 import sys
 import functools
 
+from .defaultsConfig import DESIGNATOR_PREFIXES
+
 def _kinotes_log(msg: str):
     """Log message to console, handling KiCad's None stdout."""
     try:
@@ -89,13 +91,8 @@ def safe_board_operation(func):
 class DesignatorLinker:
     """Smart cross-probe linker for PCB component designators."""
     
-    # Standard EE designator prefixes (IEEE 315 / common industry standards)
-    DEFAULT_PREFIXES = [
-        'R', 'C', 'L', 'D', 'U', 'Q', 'J', 'P', 'K',           # Basic components
-        'SW', 'S', 'F', 'FB', 'TP', 'Y', 'X', 'T', 'M',        # Switches, fuses, test points
-        'LED', 'IC', 'CON', 'RLY', 'XTAL', 'ANT', 'BT',        # Common multi-letter
-        'VR', 'RV', 'TR', 'FID', 'MH', 'JP', 'LS', 'SP', 'MIC', # Variable, fiducials, jumpers
-    ]
+    # Standard EE designator prefixes (from centralized config)
+    DEFAULT_PREFIXES = DESIGNATOR_PREFIXES
     
     # Explicit syntax: [[CUSTOM_REF]] for edge cases
     EXPLICIT_PATTERN = re.compile(r'\[\[([A-Z0-9_-]+)\]\]', re.IGNORECASE)
