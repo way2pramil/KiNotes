@@ -35,7 +35,9 @@ from ..scaling import get_dpi_scale_factor, get_user_scale_factor, set_user_scal
 from ..components import RoundedButton
 
 # Import centralized defaults
-from ...core.defaultsConfig import WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS
+from ...core.defaultsConfig import (
+    WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS, DEFAULTS, BETA_DEFAULTS, TIME_TRACKER_DEFAULTS
+)
 
 
 # ------------------------------ Helpers ---------------------------------
@@ -661,6 +663,17 @@ class SettingsDialog(wx.Dialog):
         btn_panel.SetMinSize((-1, btn_height))
         
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # Reset to Defaults button (left side)
+        reset_btn = RoundedButton(
+            btn_panel, label="↻ Reset Defaults", size=(130, 40),
+            bg_color=self._theme["accent_red"], fg_color="#FFFFFF",
+            corner_radius=10, font_size=10, font_weight=wx.FONTWEIGHT_NORMAL
+        )
+        reset_btn.Bind_Click(lambda e: self._on_reset_defaults())
+        reset_btn.SetToolTip("Reset all settings to factory defaults")
+        btn_sizer.Add(reset_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, SECTION_MARGIN)
+        
         btn_sizer.AddStretchSpacer()
         
         cancel_btn = RoundedButton(
@@ -730,6 +743,69 @@ class SettingsDialog(wx.Dialog):
         """Save settings globally (user-wide) and close dialog."""
         self._save_mode = 'global'
         self.EndModal(wx.ID_OK)
+    
+    def _on_reset_defaults(self):
+        """Reset all settings to factory defaults."""
+        # Confirm with user
+        dlg = wx.MessageDialog(
+            self,
+            "This will reset ALL settings to factory defaults.\n\n"
+            "Your notes and todos will NOT be affected.\n\n"
+            "Continue?",
+            "Reset to Defaults",
+            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING
+        )
+        
+        if dlg.ShowModal() != wx.ID_YES:
+            dlg.Destroy()
+            return
+        dlg.Destroy()
+        
+        # Reset theme
+        self._selected_theme_dark = DEFAULTS['dark_mode']
+        self._on_theme_select(self._selected_theme_dark)
+        
+        # Reset time tracking
+        self._enable_time_tracking.SetValue(TIME_TRACKER_DEFAULTS['enable_time_tracking'])
+        self._time_24h.SetValue(TIME_TRACKER_DEFAULTS['time_format_24h'])
+        self._show_work_diary.SetValue(TIME_TRACKER_DEFAULTS['show_work_diary_button'])
+        
+        # Reset cross-probe
+        self._enable_crossprobe.SetValue(DEFAULTS['crossprobe_enabled'])
+        self._enable_net_crossprobe.SetValue(DEFAULTS['net_crossprobe_enabled'])
+        self._custom_designators.SetValue('')
+        
+        # Reset UI scale to auto
+        self._scale_auto_checkbox.SetValue(True)
+        self._scale_slider.SetValue(100)
+        self._scale_slider.Disable()
+        self._scale_value_label.SetLabel("100%")
+        
+        # Reset panel size
+        self._panel_width_spin.SetValue(WINDOW_DEFAULTS['panel_width'])
+        self._panel_height_spin.SetValue(WINDOW_DEFAULTS['panel_height'])
+        
+        # Reset timer interval
+        self._timer_interval_spin.SetValue(PERFORMANCE_DEFAULTS['timer_interval_ms'] // 1000)
+        
+        # Reset beta features (all disabled except net_linker)
+        self._beta_table_cb.SetValue(BETA_DEFAULTS['beta_table'])
+        self._beta_markdown_cb.SetValue(BETA_DEFAULTS['beta_markdown'])
+        self._beta_bom_cb.SetValue(BETA_DEFAULTS['beta_bom'])
+        self._beta_version_log_cb.SetValue(BETA_DEFAULTS['beta_version_log'])
+        self._beta_net_linker_cb.SetValue(BETA_DEFAULTS['beta_net_linker'])
+        self._beta_debug_panel_cb.SetValue(BETA_DEFAULTS['beta_debug_panel'])
+        
+        # Reset PDF format
+        self._pdf_markdown_radio.SetValue(True)
+        self._pdf_visual_radio.SetValue(False)
+        
+        # Notify user
+        wx.MessageBox(
+            "Settings reset to defaults.\n\nClick 'Save' to apply changes.",
+            "Reset Complete",
+            wx.OK | wx.ICON_INFORMATION
+        )
     
     def get_save_mode(self) -> str:
         """Return the save mode: 'local' or 'global'."""
