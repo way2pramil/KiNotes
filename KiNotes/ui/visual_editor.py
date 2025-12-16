@@ -786,12 +786,66 @@ class VisualNoteEditor(wx.Panel):
         self._editor.Bind(wx.EVT_TEXT, self._on_text_changed)
         self._editor.Bind(wx.EVT_KEY_DOWN, self._on_key_down)
         self._editor.Bind(wx.EVT_KEY_UP, self._on_key_up)
-        self._editor.Bind(wx.EVT_LEFT_UP, self._on_click)
+        self._editor.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)  # For link click detection
+        self._editor.Bind(wx.EVT_LEFT_UP, self._on_click)  # For checkbox toggle, cross-probe
+        self._editor.Bind(wx.EVT_MOTION, self._on_mouse_motion)  # For link cursor
         # Update toolbar button states on selection change
         self._editor.Bind(wx.EVT_SET_FOCUS, self._on_focus_change)
         self._editor.Bind(rt.EVT_RICHTEXT_SELECTION_CHANGED, self._on_selection_changed)
         self._editor.Bind(rt.EVT_RICHTEXT_STYLE_CHANGED, self._on_selection_changed)
     
+    def _on_left_down(self, event):
+        """Handle left mouse button down - open links immediately on click."""
+        mouse_pos = event.GetPosition()
+        hit_result, hit_pos = self._editor.HitTest(mouse_pos)
+        
+        # Check if clicking on a link - only if DIRECTLY on text
+        if hit_result == wx.richtext.RICHTEXT_HITTEST_ON:
+            try:
+                text = self._editor.GetValue()
+                if hit_pos < len(text):
+                    attr = rt.RichTextAttr()
+                    if self._editor.GetStyle(hit_pos, attr):
+                        url = attr.GetURL()
+                        char_at_pos = text[hit_pos] if hit_pos < len(text) else ''
+                        if url and char_at_pos and char_at_pos not in ' \t\n\r':
+                            _kinotes_log(f"[KiNotes LeftDown] Opening link: {url}")
+                            import webbrowser
+                            webbrowser.open(url)
+                            # Don't skip - we handled the link click
+                            return
+            except Exception as e:
+                _kinotes_log(f"[KiNotes LeftDown] Error: {e}")
+        
+        # Let the event propagate for normal text selection
+        event.Skip()
+    
+    def _on_mouse_motion(self, event):
+        """Handle mouse motion - show hand cursor over links."""
+        try:
+            mouse_pos = event.GetPosition()
+            hit_result, hit_pos = self._editor.HitTest(mouse_pos)
+            
+            # Check if hovering over a link
+            if hit_result == wx.richtext.RICHTEXT_HITTEST_ON:
+                text = self._editor.GetValue()
+                if hit_pos < len(text):
+                    attr = rt.RichTextAttr()
+                    if self._editor.GetStyle(hit_pos, attr):
+                        url = attr.GetURL()
+                        char_at_pos = text[hit_pos] if hit_pos < len(text) else ''
+                        if url and char_at_pos and char_at_pos not in ' \t\n\r':
+                            # Show hand cursor over link
+                            self._editor.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+                            event.Skip()
+                            return
+            
+            # Reset to default cursor
+            self._editor.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
+        except:
+            pass
+        event.Skip()
+
     def cleanup(self):
         """Clean up resources before destruction."""
         try:
@@ -801,7 +855,9 @@ class VisualNoteEditor(wx.Panel):
                     self._editor.Unbind(wx.EVT_TEXT)
                     self._editor.Unbind(wx.EVT_KEY_DOWN)
                     self._editor.Unbind(wx.EVT_KEY_UP)
+                    self._editor.Unbind(wx.EVT_LEFT_DOWN)
                     self._editor.Unbind(wx.EVT_LEFT_UP)
+                    self._editor.Unbind(wx.EVT_MOTION)
                     self._editor.Unbind(wx.EVT_SET_FOCUS)
                     self._editor.Unbind(rt.EVT_RICHTEXT_SELECTION_CHANGED)
                     self._editor.Unbind(rt.EVT_RICHTEXT_STYLE_CHANGED)
@@ -1721,26 +1777,14 @@ class VisualNoteEditor(wx.Panel):
         self._modified = True
     
     def _on_click(self, event):
-        """Handle mouse clicks - toggle checkboxes, open links, cross-probe designators/nets, update toolbar states."""
-        # Use cursor position after click (original working logic)
+        """Handle mouse clicks - toggle checkboxes, cross-probe designators/nets, update toolbar states.
+        
+        Note: Link opening is handled in _on_left_down for immediate response.
+        """
         click_pos = self._editor.GetInsertionPoint()
         text = self._editor.GetValue()
         
         _kinotes_log(f"[KiNotes Click] Click position: {click_pos}, Text length: {len(text)}")
-        
-        # Check for link at click position - Ctrl+Click or just Click to open
-        try:
-            attr = rt.RichTextAttr()
-            if self._editor.GetStyle(click_pos, attr):
-                url = attr.GetURL()
-                if url:
-                    _kinotes_log(f"[KiNotes Click] Found link URL: {url}")
-                    import webbrowser
-                    webbrowser.open(url)
-                    event.Skip()
-                    return
-        except Exception as e:
-            _kinotes_log(f"[KiNotes Click] Error checking for link: {e}")
         
         # Only check for checkbox if there's actual text and position is valid
         if text and click_pos > 0 and click_pos <= len(text):

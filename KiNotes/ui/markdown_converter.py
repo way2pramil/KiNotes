@@ -95,8 +95,9 @@ class MarkdownParser:
         while i < len(lines):
             line = lines[i]
             
-            # Skip empty lines
+            # Preserve empty lines as empty paragraphs
             if not line.strip():
+                blocks.append(MarkdownBlock(type='empty', content=''))
                 i += 1
                 continue
             
@@ -374,6 +375,8 @@ class MarkdownToRichText:
             self._write_heading(block)
         elif block.type == 'paragraph':
             self._write_paragraph(block)
+        elif block.type == 'empty':
+            self._write_empty_line()
         elif block.type == 'bullet':
             self._write_bullet(block)
         elif block.type == 'numbered':
@@ -443,6 +446,10 @@ class MarkdownToRichText:
         self._write_inline_text(block.content, base_font_size=11, base_bold=False, base_color=text_color)
         
         self.editor.EndStyle()
+        self.editor.Newline()
+    
+    def _write_empty_line(self):
+        """Write an empty line to preserve spacing."""
         self.editor.Newline()
     
     def _write_bullet(self, block: MarkdownBlock):

@@ -117,9 +117,23 @@ class SettingsDialog(wx.Dialog):
         super().__init__(parent, title="Settings",
                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         
-        # Use SetSizeHints for flexible sizing
-        self.SetSizeHints(800, 800)
-        self.SetSize((1200, 1000))
+        # Industry standard: Use reasonable minimum size that fits most screens
+        # Minimum: 500x400 (compact), preferred: 600x700 (comfortable)
+        # Let the dialog size to content but cap at screen size
+        display = wx.Display(wx.Display.GetFromWindow(parent) if parent else 0)
+        screen_rect = display.GetClientArea()
+        
+        # Calculate preferred size (70% of screen, capped at reasonable max)
+        preferred_width = min(650, int(screen_rect.width * 0.7))
+        preferred_height = min(750, int(screen_rect.height * 0.8))
+        
+        # Set minimum and preferred sizes
+        self.SetSizeHints(minW=450, minH=350)  # Minimum usable size
+        self.SetSize((preferred_width, preferred_height))
+        
+        # Center on screen
+        self.CentreOnScreen()
+        
         self.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         
         # Track selected theme state
@@ -567,9 +581,18 @@ class SettingsDialog(wx.Dialog):
         sizer.AddSpacer(SECTION_SPACING)
     
     def _build_buttons(self, dialog_sizer):
-        """Build dialog buttons with modern dropdown Save button."""
+        """Build dialog buttons with modern dropdown Save button.
+        
+        Industry standard: Buttons in a fixed panel at bottom, always visible,
+        separated from scrolling content with a line.
+        """
+        # Separator line above buttons
+        separator = wx.StaticLine(self)
+        dialog_sizer.Add(separator, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        
         btn_panel = wx.Panel(self)
         btn_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        btn_panel.SetMinSize((-1, 60))  # Ensure minimum height for buttons
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         btn_sizer.AddStretchSpacer()
         
