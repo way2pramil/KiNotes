@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <svg xmlns="http://www.w3.org/2000/svg"
      width="256" height="256" viewBox="0 0 256 256"
-     role="img" aria-label="KiNotes icon - straight tracks">
+     role="img" aria-label="KiNotes icon - high contrast elements">
 
   <defs>
     <style>
@@ -9,6 +9,7 @@
       .ic-body { fill: #FFFFFF; }
       .pin { fill: #D4AF37; }
       .pad { fill: #D4AF37; }
+      .hole { fill: #000000; }
       .track {
         stroke: #0A7A44;
         stroke-width: 8;
@@ -16,10 +17,32 @@
         stroke-linecap: round;
         vector-effect: non-scaling-stroke;
       }
-      .task-box { fill: #E0E0E0; }
-      .check { stroke: #888888; stroke-width: 16; stroke-linecap: round; stroke-linejoin: round; fill: none; vector-effect: non-scaling-stroke; }
-      .line { stroke: #085C34; stroke-width: 10; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-      .ic-border { stroke: #CCCCCC; stroke-width: 1; fill: none; vector-effect: non-scaling-stroke; }
+      .task-box {
+        fill: #E0E0E0;
+        stroke: #000000;          /* HIGH CONTRAST BORDER */
+        stroke-width: 4;
+        vector-effect: non-scaling-stroke;
+      }
+      .check {
+        stroke: #000000;          /* HIGH CONTRAST CHECKMARK */
+        stroke-width: 16;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+        vector-effect: non-scaling-stroke;
+      }
+      .line {
+        stroke: #085C34;
+        stroke-width: 10;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+      }
+      .ic-border {
+        stroke: #CCCCCC;
+        stroke-width: 1;
+        fill: none;
+        vector-effect: non-scaling-stroke;
+      }
     </style>
   </defs>
 
@@ -32,18 +55,20 @@
 
   <!-- GREEN NOTES BAR -->
   <rect x="46" y="64" width="56" height="128" rx="10" class="pcb-green"/>
-  <!-- Straight track: round (64,90) → left rect pad -->
-  <path d="M64 90 L64 150" class="track"/>
 
-  <!-- Straight track: round (85,110) → right rect pad -->
+  <!-- TRACKS -->
+  <path d="M64 90 L64 150" class="track"/>
   <path d="M85 110 L85 150" class="track"/>
+
   <!-- ROUND PADS -->
   <circle cx="64" cy="90" r="8" class="pad"/>
   <circle cx="85" cy="110" r="8" class="pad"/>
+
+  <!-- HOLES -->
   <circle cx="64" cy="90" r="4" class="hole"/>
   <circle cx="85" cy="110" r="4" class="hole"/>
 
-  <!-- RECTANGULAR PADS (horizontal alignment) -->
+  <!-- RECTANGULAR PADS -->
   <rect x="60" y="150" width="10" height="20" rx="2" class="pad"/>
   <rect x="80" y="150" width="10" height="20" rx="2" class="pad"/>
 
@@ -51,35 +76,31 @@
   <line x1="120" y1="70" x2="200" y2="70" class="line" />
   <line x1="120" y1="92" x2="200" y2="92" class="line" />
 
-  <!-- CHECKBOX -->
+  <!-- CHECKBOX WITH NEW HIGH-CONTRAST BORDER -->
   <rect x="120" y="108" width="80" height="80" rx="16" class="task-box"/>
 
-  <!-- CHECKMARK -->
+  <!-- HIGH CONTRAST CHECKMARK -->
   <path d="M135 150 L155 170 L190 125" class="check"/>
 
   <!-- GOLD PINS -->
-  <!-- LEFT -->
   <g class="pin">
     <rect x="12" y="78" width="20" height="8" rx="2"/>
     <rect x="12" y="118" width="20" height="8" rx="2"/>
     <rect x="12" y="158" width="20" height="8" rx="2"/>
   </g>
 
-  <!-- RIGHT -->
   <g class="pin">
     <rect x="224" y="78" width="20" height="8" rx="2"/>
     <rect x="224" y="118" width="20" height="8" rx="2"/>
     <rect x="224" y="158" width="20" height="8" rx="2"/>
   </g>
 
-  <!-- TOP -->
   <g class="pin">
     <rect x="78" y="12" width="8" height="20" rx="2"/>
     <rect x="118" y="12" width="8" height="20" rx="2"/>
     <rect x="158" y="12" width="8" height="20" rx="2"/>
   </g>
 
-  <!-- BOTTOM -->
   <g class="pin">
     <rect x="78" y="224" width="8" height="20" rx="2"/>
     <rect x="118" y="224" width="8" height="20" rx="2"/>
