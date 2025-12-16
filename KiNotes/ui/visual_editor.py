@@ -1023,21 +1023,41 @@ class VisualNoteEditor(wx.Panel):
         if dlg.ShowModal() == wx.ID_OK:
             url = dlg.GetValue().strip()
             if url:
+                # Ensure URL has protocol
+                if url and not url.startswith(('http://', 'https://', 'mailto:')):
+                    url = 'https://' + url
+                
                 # Get selected text or use URL as text
                 selection = self._editor.GetStringSelection()
                 link_text = selection if selection else url
                 
-                # Insert link with styling
-                attr = VisualEditorStyles.get_link_style(self._dark_mode)
-                attr.SetURL(url)
-                
                 if selection:
+                    # IMPORTANT: Preserve existing formatting when adding link
+                    # Get the current style at selection start
+                    sel_range = self._editor.GetSelectionRange()
+                    existing_attr = rt.RichTextAttr()
+                    self._editor.GetStyle(sel_range.GetStart(), existing_attr)
+                    
+                    # Modify the existing style to add link properties
+                    existing_attr.SetURL(url)
+                    existing_attr.SetFontUnderlined(True)
+                    # Change color to link blue while preserving bold/italic
+                    if self._dark_mode:
+                        existing_attr.SetTextColour(wx.Colour(97, 175, 239))  # Light blue
+                    else:
+                        existing_attr.SetTextColour(wx.Colour(0, 102, 204))  # Standard link blue
+                    
+                    # Apply the modified style
                     self._editor.SetStyleEx(
-                        self._editor.GetSelectionRange(),
-                        attr,
+                        sel_range,
+                        existing_attr,
                         rt.RICHTEXT_SETSTYLE_WITH_UNDO
                     )
                 else:
+                    # No selection - insert new link text
+                    attr = VisualEditorStyles.get_link_style(self._dark_mode)
+                    attr.SetURL(url)
+                    
                     self._editor.BeginStyle(attr)
                     self._editor.WriteText(link_text)
                     self._editor.EndStyle()
@@ -1701,12 +1721,26 @@ class VisualNoteEditor(wx.Panel):
         self._modified = True
     
     def _on_click(self, event):
-        """Handle mouse clicks - toggle checkboxes, cross-probe designators/nets, update toolbar states."""
+        """Handle mouse clicks - toggle checkboxes, open links, cross-probe designators/nets, update toolbar states."""
         # Use cursor position after click (original working logic)
         click_pos = self._editor.GetInsertionPoint()
         text = self._editor.GetValue()
         
         _kinotes_log(f"[KiNotes Click] Click position: {click_pos}, Text length: {len(text)}")
+        
+        # Check for link at click position - Ctrl+Click or just Click to open
+        try:
+            attr = rt.RichTextAttr()
+            if self._editor.GetStyle(click_pos, attr):
+                url = attr.GetURL()
+                if url:
+                    _kinotes_log(f"[KiNotes Click] Found link URL: {url}")
+                    import webbrowser
+                    webbrowser.open(url)
+                    event.Skip()
+                    return
+        except Exception as e:
+            _kinotes_log(f"[KiNotes Click] Error checking for link: {e}")
         
         # Only check for checkbox if there's actual text and position is valid
         if text and click_pos > 0 and click_pos <= len(text):

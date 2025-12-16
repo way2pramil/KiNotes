@@ -224,58 +224,99 @@ class MarkdownParser:
             List of TextSpan objects with formatting info
         """
         spans = []
-        remaining = text
         
-        # Process text character by character, tracking formatting state
-        # This is a simplified approach - full implementation would use a proper parser
+        # Handle nested formatting: **[text](url)** or *[text](url)*
+        # Strategy: Process outer formatting first, then inner
         
-        # For now, return a simple approach that handles common patterns
-        # Split on formatting markers and track state
+        import re
         
-        # First, find all formatting markers and their positions
-        markers = []
+        # Pattern for bold link: **[text](url)** 
+        bold_link_pattern = re.compile(r'\*\*\[([^\]]+)\]\(([^)]+)\)\*\*')
+        # Pattern for italic link: *[text](url)*
+        italic_link_pattern = re.compile(r'(?<!\*)\*(?!\*)\[([^\]]+)\]\(([^)]+)\)\*(?!\*)')
+        # Pattern for plain link: [text](url)
+        link_pattern = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+        # Pattern for bold: **text**
+        bold_pattern = re.compile(r'\*\*([^*\[\]]+?)\*\*')
+        # Pattern for italic: *text*
+        italic_pattern = re.compile(r'(?<!\*)\*(?!\*)([^*\[\]]+?)\*(?!\*)')
+        # Pattern for code: `text`
+        code_pattern = re.compile(r'`([^`]+)`')
         
-        # Find bold markers
-        for match in re.finditer(r'\*\*(.+?)\*\*', text):
-            markers.append(('bold', match.start(), match.end(), match.group(1)))
-        
-        # Find italic markers
-        for match in re.finditer(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', text):
-            markers.append(('italic', match.start(), match.end(), match.group(1)))
-        
-        # Find code markers
-        for match in re.finditer(r'`([^`]+)`', text):
-            markers.append(('code', match.start(), match.end(), match.group(1)))
-        
-        # Find links
-        for match in re.finditer(r'\[([^\]]+)\]\(([^)]+)\)', text):
-            markers.append(('link', match.start(), match.end(), match.group(1), match.group(2)))
-        
-        # Sort markers by position
-        markers.sort(key=lambda x: x[1])
-        
-        # Build spans
         pos = 0
-        for marker in markers:
-            # Add plain text before this marker
-            if marker[1] > pos:
-                spans.append(TextSpan(text=text[pos:marker[1]]))
+        while pos < len(text):
+            # Find the earliest match among all patterns
+            best_match = None
+            best_type = None
+            best_start = len(text)
             
-            # Add formatted span
-            if marker[0] == 'bold':
-                spans.append(TextSpan(text=marker[3], bold=True))
-            elif marker[0] == 'italic':
-                spans.append(TextSpan(text=marker[3], italic=True))
-            elif marker[0] == 'code':
-                spans.append(TextSpan(text=marker[3], code=True))
-            elif marker[0] == 'link':
-                spans.append(TextSpan(text=marker[3], link_url=marker[4]))
+            # Check bold+link
+            m = bold_link_pattern.search(text, pos)
+            if m and m.start() < best_start:
+                best_match = m
+                best_type = 'bold_link'
+                best_start = m.start()
             
-            pos = marker[2]
-        
-        # Add remaining text
-        if pos < len(text):
-            spans.append(TextSpan(text=text[pos:]))
+            # Check italic+link
+            m = italic_link_pattern.search(text, pos)
+            if m and m.start() < best_start:
+                best_match = m
+                best_type = 'italic_link'
+                best_start = m.start()
+            
+            # Check plain link
+            m = link_pattern.search(text, pos)
+            if m and m.start() < best_start:
+                best_match = m
+                best_type = 'link'
+                best_start = m.start()
+            
+            # Check bold
+            m = bold_pattern.search(text, pos)
+            if m and m.start() < best_start:
+                best_match = m
+                best_type = 'bold'
+                best_start = m.start()
+            
+            # Check italic
+            m = italic_pattern.search(text, pos)
+            if m and m.start() < best_start:
+                best_match = m
+                best_type = 'italic'
+                best_start = m.start()
+            
+            # Check code
+            m = code_pattern.search(text, pos)
+            if m and m.start() < best_start:
+                best_match = m
+                best_type = 'code'
+                best_start = m.start()
+            
+            if best_match:
+                # Add plain text before this match
+                if best_start > pos:
+                    spans.append(TextSpan(text=text[pos:best_start]))
+                
+                # Add the formatted span
+                if best_type == 'bold_link':
+                    spans.append(TextSpan(text=best_match.group(1), bold=True, link_url=best_match.group(2)))
+                elif best_type == 'italic_link':
+                    spans.append(TextSpan(text=best_match.group(1), italic=True, link_url=best_match.group(2)))
+                elif best_type == 'link':
+                    spans.append(TextSpan(text=best_match.group(1), link_url=best_match.group(2)))
+                elif best_type == 'bold':
+                    spans.append(TextSpan(text=best_match.group(1), bold=True))
+                elif best_type == 'italic':
+                    spans.append(TextSpan(text=best_match.group(1), italic=True))
+                elif best_type == 'code':
+                    spans.append(TextSpan(text=best_match.group(1), code=True))
+                
+                pos = best_match.end()
+            else:
+                # No more matches - add remaining text
+                if pos < len(text):
+                    spans.append(TextSpan(text=text[pos:]))
+                break
         
         # If no spans were created, return the whole text as a single span
         if not spans:
@@ -700,6 +741,8 @@ class RichTextToMarkdown:
         """Convert a line with inline formatting to Markdown."""
         result = []
         
+        print(f"[KiNotes MD] Converting line: {repr(line)}, start_pos: {start_pos}")
+        
         i = 0
         while i < len(line):
             char_pos = start_pos + i
@@ -727,21 +770,38 @@ class RichTextToMarkdown:
             # Get the text span
             span_text = line[i:j]
             
+            # Debug output
+            url = attr.GetURL() if has_style else ""
+            is_bold = attr.GetFontWeight() == wx.FONTWEIGHT_BOLD if has_style else False
+            print(f"[KiNotes MD]   Span [{i}:{j}]: {repr(span_text)}, bold={is_bold}, url={repr(url)}")
+            
             # Apply Markdown formatting
             if has_style:
                 is_bold = attr.GetFontWeight() == wx.FONTWEIGHT_BOLD
                 is_italic = attr.GetFontStyle() == wx.FONTSTYLE_ITALIC
                 is_underline = attr.GetFontUnderlined()
                 
-                if is_bold:
-                    span_text = f"**{span_text}**"
-                if is_italic:
-                    span_text = f"*{span_text}*"
-                
-                # Check for links
+                # Check for links FIRST - link text should be plain
                 url = attr.GetURL()
                 if url:
-                    span_text = f"[{span_text}]({url})"
+                    # Link text should NOT have formatting markers inside
+                    # Format: **[text](url)** for bold link, not [**text**](url)
+                    link_part = f"[{span_text}]({url})"
+                    # Now wrap the entire link with bold/italic if needed
+                    if is_bold and is_italic:
+                        span_text = f"***{link_part}***"
+                    elif is_bold:
+                        span_text = f"**{link_part}**"
+                    elif is_italic:
+                        span_text = f"*{link_part}*"
+                    else:
+                        span_text = link_part
+                else:
+                    # No link - apply formatting normally
+                    if is_bold:
+                        span_text = f"**{span_text}**"
+                    if is_italic:
+                        span_text = f"*{span_text}*"
             
             result.append(span_text)
             i = j

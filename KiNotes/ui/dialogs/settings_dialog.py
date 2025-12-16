@@ -22,6 +22,7 @@ Usage:
         # Apply settings from result dict
 """
 import wx
+import wx.adv
 import wx.lib.scrolledpanel as scrolled
 
 from ..themes import (
@@ -487,6 +488,21 @@ class SettingsDialog(wx.Dialog):
         self._pdf_visual_radio.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         pdf_sizer.Add(self._pdf_visual_radio, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         
+        # Requirement note with help link
+        req_row = wx.BoxSizer(wx.HORIZONTAL)
+        req_note = wx.StaticText(pdf_panel, 
+            label="       ℹ️ Formatted export requires 'reportlab'. Install: pip install reportlab")
+        req_note.SetForegroundColour(hex_to_colour(self._theme.get("text_secondary", "#888888")))
+        req_note.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
+        req_row.Add(req_note, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        help_link = wx.adv.HyperlinkCtrl(pdf_panel, label="  ❓ Help", url="https://pcbtools.xyz/tools/kinotes#requirements")
+        help_link.SetNormalColour(hex_to_colour(self._theme.get("accent_blue", "#2196F3")))
+        help_link.SetHoverColour(hex_to_colour(self._theme.get("accent_blue", "#2196F3")))
+        req_row.Add(help_link, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
+        
+        pdf_sizer.Add(req_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        
         pdf_panel.SetSizer(pdf_sizer)
         sizer.Add(pdf_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SECTION_MARGIN)
         
@@ -548,6 +564,7 @@ class SettingsDialog(wx.Dialog):
         
         beta_panel.SetSizer(beta_sizer)
         sizer.Add(beta_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SECTION_MARGIN)
+        sizer.AddSpacer(SECTION_SPACING)
     
     def _build_buttons(self, dialog_sizer):
         """Build dialog buttons with modern dropdown Save button."""

@@ -220,13 +220,13 @@ class PDFExporter:
                 heading_match = re.match(r'^(#{1,3})\s+(.+)$', line)
                 if heading_match:
                     level = len(heading_match.group(1))
-                    text = self._convert_markdown_formatting(heading_match.group(2))
+                    raw_text = heading_match.group(2)
                     if level == 1:
-                        story.append(self._safe_paragraph(text, h1_style))
+                        story.append(self._convert_and_paragraph(raw_text, h1_style))
                     elif level == 2:
-                        story.append(self._safe_paragraph(text, h2_style))
+                        story.append(self._convert_and_paragraph(raw_text, h2_style))
                     else:
-                        story.append(self._safe_paragraph(text, h3_style))
+                        story.append(self._convert_and_paragraph(raw_text, h3_style))
                     continue
                 
                 # Check for horizontal rule
@@ -240,9 +240,11 @@ class PDFExporter:
                 bullet_match = re.match(r'^(\s*)[-*+]\s+(.+)$', line)
                 if bullet_match:
                     indent = len(bullet_match.group(1))
-                    text = self._convert_markdown_formatting(bullet_match.group(2))
+                    raw_text = bullet_match.group(2)
                     style = ParagraphStyle('BulletIndent', parent=bullet_style, leftIndent=20 + indent*10)
-                    story.append(self._safe_paragraph(f"• {text}", style))
+                    # Convert with link support, prepend bullet
+                    formatted = self._convert_markdown_formatting(raw_text, enable_links=True)
+                    story.append(self._safe_paragraph(f"• {formatted}", style))
                     continue
                 
                 # Check for numbered list
@@ -250,24 +252,25 @@ class PDFExporter:
                 if num_match:
                     indent = len(num_match.group(1))
                     num = num_match.group(2)
-                    text = self._convert_markdown_formatting(num_match.group(3))
+                    raw_text = num_match.group(3)
                     style = ParagraphStyle('NumIndent', parent=bullet_style, leftIndent=20 + indent*10)
-                    story.append(self._safe_paragraph(f"{num}. {text}", style))
+                    formatted = self._convert_markdown_formatting(raw_text, enable_links=True)
+                    story.append(self._safe_paragraph(f"{num}. {formatted}", style))
                     continue
                 
                 # Check for checkbox
                 checkbox_match = re.match(r'^[-*]\s+\[([ xX])\]\s+(.+)$', line)
                 if checkbox_match:
                     checked = checkbox_match.group(1).lower() == 'x'
-                    text = self._convert_markdown_formatting(checkbox_match.group(2))
+                    raw_text = checkbox_match.group(2)
                     checkbox_char = "☑" if checked else "☐"
-                    story.append(self._safe_paragraph(f"{checkbox_char} {text}", bullet_style))
+                    formatted = self._convert_markdown_formatting(raw_text, enable_links=True)
+                    story.append(self._safe_paragraph(f"{checkbox_char} {formatted}", bullet_style))
                     continue
                 
-                # Regular paragraph
+                # Regular paragraph - use full fallback chain
                 if line.strip():
-                    text = self._convert_markdown_formatting(line)
-                    story.append(self._safe_paragraph(text, body_style))
+                    story.append(self._convert_and_paragraph(line, body_style))
                 else:
                     story.append(Spacer(1, 0.1*inch))
             
@@ -314,20 +317,71 @@ class PDFExporter:
             plain = re.sub(r'<[^>]+>', '', text)
             return Paragraph(plain, style)
     
-    def _convert_markdown_formatting(self, text):
+    def _convert_and_paragraph(self, raw_text, style):
+        """Convert markdown to XML and create Paragraph with link fallback.
+        
+        First tries with clickable links enabled.
+        If that fails, retries with links stripped to plain text.
+        If that still fails, strips all formatting.
+        """
+        from reportlab.platypus import Paragraph
+        import re
+        
+        # Try 1: With clickable links
+        try:
+            formatted = self._convert_markdown_formatting(raw_text, enable_links=True)
+            return Paragraph(formatted, style)
+        except ValueError as e:
+            print(f"[KiNotes PDF] Link conversion failed, retrying without links")
+        
+        # Try 2: Without links (plain text links)
+        try:
+            formatted = self._convert_markdown_formatting(raw_text, enable_links=False)
+            return Paragraph(formatted, style)
+        except ValueError as e:
+            print(f"[KiNotes PDF] Formatting failed, using plain text")
+        
+        # Try 3: Plain text only
+        plain = self._strip_all_markdown(raw_text)
+        return Paragraph(plain, style)
+    
+    def _convert_markdown_formatting(self, text, enable_links=True):
         """Convert Markdown inline formatting to reportlab XML tags.
         
         IMPORTANT: reportlab requires properly nested XML tags.
         If we open <b> then <i>, we must close </i> then </b>.
+        
+        Args:
+            text: Markdown text to convert
+            enable_links: If True, convert [text](url) to clickable <a> tags.
+                         If False, strip links to plain text (fallback mode).
         """
         import re
         
         # Escape HTML entities first
         text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         
-        # Remove ALL link syntax first - just keep the text
-        # This handles malformed links like "text](url)" and "[text](url)"
-        text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)  # [text](url) -> text
+        if enable_links:
+            # Convert links to clickable <a> tags
+            # Handle [text](url) -> <a href="url" color="blue"><u>text</u></a>
+            def convert_link(match):
+                link_text = match.group(1)
+                url = match.group(2)
+                # Strip any formatting markers from link text for clean display
+                link_text = re.sub(r'\*+', '', link_text)
+                link_text = re.sub(r'_+', '', link_text)
+                link_text = link_text.strip()
+                if not link_text:
+                    link_text = url  # Use URL as text if empty
+                # Return clickable link with blue underline
+                return f'<a href="{url}" color="blue"><u>{link_text}</u></a>'
+            
+            text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', convert_link, text)
+        else:
+            # Fallback: strip links to plain text
+            text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)
+        
+        # Clean orphaned link fragments
         text = re.sub(r'\]\([^)]*\)', '', text)  # orphaned ](url) -> nothing
         text = re.sub(r'\[([^\]]*)\]', r'\1', text)  # orphaned [text] -> text
         
@@ -482,12 +536,17 @@ Generated by KiNotes - PCBtools.xyz
         if actual_pdf:
             return actual_pdf
         
-        # Show message about text export
+        # Show message about text export with clear instructions
         if HAS_WX:
             wx.MessageBox(
                 f"PDF export created text file:\n{txt_path}\n\n"
-                "For true PDF export, install 'reportlab' package.",
-                "Export Note",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "📦 To enable full PDF export with formatting:\n\n"
+                "1. Open KiCad Command Prompt (or terminal)\n"
+                "2. Run: pip install reportlab\n"
+                "3. Restart KiCad\n\n"
+                "📖 More info: pcbtools.xyz/tools/kinotes#requirements",
+                "Export Note - PDF Package Required",
                 wx.OK | wx.ICON_INFORMATION
             )
         
