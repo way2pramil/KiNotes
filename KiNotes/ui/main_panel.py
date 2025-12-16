@@ -18,7 +18,8 @@ import fnmatch
 
 # Import centralized defaults
 from ..core.defaultsConfig import (
-    DEFAULTS, BETA_DEFAULTS, WINDOW_DEFAULTS, DEBUG_MODULES
+    DEFAULTS, BETA_DEFAULTS, WINDOW_DEFAULTS, DEBUG_MODULES,
+    PERFORMANCE_DEFAULTS, debug_print
 )
 
 # Visual Note Editor for WYSIWYG mode
@@ -145,7 +146,10 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         # Don't create linker at init—it requires a live KiCad board (will be created on demand when clicking nets)
         self.net_linker = None
         # Beta flag defaults to True; linker will be lazy-loaded when needed
-        print(f"[KiNotes] Net cache manager available: {bool(self.net_cache_manager)}. beta={self._beta_net_linker}")
+        debug_print(f"[KiNotes] Net cache manager available: {bool(self.net_cache_manager)}. beta={self._beta_net_linker}")
+        
+        # Load timer interval from settings (default from PERFORMANCE_DEFAULTS)
+        self._timer_interval_ms = PERFORMANCE_DEFAULTS['timer_interval_ms']
 
         # Debug logger (shared singleton)
         self.debug_logger: DebugEventLogger = get_debug_logger()
@@ -173,7 +177,7 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 wx.CallAfter(self._show_crash_recovery_dialog)
         except Exception as e:
             import traceback
-            print("KiNotes UI init error: " + str(e))
+            debug_print("KiNotes UI init error: " + str(e))
             traceback.print_exc()
     
     def _load_color_settings(self):
@@ -231,20 +235,20 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             version_changed, old_version, new_version = self.crash_safety.check_version()
             
             if version_changed and old_version:
-                print(f"[KiNotes] Version bump: {old_version} → {new_version}")
+                debug_print(f"[KiNotes] Version bump: {old_version} → {new_version}")
                 self._version_bumped = True
                 # Create backup before any changes
                 backup_ok = self.crash_safety.backup_on_version_bump()
                 if backup_ok:
-                    print(f"[KiNotes] Version backup created: {old_version} → {new_version}")
+                    debug_print(f"[KiNotes] Version backup created: {old_version} → {new_version}")
                 else:
-                    print("[KiNotes] Version backup failed")
+                    debug_print("[KiNotes] Version backup failed")
             
             # Mark startup and check for crash
             crashed = self.crash_safety.mark_startup()
             
             if crashed:
-                print("[KiNotes] ⚠ Previous session crashed")
+                debug_print("[KiNotes] ⚠ Previous session crashed")
                 
                 # Check if safe mode should be enabled
                 if self.crash_safety.should_use_safe_mode():
@@ -259,13 +263,13 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                     self._beta_version_log = safe_config.get('beta_version_log', False)
                     self._beta_net_linker = safe_config.get('beta_net_linker', False)
                     self._beta_debug_panel = safe_config.get('beta_debug_panel', False)
-                    print("[KiNotes] Safe mode activated (beta features disabled)")
+                    debug_print("[KiNotes] Safe mode activated (beta features disabled)")
             
             # Update version file
             self.crash_safety.update_version()
             
         except Exception as e:
-            print(f"[KiNotes] Error in crash/version check: {e}")
+            debug_print(f"[KiNotes] Error in crash/version check: {e}")
             import traceback
             traceback.print_exc()
     
@@ -277,9 +281,9 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         try:
             self.crash_safety = CrashSafetyManager(self.notes_manager.notes_dir)
             self._handle_crash_and_version_check()
-            print("[KiNotes] Crash safety initialized")
+            debug_print("[KiNotes] Crash safety initialized")
         except Exception as e:
-            print(f"[KiNotes] Crash safety init failed (non-critical): {e}")
+            debug_print(f"[KiNotes] Crash safety init failed (non-critical): {e}")
             self.crash_safety = None
 
     def _save_color_settings(self, save_mode='local'):
@@ -321,13 +325,13 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             if save_mode == 'global':
                 # Save to global settings (user-wide defaults)
                 self.notes_manager.save_settings_globally(settings)
-                print("[KiNotes] Settings saved globally")
+                debug_print("[KiNotes] Settings saved globally")
             else:
                 # Save to local project settings
                 self.notes_manager.save_settings(settings)
-                print("[KiNotes] Settings saved locally")
+                debug_print("[KiNotes] Settings saved locally")
         except Exception as e:
-            print(f"[KiNotes] Error saving settings: {e}")
+            debug_print(f"[KiNotes] Error saving settings: {e}")
 
     def _get_editor_bg(self):
         if self._dark_mode:
@@ -751,13 +755,13 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
     def _ensure_net_linker(self):
         """Get net linker from cache manager (lazy-loaded on demand inside KiCad)."""
         if not self.net_cache_manager:
-            print("[KiNotes] Net cache manager not available")
+            debug_print("[KiNotes] Net cache manager not available")
             return
         self.net_linker = self.net_cache_manager.get_linker()
         if self.net_linker:
-            print("[KiNotes] Net linker obtained from cache manager")
+            debug_print("[KiNotes] Net linker obtained from cache manager")
         else:
-            print("[KiNotes] Net linker unavailable (no KiCad board?)")
+            debug_print("[KiNotes] Net linker unavailable (no KiCad board?)")
 
     def _attach_net_linker_to_editor(self):
         """Attach linker to visual editor if available. Linker may be None (lazy-loaded)."""
@@ -767,11 +771,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         try:
             if self._beta_net_linker and self.net_linker:
                 self.visual_editor.set_net_linker(self.net_linker)
-                print("[KiNotes] Net linker attached to visual editor")
+                debug_print("[KiNotes] Net linker attached to visual editor")
             else:
                 self.visual_editor.set_net_linker(None)
         except Exception as e:
-            print(f"[KiNotes] Net linker attach warning: {e}")
+            debug_print(f"[KiNotes] Net linker attach warning: {e}")
 
     def _should_log(self, module: str) -> bool:
         """Return True if debug logging for the module is enabled."""
@@ -819,7 +823,7 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
 
     def _on_refresh_nets(self, event):
         """Refresh net cache (beta feature) - show visual feedback."""
-        print("[KiNotes] Refresh button clicked")
+        debug_print("[KiNotes] Refresh button clicked")
         try:
             # Change button color to green to show active state
             if hasattr(self, 'refresh_net_btn') and self.refresh_net_btn:
@@ -990,7 +994,7 @@ You can safely continue working."""
             dlg.Destroy()
             
         except Exception as e:
-            print(f"[KiNotes] Error showing crash dialog: {e}")
+            debug_print(f"[KiNotes] Error showing crash dialog: {e}")
     
     def _on_clear_crash_history(self, dialog):
         """Clear crash history and disable safe mode."""
@@ -1006,7 +1010,7 @@ You can safely continue working."""
             )
             dialog.Close()
         except Exception as e:
-            print(f"[KiNotes] Error clearing crash history: {e}")
+            debug_print(f"[KiNotes] Error clearing crash history: {e}")
     
     def _get_work_diary_path(self):
         """
@@ -1089,57 +1093,57 @@ You can safely continue working."""
                 filepath, kinotes_dir = self._get_work_diary_path()
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(content)
-                print(f"[KiNotes] Work diary auto-saved to: {filepath}")
+                debug_print(f"[KiNotes] Work diary auto-saved to: {filepath}")
         except Exception as e:
-            print(f"[KiNotes] Auto-save diary warning: {e}")
+            debug_print(f"[KiNotes] Auto-save diary warning: {e}")
     
     def _on_open_work_logs_folder(self, event):
         """Open the .kinotes work logs folder in file explorer."""
-        print("[KiNotes Directory] Click handler called")
+        debug_print("[KiNotes Directory] Click handler called")
         
         # Get actual project directory from board (most reliable)
         kinotes_dir = None
         try:
             import pcbnew
             board = pcbnew.GetBoard()
-            print(f"[KiNotes Directory] board: {board}")
+            debug_print(f"[KiNotes Directory] board: {board}")
             if board:
                 board_file = board.GetFileName()
-                print(f"[KiNotes Directory] board.GetFileName(): {board_file}")
+                debug_print(f"[KiNotes Directory] board.GetFileName(): {board_file}")
                 if board_file:
                     project_dir = os.path.dirname(board_file)
                     kinotes_dir = os.path.join(project_dir, ".kinotes")
-                    print(f"[KiNotes Directory] From board: {kinotes_dir}")
+                    debug_print(f"[KiNotes Directory] From board: {kinotes_dir}")
         except Exception as e:
-            print(f"[KiNotes Directory] pcbnew error: {e}")
+            debug_print(f"[KiNotes Directory] pcbnew error: {e}")
         
         # Fallback to notes_manager's notes_dir (canonical location)
         if not kinotes_dir:
             if hasattr(self, 'notes_manager') and self.notes_manager:
                 if hasattr(self.notes_manager, 'notes_dir') and self.notes_manager.notes_dir:
                     kinotes_dir = self.notes_manager.notes_dir
-                    print(f"[KiNotes Directory] From notes_manager.notes_dir: {kinotes_dir}")
+                    debug_print(f"[KiNotes Directory] From notes_manager.notes_dir: {kinotes_dir}")
                 elif hasattr(self.notes_manager, 'project_dir') and self.notes_manager.project_dir:
                     kinotes_dir = os.path.join(self.notes_manager.project_dir, ".kinotes")
-                    print(f"[KiNotes Directory] From notes_manager.project_dir: {kinotes_dir}")
+                    debug_print(f"[KiNotes Directory] From notes_manager.project_dir: {kinotes_dir}")
         
         # Final fallback - should never reach here
         if not kinotes_dir:
             kinotes_dir = os.path.join(os.getcwd(), ".kinotes")
-            print(f"[KiNotes Directory] FALLBACK to cwd: {kinotes_dir}")
+            debug_print(f"[KiNotes Directory] FALLBACK to cwd: {kinotes_dir}")
         
-        print(f"[KiNotes Directory] Final path: {kinotes_dir}")
-        print(f"[KiNotes Directory] Exists: {os.path.exists(kinotes_dir)}")
+        debug_print(f"[KiNotes Directory] Final path: {kinotes_dir}")
+        debug_print(f"[KiNotes Directory] Exists: {os.path.exists(kinotes_dir)}")
         
         # Normalize path for Windows (fix mixed / and \ separators)
         kinotes_dir = os.path.normpath(kinotes_dir)
-        print(f"[KiNotes Directory] Normalized path: {kinotes_dir}")
+        debug_print(f"[KiNotes Directory] Normalized path: {kinotes_dir}")
         
         # Ensure directory exists
         if not os.path.exists(kinotes_dir):
             try:
                 os.makedirs(kinotes_dir, exist_ok=True)
-                print(f"[KiNotes Directory] Created folder")
+                debug_print(f"[KiNotes Directory] Created folder")
             except Exception as e:
                 wx.MessageBox(
                     f"Could not create .kinotes directory:\n{e}",
@@ -1151,7 +1155,7 @@ You can safely continue working."""
         # Open folder in system file explorer
         import subprocess
         try:
-            print(f"[KiNotes Directory] Opening: {kinotes_dir}")
+            debug_print(f"[KiNotes Directory] Opening: {kinotes_dir}")
             if sys.platform.startswith("win"):
                 # Use os.startfile for most reliable Windows folder opening
                 os.startfile(kinotes_dir)
@@ -1371,9 +1375,9 @@ You can safely continue working."""
         if self._beta_net_linker and self.net_linker:
             try:
                 self.net_linker.refresh_nets()
-                print("[KiNotes] Net linker cache refreshed")
+                debug_print("[KiNotes] Net linker cache refreshed")
             except Exception as e:
-                print(f"[KiNotes] Net linker refresh warning: {e}")
+                debug_print(f"[KiNotes] Net linker refresh warning: {e}")
 
         # Re-attach net linker to editor after settings changes
         self._attach_net_linker_to_editor()
@@ -1426,7 +1430,7 @@ You can safely continue working."""
                     self._create_resizable_debug_panel(main_sizer)
                     self.Layout()
                 except Exception as e:
-                    print(f"[KiNotes] Debug panel create warning: {e}")
+                    debug_print(f"[KiNotes] Debug panel create warning: {e}")
             elif not self._beta_debug_panel and self.debug_panel:
                 try:
                     if hasattr(self, 'debug_container') and self.debug_container:
@@ -1455,7 +1459,7 @@ You can safely continue working."""
         try:
             self.force_save()
         except Exception as e:
-            print(f"[KiNotes] Settings apply save warning: {e}")
+            debug_print(f"[KiNotes] Settings apply save warning: {e}")
         self.Layout()
     
     def _apply_theme_to_panel(self, panel):
@@ -1624,59 +1628,59 @@ You can safely continue working."""
             # Set project directory for file dialogs
             self.visual_editor.project_dir = self.notes_manager.project_dir
             
-            print("[KiNotes] Visual editor created successfully")
+            debug_print("[KiNotes] Visual editor created successfully")
             
             # Apply user's custom colors immediately after creation
             try:
                 bg = self._get_editor_bg()
                 fg = self._get_editor_text()
                 self.visual_editor.set_custom_colors(bg, fg)
-                print(f"[KiNotes] Custom colors applied: bg={bg}, fg={fg}")
+                debug_print(f"[KiNotes] Custom colors applied: bg={bg}, fg={fg}")
             except Exception as e:
-                print(f"[KiNotes] Custom colors warning: {e}")
+                debug_print(f"[KiNotes] Custom colors warning: {e}")
                 import traceback
                 traceback.print_exc()
             
             # Apply user's font size setting
-            print("[KiNotes] About to set font size...")
+            debug_print("[KiNotes] About to set font size...")
             try:
                 settings = self.notes_manager.load_settings() or {}
                 font_size = settings.get("font_size", 11)
-                print(f"[KiNotes] Font size setting: {font_size}")
+                debug_print(f"[KiNotes] Font size setting: {font_size}")
                 self.visual_editor.set_font_size(font_size)
-                print("[KiNotes] Font size applied")
+                debug_print("[KiNotes] Font size applied")
             except Exception as e:
-                print(f"[KiNotes] Font size warning: {e}")
+                debug_print(f"[KiNotes] Font size warning: {e}")
                 import traceback
                 traceback.print_exc()
             
             # Set up cross-probe functionality
-            print("[KiNotes] About to setup crossprobe...")
+            debug_print("[KiNotes] About to setup crossprobe...")
             try:
                 self.visual_editor.set_crossprobe_enabled(self._crossprobe_enabled)
                 if self._crossprobe_enabled and self.designator_linker:
                     self.visual_editor.set_designator_linker(self.designator_linker)
-                print("[KiNotes] Crossprobe setup complete")
+                debug_print("[KiNotes] Crossprobe setup complete")
             except Exception as e:
-                print(f"[KiNotes] Crossprobe setup warning: {e}")
+                debug_print(f"[KiNotes] Crossprobe setup warning: {e}")
                 import traceback
                 traceback.print_exc()
             
             # Set up net highlighting (Beta)
             # Note: net linker is lazy-loaded on first click (inside KiCad only)
-            print("[KiNotes] Net linker setup deferred to first click")
+            debug_print("[KiNotes] Net linker setup deferred to first click")
             try:
                 self.visual_editor.set_net_linker(None)  # Start with no linker; will be created on demand
             except Exception as e:
-                print(f"[KiNotes] Net linker setup warning: {e}")
+                debug_print(f"[KiNotes] Net linker setup warning: {e}")
 
             # Attach debug logger if enabled
-            print("[KiNotes] About to setup debug logger...")
+            debug_print("[KiNotes] About to setup debug logger...")
             try:
                 self._apply_debug_logger_targets()
-                print("[KiNotes] Debug logger setup complete")
+                debug_print("[KiNotes] Debug logger setup complete")
             except Exception as e:
-                print(f"[KiNotes] Debug logger setup warning: {e}")
+                debug_print(f"[KiNotes] Debug logger setup warning: {e}")
                 import traceback
                 traceback.print_exc()
             
@@ -1685,17 +1689,17 @@ You can safely continue working."""
             self.format_toolbar = None  # Visual editor has integrated toolbar
             
             # Bind text change event for auto-save
-            print("[KiNotes] About to bind text change event...")
+            debug_print("[KiNotes] About to bind text change event...")
             try:
                 self.visual_editor.editor.Bind(wx.EVT_TEXT, self._on_text_changed)
             except Exception as e:
-                print(f"[KiNotes] Text change binding warning: {e}")
+                debug_print(f"[KiNotes] Text change binding warning: {e}")
             
             sizer.Add(self.visual_editor, 1, wx.EXPAND | wx.ALL, 0)
-            print("[KiNotes] Visual editor added to sizer")
+            debug_print("[KiNotes] Visual editor added to sizer")
         except Exception as e:
             import traceback
-            print(f"[KiNotes ERROR] Failed to create visual editor: {e}")
+            debug_print(f"[KiNotes ERROR] Failed to create visual editor: {e}")
             traceback.print_exc()
             # Fall back to markdown editor
             self._create_markdown_editor(panel, sizer)
@@ -2242,18 +2246,28 @@ You can safely continue working."""
     # ============================================================
     
     def _start_auto_save_timer(self):
-        """Start auto-save timer - runs every 1 second for time tracking updates."""
+        """Start auto-save timer - uses configurable interval from settings."""
         try:
+            # Load interval from settings, fallback to default
+            settings = self.notes_manager.load_settings() or {}
+            self._timer_interval_ms = settings.get('timer_interval_ms', PERFORMANCE_DEFAULTS['timer_interval_ms'])
+            # Enforce min/max bounds
+            self._timer_interval_ms = max(PERFORMANCE_DEFAULTS['timer_min_ms'], 
+                                          min(self._timer_interval_ms, PERFORMANCE_DEFAULTS['timer_max_ms']))
+            
             self._auto_save_timer = wx.Timer(self)
             self.Bind(wx.EVT_TIMER, self._on_auto_save, self._auto_save_timer)
-            self._auto_save_timer.Start(1000)  # 1 second for timer updates
+            self._auto_save_timer.Start(self._timer_interval_ms)
+            debug_print(f"[KiNotes] Auto-save timer started: {self._timer_interval_ms}ms interval")
         except:
             pass
     
     def _on_auto_save(self, event):
         """Auto-save if modified and update timer displays."""
-        # Update timer displays every tick
+        # Update timer displays
         self._timer_update_tick += 1
+        
+        # Update timer display every tick (timer already throttled by interval)
         self._update_timer_displays()
         
         # Update global timer display
@@ -2262,16 +2276,15 @@ You can safely continue working."""
         except:
             pass
         
-        # Full save only every 5 ticks (5 seconds)
-        if self._timer_update_tick >= 5 or self._modified:
-            if self._modified:
-                try:
-                    self._save_notes()
-                    self._save_todos()
-                    self._modified = False
-                except:
-                    pass
-            self._timer_update_tick = 0
+        # Save if content modified
+        if self._modified:
+            try:
+                self._save_notes()
+                self._save_todos()
+                self._modified = False
+            except:
+                pass
+        self._timer_update_tick = 0
     
     def _load_all_data(self):
         """Load saved data."""

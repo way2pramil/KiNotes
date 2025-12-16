@@ -27,7 +27,7 @@ import datetime
 from typing import Optional, Tuple, List
 
 from .debug_event_logger import EventLevel
-from ..core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS
+from ..core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS, debug_print
 
 
 def _kinotes_log(msg: str):
@@ -706,16 +706,16 @@ class VisualNoteEditor(wx.Panel):
     def _configure_editor_styles(self):
         """Configure the rich text editor default styles."""
         try:
-            print(f"[KiNotes] _configure_editor_styles: Entering")
+            debug_print(f"[KiNotes] _configure_editor_styles: Entering")
             # Always create a fresh style sheet to avoid stale references
-            print(f"[KiNotes] _configure_editor_styles: Creating fresh style sheet")
+            debug_print(f"[KiNotes] _configure_editor_styles: Creating fresh style sheet")
             try:
                 stylesheet = rt.RichTextStyleSheet()
                 self._editor.SetStyleSheet(stylesheet)
             except Exception as e:
-                print(f"[KiNotes] _configure_editor_styles: Style sheet creation warning: {e}")
+                debug_print(f"[KiNotes] _configure_editor_styles: Style sheet creation warning: {e}")
             
-            print(f"[KiNotes] _configure_editor_styles: Creating font with size {self._font_size}")
+            debug_print(f"[KiNotes] _configure_editor_styles: Creating font with size {self._font_size}")
             # Set default font using instance font size
             default_font = wx.Font(
                 self._font_size,
@@ -723,20 +723,20 @@ class VisualNoteEditor(wx.Panel):
                 wx.FONTSTYLE_NORMAL,
                 wx.FONTWEIGHT_NORMAL
             )
-            print(f"[KiNotes] _configure_editor_styles: Setting font on editor")
+            debug_print(f"[KiNotes] _configure_editor_styles: Setting font on editor")
             self._editor.SetFont(default_font)
             
-            print(f"[KiNotes] _configure_editor_styles: Creating basic style")
+            debug_print(f"[KiNotes] _configure_editor_styles: Creating basic style")
             # Set default text color
             basic_style = rt.RichTextAttr()
             basic_style.SetTextColour(self._text_color)
             basic_style.SetBackgroundColour(self._bg_color)
             basic_style.SetFontSize(self._font_size)
-            print(f"[KiNotes] _configure_editor_styles: Setting basic style on editor")
+            debug_print(f"[KiNotes] _configure_editor_styles: Setting basic style on editor")
             self._editor.SetBasicStyle(basic_style)
-            print(f"[KiNotes] _configure_editor_styles: Success!")
+            debug_print(f"[KiNotes] _configure_editor_styles: Success!")
         except Exception as e:
-            print(f"[KiNotes] Configure editor styles warning: {e}")
+            debug_print(f"[KiNotes] Configure editor styles warning: {e}")
             import traceback
             traceback.print_exc()
     
@@ -757,28 +757,28 @@ class VisualNoteEditor(wx.Panel):
     def set_font_size(self, size: int):
         """Set the editor font size (8-24 points)."""
         try:
-            print(f"[KiNotes] set_font_size: Entering with size={size}")
+            debug_print(f"[KiNotes] set_font_size: Entering with size={size}")
             self._font_size = max(8, min(24, size))
-            print(f"[KiNotes] set_font_size: About to call _configure_editor_styles()")
+            debug_print(f"[KiNotes] set_font_size: About to call _configure_editor_styles()")
             self._configure_editor_styles()
-            print(f"[KiNotes] set_font_size: _configure_editor_styles() completed")
+            debug_print(f"[KiNotes] set_font_size: _configure_editor_styles() completed")
             # Update line numbers panel line height (with safety checks)
             if hasattr(self, '_line_numbers') and self._line_numbers:
                 try:
-                    print(f"[KiNotes] set_font_size: About to update line height")
+                    debug_print(f"[KiNotes] set_font_size: About to update line height")
                     self._line_numbers._update_line_height()
-                    print(f"[KiNotes] set_font_size: Line height updated")
+                    debug_print(f"[KiNotes] set_font_size: Line height updated")
                 except Exception as e:
-                    print(f"[KiNotes] Line number height update warning: {e}")
+                    debug_print(f"[KiNotes] Line number height update warning: {e}")
                 try:
-                    print(f"[KiNotes] set_font_size: About to update line numbers from editor")
+                    debug_print(f"[KiNotes] set_font_size: About to update line numbers from editor")
                     self._line_numbers.update_from_editor()
-                    print(f"[KiNotes] set_font_size: Line numbers updated")
+                    debug_print(f"[KiNotes] set_font_size: Line numbers updated")
                 except Exception as e:
-                    print(f"[KiNotes] Line number update warning: {e}")
-            print(f"[KiNotes] set_font_size: Exiting successfully")
+                    debug_print(f"[KiNotes] Line number update warning: {e}")
+            debug_print(f"[KiNotes] set_font_size: Exiting successfully")
         except Exception as e:
-            print(f"[KiNotes] Font size setting warning: {e}")
+            debug_print(f"[KiNotes] Font size setting warning: {e}")
             import traceback
             traceback.print_exc()
     

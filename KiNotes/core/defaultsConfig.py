@@ -31,7 +31,7 @@ License: MIT
 # ============================================================
 DEFAULTS = {
     # General
-    'autosave_interval': 5,          # seconds
+    'autosave_interval': 5,          # seconds (min: 3, max: 60)
     'font_size': 11,                 # points (8-24)
     'pdf_format': 'markdown',        # 'markdown' or 'visual'
     
@@ -60,6 +60,26 @@ DEFAULTS = {
     # Version Log
     'current_version': '0.1.0',
 }
+
+# ============================================================
+# PERFORMANCE SETTINGS
+# ============================================================
+PERFORMANCE_DEFAULTS = {
+    'timer_interval_ms': 5000,       # Auto-save timer interval (ms) - min: 3000
+    'timer_min_ms': 3000,            # Minimum allowed interval
+    'timer_max_ms': 60000,           # Maximum allowed interval
+    'timer_display_divisor': 1,      # Update timer display every N ticks
+}
+
+# ============================================================
+# DEBUG SETTINGS - Console output control
+# ============================================================
+DEBUG_ENABLED = False  # Master debug flag - set True for development only
+
+def debug_print(msg: str) -> None:
+    """Print debug message only if DEBUG_ENABLED is True."""
+    if DEBUG_ENABLED:
+        print(msg)
 
 # ============================================================
 # BETA FEATURES - Experimental features (disabled by default)

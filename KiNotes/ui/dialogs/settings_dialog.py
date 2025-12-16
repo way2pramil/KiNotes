@@ -35,7 +35,7 @@ from ..scaling import get_dpi_scale_factor, get_user_scale_factor, set_user_scal
 from ..components import RoundedButton
 
 # Import centralized defaults
-from ...core.defaultsConfig import WINDOW_DEFAULTS
+from ...core.defaultsConfig import WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS
 
 
 # ------------------------------ Helpers ---------------------------------
@@ -183,6 +183,9 @@ class SettingsDialog(wx.Dialog):
         
         # Panel Size Section
         self._build_panel_size_section(self._scroll_panel, sizer)
+        
+        # Performance Section (Timer Interval)
+        self._build_performance_section(self._scroll_panel, sizer)
         
         # Beta Features Section
         self._build_beta_section(self._scroll_panel, sizer)
@@ -486,6 +489,56 @@ class SettingsDialog(wx.Dialog):
         
         # PDF Export Format Section
         self._build_pdf_format_section(self._scroll_panel, sizer)
+    
+    def _build_performance_section(self, parent, sizer):
+        """Build performance settings section (timer interval)."""
+        perf_header = wx.StaticText(parent, label="⚡ Performance")
+        set_label_style(perf_header, self._theme, bold=True, size=10)
+        sizer.Add(perf_header, 0, wx.LEFT | wx.BOTTOM, SECTION_MARGIN)
+        
+        perf_panel = wx.Panel(parent)
+        perf_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        perf_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Get current settings
+        notes_manager = self._config.get('notes_manager')
+        current_settings = notes_manager.load_settings() if notes_manager else {}
+        current_interval_ms = current_settings.get('timer_interval_ms', PERFORMANCE_DEFAULTS['timer_interval_ms'])
+        current_interval_sec = current_interval_ms // 1000  # Convert to seconds for UI
+        
+        # Timer interval row
+        timer_row = wx.BoxSizer(wx.HORIZONTAL)
+        
+        timer_label = wx.StaticText(perf_panel, label="Auto-save interval:")
+        timer_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        timer_row.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        
+        # SpinCtrl for interval (3-60 seconds)
+        min_sec = PERFORMANCE_DEFAULTS['timer_min_ms'] // 1000
+        max_sec = PERFORMANCE_DEFAULTS['timer_max_ms'] // 1000
+        self._timer_interval_spin = wx.SpinCtrl(perf_panel, min=min_sec, max=max_sec, 
+                                                 initial=max(min_sec, min(current_interval_sec, max_sec)))
+        self._timer_interval_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        self._timer_interval_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
+        timer_row.Add(self._timer_interval_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        
+        sec_label = wx.StaticText(perf_panel, label="seconds")
+        sec_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        timer_row.Add(sec_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        
+        perf_sizer.Add(timer_row, 0, wx.ALL, 10)
+        
+        perf_hint = wx.StaticText(perf_panel, 
+            label="Higher values = better performance, lower = faster saves (Min: 3s)")
+        perf_hint.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        perf_sizer.Add(perf_hint, 0, wx.LEFT | wx.BOTTOM, 10)
+        
+        perf_panel.SetSizer(perf_sizer)
+        sizer.Add(perf_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SECTION_MARGIN)
+        
+        sizer.AddSpacer(SECTION_SPACING)
+        self._add_separator(parent, sizer)
+        sizer.AddSpacer(SECTION_SPACING)
     
     def _build_pdf_format_section(self, parent, sizer):
         """Build PDF export format settings section."""
@@ -811,6 +864,7 @@ class SettingsDialog(wx.Dialog):
             'scale_factor': None if self._scale_auto_checkbox.GetValue() else self._scale_slider.GetValue() / 100.0,
             'panel_width': self._panel_width_spin.GetValue(),
             'panel_height': self._panel_height_spin.GetValue(),
+            'timer_interval_ms': self._timer_interval_spin.GetValue() * 1000,  # Convert seconds to ms
             'beta_table': self._beta_table_cb.GetValue(),
             'beta_markdown': self._beta_markdown_cb.GetValue(),
             'beta_bom': self._beta_bom_cb.GetValue(),

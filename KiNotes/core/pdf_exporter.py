@@ -4,6 +4,8 @@ KiNotes PDF Exporter - Export notes as PDF
 import os
 from datetime import datetime
 
+from .defaultsConfig import debug_print
+
 try:
     import wx
     HAS_WX = True
@@ -105,7 +107,7 @@ class PDFExporter:
     def _try_create_visual_pdf(self, rich_text_ctrl, filepath):
         """Try to create PDF from RichTextCtrl using reportlab - convert via markdown first."""
         try:
-            print("[KiNotes PDF] Starting visual PDF export...")
+            debug_print("[KiNotes PDF] Starting visual PDF export...")
             
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -113,16 +115,16 @@ class PDFExporter:
             from reportlab.lib.colors import HexColor
             from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
             
-            print("[KiNotes PDF] reportlab imported successfully")
+            debug_print("[KiNotes PDF] reportlab imported successfully")
             
             # Use the markdown converter to extract formatting properly
             try:
                 from ui.markdown_converter import richtext_to_markdown
-                print("[KiNotes PDF] markdown_converter imported (method 1)")
+                debug_print("[KiNotes PDF] markdown_converter imported (method 1)")
             except ImportError:
                 try:
                     from ..ui.markdown_converter import richtext_to_markdown
-                    print("[KiNotes PDF] markdown_converter imported (method 2)")
+                    debug_print("[KiNotes PDF] markdown_converter imported (method 2)")
                 except ImportError:
                     # Fallback: direct import for different package structures
                     import sys
@@ -131,25 +133,25 @@ class PDFExporter:
                     if plugin_dir not in sys.path:
                         sys.path.insert(0, plugin_dir)
                     from ui.markdown_converter import richtext_to_markdown
-                    print("[KiNotes PDF] markdown_converter imported (method 3)")
+                    debug_print("[KiNotes PDF] markdown_converter imported (method 3)")
             
             # Convert RichTextCtrl to Markdown (this extracts all formatting)
-            print("[KiNotes PDF] Converting RichText to Markdown...")
+            debug_print("[KiNotes PDF] Converting RichText to Markdown...")
             markdown_content = richtext_to_markdown(rich_text_ctrl)
             
             # DEBUG: Show first 500 chars of markdown
-            print(f"[KiNotes PDF] Markdown content ({len(markdown_content)} chars):")
-            print("=" * 50)
+            debug_print(f"[KiNotes PDF] Markdown content ({len(markdown_content)} chars):")
+            debug_print("=" * 50)
             for line in markdown_content.split('\n')[:15]:
-                print(f"  {repr(line)}")
-            print("=" * 50)
+                debug_print(f"  {repr(line)}")
+            debug_print("=" * 50)
             
             # Check if formatting markers exist
             has_bold = '**' in markdown_content
             has_italic = '*' in markdown_content.replace('**', '')
             has_heading = markdown_content.strip().startswith('#') or '\n#' in markdown_content
             has_hr = '---' in markdown_content or '___' in markdown_content
-            print(f"[KiNotes PDF] Formatting detected: bold={has_bold}, italic={has_italic}, heading={has_heading}, hr={has_hr}")
+            debug_print(f"[KiNotes PDF] Formatting detected: bold={has_bold}, italic={has_italic}, heading={has_heading}, hr={has_hr}")
             
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
             project_name = self._get_project_name()
@@ -274,16 +276,16 @@ class PDFExporter:
                 else:
                     story.append(Spacer(1, 0.1*inch))
             
-            print(f"[KiNotes PDF] Building PDF with {len(story)} story elements...")
+            debug_print(f"[KiNotes PDF] Building PDF with {len(story)} story elements...")
             doc.build(story, onFirstPage=add_footer, onLaterPages=add_footer)
-            print(f"[KiNotes PDF] SUCCESS! PDF created at: {filepath}")
+            debug_print(f"[KiNotes PDF] SUCCESS! PDF created at: {filepath}")
             return filepath
             
         except ImportError as e:
-            print(f"[KiNotes PDF] IMPORT ERROR: {e}")
+            debug_print(f"[KiNotes PDF] IMPORT ERROR: {e}")
             return None
         except Exception as e:
-            print(f"[KiNotes PDF] EXCEPTION: {e}")
+            debug_print(f"[KiNotes PDF] EXCEPTION: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -311,7 +313,7 @@ class PDFExporter:
             return Paragraph(text, style)
         except ValueError as e:
             # XML parsing error - fall back to plain text
-            print(f"[KiNotes PDF] XML error in paragraph, using plain text")
+            debug_print(f"[KiNotes PDF] XML error in paragraph, using plain text")
             # Strip all XML tags and return plain text
             import re
             plain = re.sub(r'<[^>]+>', '', text)
@@ -332,14 +334,14 @@ class PDFExporter:
             formatted = self._convert_markdown_formatting(raw_text, enable_links=True)
             return Paragraph(formatted, style)
         except ValueError as e:
-            print(f"[KiNotes PDF] Link conversion failed, retrying without links")
+            debug_print(f"[KiNotes PDF] Link conversion failed, retrying without links")
         
         # Try 2: Without links (plain text links)
         try:
             formatted = self._convert_markdown_formatting(raw_text, enable_links=False)
             return Paragraph(formatted, style)
         except ValueError as e:
-            print(f"[KiNotes PDF] Formatting failed, using plain text")
+            debug_print(f"[KiNotes PDF] Formatting failed, using plain text")
         
         # Try 3: Plain text only
         plain = self._strip_all_markdown(raw_text)
@@ -409,7 +411,7 @@ class PDFExporter:
         
         # Validate XML tag nesting - if broken, strip all tags
         if not self._validate_xml_nesting(text):
-            print(f"[KiNotes PDF] Invalid XML nesting detected, stripping tags")
+            debug_print(f"[KiNotes PDF] Invalid XML nesting detected, stripping tags")
             text = re.sub(r'<[^>]+>', '', text)
         
         return text
@@ -448,7 +450,7 @@ class PDFExporter:
             return self._export_as_text_pdf(content, filepath)
             
         except Exception as e:
-            print(f"KiNotes: wx printing visual export failed: {e}")
+            debug_print(f"KiNotes: wx printing visual export failed: {e}")
             # Fallback to markdown export
             content = rich_text_ctrl.GetValue()
             return self._export_as_text_pdf(content, filepath)
@@ -659,7 +661,7 @@ Generated by KiNotes - PCBtools.xyz
         except ImportError:
             return None
         except Exception as e:
-            print(f"KiNotes: reportlab PDF failed: {e}")
+            debug_print(f"KiNotes: reportlab PDF failed: {e}")
             return None
 
 
