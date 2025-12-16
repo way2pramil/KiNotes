@@ -29,7 +29,7 @@ if _plugin_dir not in sys.path:
     sys.path.insert(0, _plugin_dir)
 
 # Import centralized defaults
-from core.defaultsConfig import WINDOW_DEFAULTS
+from core.defaultsConfig import WINDOW_DEFAULTS, debug_print, DEPLOY_BUILD
 
 
 # ============================================================
@@ -122,7 +122,7 @@ from ui.main_panel import KiNotesMainPanel
 
 # Import version from single source of truth
 from __version__ import __version__ as _PLUGIN_VERSION
-print(f"KiNotes v{_PLUGIN_VERSION} loaded - Crash-safe edition with atomic saves")
+print(f"KiNotes v{_PLUGIN_VERSION} (Build {DEPLOY_BUILD}) loaded - Crash-safe edition")
 
 
 # Global singleton - ensures only ONE window ever
@@ -223,14 +223,18 @@ class KiNotesFrame(wx.Frame):
         # Load panel size from settings (use centralized defaults)
         panel_width = WINDOW_DEFAULTS['panel_width']
         panel_height = WINDOW_DEFAULTS['panel_height']
+        debug_print(f"[KiNotes SIZE] Frame defaults: {panel_width}x{panel_height}")
         try:
             notes_manager = NotesManager(self.project_dir)
             settings = notes_manager.load_settings()
             if settings:
                 panel_width = settings.get("panel_width", WINDOW_DEFAULTS['panel_width'])
                 panel_height = settings.get("panel_height", WINDOW_DEFAULTS['panel_height'])
-        except:
-            pass
+                debug_print(f"[KiNotes SIZE] Frame from settings: {panel_width}x{panel_height}")
+            else:
+                debug_print(f"[KiNotes SIZE] No settings found, using defaults")
+        except Exception as e:
+            debug_print(f"[KiNotes SIZE] Error loading settings: {e}")
         
         # Use regular Frame style for better close button visibility
         style = (wx.DEFAULT_FRAME_STYLE | wx.FRAME_FLOAT_ON_PARENT)
@@ -241,6 +245,7 @@ class KiNotesFrame(wx.Frame):
             size=(panel_width, panel_height),
             style=style
         )
+        debug_print(f"[KiNotes SIZE] Frame created with size: {self.GetSize()}")
         
         # Initialize core modules
         self.notes_manager = NotesManager(self.project_dir)
@@ -291,21 +296,36 @@ class KiNotesFrame(wx.Frame):
         
         # Set minimum size (800x600 - Windows standard minimum)
         self.SetMinSize((800, 600))
+        debug_print(f"[KiNotes SIZE] Frame after SetMinSize: {self.GetSize()}, MinSize: {self.GetMinSize()}")
     
     def _position_window(self):
-        """Position window on the right side like Properties panel."""
+        """Position window on the right side of the CURRENT display (where mouse is)."""
         try:
-            # Get screen size
-            display = wx.Display(0)
-            screen_rect = display.GetClientArea()
+            # Get display where mouse currently is (multi-monitor aware)
+            mouse_pos = wx.GetMousePosition()
+            display_idx = wx.Display.GetFromPoint(mouse_pos)
+            if display_idx == wx.NOT_FOUND:
+                display_idx = 0  # Fallback to primary
             
-            # Position on right side
+            display = wx.Display(display_idx)
+            screen_rect = display.GetClientArea()
+            debug_print(f"[KiNotes SIZE] Display {display_idx}, Screen rect: {screen_rect.GetWidth()}x{screen_rect.GetHeight()}, origin: ({screen_rect.GetX()}, {screen_rect.GetY()})")
+            
+            # Position on right side of CURRENT display
             frame_size = self.GetSize()
             x = screen_rect.GetRight() - frame_size.GetWidth() - 20
             y = screen_rect.GetTop() + 100
             
+            # Ensure position is within screen bounds
+            if x < screen_rect.GetX():
+                x = screen_rect.GetX() + 20
+            if y < screen_rect.GetY():
+                y = screen_rect.GetY() + 20
+            
             self.SetPosition((x, y))
-        except:
+            debug_print(f"[KiNotes SIZE] Frame positioned at ({x}, {y}), final size: {self.GetSize()}")
+        except Exception as e:
+            debug_print(f"[KiNotes SIZE] Position error: {e}, centering instead")
             self.Centre()
     
     def _bind_events(self):

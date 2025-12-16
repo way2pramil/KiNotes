@@ -103,7 +103,7 @@ When your brain is juggling impedance calculations, component placement, thermal
 ### Core (Stable)
 | Feature | What It Does |
 |---------|--------------|
-| **Visual Editor** | Notion-like rich text—bold, lists, headings, tables |
+| **Visual Editor** | Notion-like rich text—bold, lists, headings |
 | **Smart-Link Designators** | Click R1, U3, C5 → highlight on PCB |
 | **Smart-Link Nets** | Click GND, VCC, SDA → highlight traces and pads |
 | **Auto-Save** | Never lose work—saves on every change |
@@ -119,7 +119,6 @@ When your brain is juggling impedance calculations, component placement, thermal
 | Feature | Status |
 |---------|--------|
 | **Markdown Editor Mode** | Toggle between visual and raw markdown |
-| **Table Insert** | Add tables in visual editor |
 | **BOM Tab** | Dedicated Bill of Materials generator | Thaks for *iBOM*
 | **Version Log Tab** | Design revision tracking (in progress) |
 | **Debug Panel** | Event logging for troubleshooting |
@@ -176,13 +175,14 @@ KiNotes is open source because good tools should be shared. If it helps you ship
 ## 🔧 Requirements
 
 - **KiCad 9.0** (Python 3.9+, wxPython 4.2+)
-- **Optional:** `reportlab` — for PDF export support
+- **Optional:** `reportlab` — for 💾 PDF Export support
+  ○ 📝 Markdown (Plain text, lightweight)
+  ● 🎨 Formatted (Preserves bold, italic, lists)
+  ℹ️ Formatted export requires 'reportlab'. 
   ```bash
   pip install reportlab
   ```
   Without it, PDF export falls back to plain text format.
-
----
 
 ## 🤝 Contributing
 

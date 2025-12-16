@@ -74,7 +74,8 @@ PERFORMANCE_DEFAULTS = {
 # ============================================================
 # DEBUG SETTINGS - Console output control
 # ============================================================
-DEBUG_ENABLED = False  # Master debug flag - set True for development only
+DEBUG_ENABLED = True  # Master debug flag - set True for development only
+DEPLOY_BUILD = 11      # Incremented by deploy script - verifies fresh deployment
 
 def debug_print(msg: str) -> None:
     """Print debug message only if DEBUG_ENABLED is True."""
@@ -86,7 +87,6 @@ def debug_print(msg: str) -> None:
 # ============================================================
 BETA_DEFAULTS = {
     'beta_features_enabled': False,  # Master toggle
-    'beta_table': False,             # Insert Table button
     'beta_markdown': False,          # Markdown editor mode
     'beta_bom': False,               # BOM tab
     'beta_version_log': False,       # Version Log tab
@@ -108,8 +108,8 @@ TIME_TRACKER_DEFAULTS = {
 # ============================================================
 WINDOW_DEFAULTS = {
     # Main panel
-    'panel_width': 1300,
-    'panel_height': 1170,
+    'panel_width': 1000,
+    'panel_height': 800,
     'min_width': 800,
     'min_height': 600,
     
@@ -134,6 +134,20 @@ FONT_DEFAULTS = {
     'code': 10,
     'min': 8,
     'max': 24,
+}
+
+# ============================================================
+# EDITOR LAYOUT DEFAULTS (pixels, DPI-scaled at runtime)
+# Industry standard: 12-16px horizontal, 8px vertical for compact tools
+# ============================================================
+EDITOR_LAYOUT = {
+    # Internal margins (inside editor control)
+    'margin_left': 12,       # Left padding from text edge
+    'margin_right': 8,       # Right padding from text edge
+    
+    # External padding (sizer padding around editor)
+    'padding_horizontal': 4,  # Left/right gap between editor and panel
+    'padding_bottom': 4,      # Bottom gap
 }
 
 # ============================================================
@@ -317,3 +331,8 @@ def get_notes_template(project_name: str) -> str:
 def get_version_log_template() -> dict:
     """Get default version log structure."""
     return VERSION_LOG_TEMPLATE.copy()
+
+
+
+
+

@@ -40,7 +40,6 @@ KiNotes includes a comprehensive crash detection and recovery system that protec
 {
     'use_visual_editor': False,      # Use stable Markdown editor
     'beta_features_enabled': False,  # Disable beta features
-    'beta_table': False,
     'beta_markdown': True,           # Keep markdown (stable)
     'beta_bom': False,
     'beta_version_log': False,

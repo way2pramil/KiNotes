@@ -41,6 +41,7 @@ from .main_panel import KiNotesMainPanel
 from .toolbar import KiNotesToolbar
 from .styles import KiNotesStyles
 from .bom_dialog import BOMConfigDialog, BOMGenerator, show_bom_dialog
+from .markdown_editor import MarkdownEditor
 
 __all__ = [
     # Themes
@@ -62,5 +63,8 @@ __all__ = [
     
     # Main UI
     'KiNotesMainPanel', 'KiNotesToolbar', 'KiNotesStyles',
-    'BOMConfigDialog', 'BOMGenerator', 'show_bom_dialog'
+    'BOMConfigDialog', 'BOMGenerator', 'show_bom_dialog',
+    
+    # Editors
+    'MarkdownEditor',
 ]

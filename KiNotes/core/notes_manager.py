@@ -9,11 +9,17 @@ import shutil
 import tempfile
 from datetime import datetime
 
-# Import centralized defaults
-from .defaultsConfig import (
-    DEFAULTS, get_default_settings, get_notes_template, 
-    get_version_log_template
-)
+# Import centralized defaults - handle both KiCad plugin and standalone context
+try:
+    from .defaultsConfig import (
+        DEFAULTS, get_default_settings, get_notes_template, 
+        get_version_log_template
+    )
+except ImportError:
+    from core.defaultsConfig import (
+        DEFAULTS, get_default_settings, get_notes_template, 
+        get_version_log_template
+    )
 
 
 class NotesManager:

@@ -34,10 +34,15 @@ from ..themes import (
 from ..scaling import get_dpi_scale_factor, get_user_scale_factor, set_user_scale_factor
 from ..components import RoundedButton
 
-# Import centralized defaults
-from ...core.defaultsConfig import (
-    WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS, DEFAULTS, BETA_DEFAULTS, TIME_TRACKER_DEFAULTS
-)
+# Import centralized defaults - handle both KiCad plugin and standalone context
+try:
+    from ...core.defaultsConfig import (
+        WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS, DEFAULTS, BETA_DEFAULTS, TIME_TRACKER_DEFAULTS, debug_print
+    )
+except ImportError:
+    from core.defaultsConfig import (
+        WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS, DEFAULTS, BETA_DEFAULTS, TIME_TRACKER_DEFAULTS, debug_print
+    )
 
 
 # ------------------------------ Helpers ---------------------------------
@@ -91,6 +96,23 @@ SCROLLBAR_MARGIN = 30
 SECTION_SPACING = 20
 
 
+def block_scroll_wheel(ctrl):
+    """Block mouse scroll wheel on a control to prevent accidental value changes.
+    
+    When scrolling through the settings dialog, users may accidentally change
+    spinner/slider values. This blocks the scroll event on specific controls.
+    """
+    def on_mousewheel(event):
+        # Don't process - let parent scroll panel handle it
+        event.Skip(False)
+        # Propagate to parent for scrolling
+        parent = ctrl.GetParent()
+        if parent:
+            wx.PostEvent(parent, event)
+    
+    ctrl.Bind(wx.EVT_MOUSEWHEEL, on_mousewheel)
+
+
 class SettingsDialog(wx.Dialog):
     """Settings configuration dialog with theme, color, and feature options.
     
@@ -112,8 +134,7 @@ class SettingsDialog(wx.Dialog):
                 - crossprobe_enabled: bool
                 - use_visual_editor: bool
                 - visual_editor_available: bool
-                - beta_markdown: bool
-                - beta_table, beta_bom, beta_version_log: bool
+                - beta_markdown, beta_bom, beta_version_log: bool
                 - notes_manager: NotesManager instance
         """
         self._config = config
@@ -139,12 +160,16 @@ class SettingsDialog(wx.Dialog):
         min_width = min(min_width, screen_rect.width - 50)
         min_height = min(min_height, screen_rect.height - 100)
         
+        debug_print(f"[KiNotes SIZE] SettingsDialog: screen={screen_rect.width}x{screen_rect.height}, dpi_scale={dpi_scale}")
+        debug_print(f"[KiNotes SIZE] SettingsDialog: min={min_width}x{min_height}, preferred={preferred_width}x{preferred_height}")
+        
         # Set minimum and preferred sizes
         self.SetSizeHints(minW=min_width, minH=min_height)
         self.SetSize((preferred_width, preferred_height))
         
         # Center on screen
         self.CentreOnScreen()
+        debug_print(f"[KiNotes SIZE] SettingsDialog final size: {self.GetSize()}, pos: {self.GetPosition()}")
         
         self.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         
@@ -396,6 +421,7 @@ class SettingsDialog(wx.Dialog):
         slider_row.Add(min_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
         self._scale_slider = wx.Slider(scale_panel, value=100, minValue=100, maxValue=200, style=wx.SL_HORIZONTAL)
+        block_scroll_wheel(self._scale_slider)  # Prevent accidental value changes while scrolling
         if current_scale is not None:
             self._scale_slider.SetValue(int(current_scale * 100))
         else:
@@ -403,7 +429,7 @@ class SettingsDialog(wx.Dialog):
             self._scale_slider.SetValue(int(system_scale * 100))
         self._scale_slider.Enable(current_scale is not None)
         self._scale_slider.Bind(wx.EVT_SLIDER, self._on_scale_slider_change)
-        slider_row.Add(self._scale_slider, 1, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+        slider_row.Add(self._scale_slider, 1, wx.EXPAND)
         
         max_label = wx.StaticText(scale_panel, label="200%")
         max_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
@@ -450,6 +476,7 @@ class SettingsDialog(wx.Dialog):
         size_row.Add(width_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
         self._panel_width_spin = wx.SpinCtrl(panel_size_panel, min=800, max=2000, initial=max(800, current_width))
+        block_scroll_wheel(self._panel_width_spin)  # Prevent accidental value changes while scrolling
         self._panel_width_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         self._panel_width_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
         size_row.Add(self._panel_width_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
@@ -467,6 +494,7 @@ class SettingsDialog(wx.Dialog):
         size_row.Add(height_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         
         self._panel_height_spin = wx.SpinCtrl(panel_size_panel, min=600, max=2000, initial=max(600, current_height))
+        block_scroll_wheel(self._panel_height_spin)  # Prevent accidental value changes while scrolling
         self._panel_height_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         self._panel_height_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
         size_row.Add(self._panel_height_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
@@ -520,6 +548,7 @@ class SettingsDialog(wx.Dialog):
         max_sec = PERFORMANCE_DEFAULTS['timer_max_ms'] // 1000
         self._timer_interval_spin = wx.SpinCtrl(perf_panel, min=min_sec, max=max_sec, 
                                                  initial=max(min_sec, min(current_interval_sec, max_sec)))
+        block_scroll_wheel(self._timer_interval_spin)  # Prevent accidental value changes while scrolling
         self._timer_interval_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         self._timer_interval_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
         timer_row.Add(self._timer_interval_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
@@ -599,15 +628,10 @@ class SettingsDialog(wx.Dialog):
         beta_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         beta_sizer = wx.BoxSizer(wx.VERTICAL)
         
-        self._beta_table_cb = wx.CheckBox(beta_panel, label="  📊 Insert Table (Visual Editor toolbar)")
-        self._beta_table_cb.SetValue(self._config.get('beta_table', False))
-        self._beta_table_cb.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        beta_sizer.Add(self._beta_table_cb, 0, wx.ALL, 8)
-        
         self._beta_markdown_cb = wx.CheckBox(beta_panel, label="  📝 Markdown Editor Mode")
         self._beta_markdown_cb.SetValue(self._config.get('beta_markdown', False))
         self._beta_markdown_cb.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        beta_sizer.Add(self._beta_markdown_cb, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        beta_sizer.Add(self._beta_markdown_cb, 0, wx.ALL, 8)
         
         self._beta_bom_cb = wx.CheckBox(beta_panel, label="  📋 BOM Tab (Bill of Materials)")
         self._beta_bom_cb.SetValue(self._config.get('beta_bom', False))
@@ -664,10 +688,10 @@ class SettingsDialog(wx.Dialog):
         
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        # Reset to Defaults button (left side)
+        # Reset to Defaults button (left side) - plain style, not alarming
         reset_btn = RoundedButton(
-            btn_panel, label="↻ Reset Defaults", size=(130, 40),
-            bg_color=self._theme["accent_red"], fg_color="#FFFFFF",
+            btn_panel, label="Reset Defaults", size=(130, 40),
+            bg_color=self._theme["bg_button"], fg_color=self._theme["text_primary"],
             corner_radius=10, font_size=10, font_weight=wx.FONTWEIGHT_NORMAL
         )
         reset_btn.Bind_Click(lambda e: self._on_reset_defaults())
@@ -789,7 +813,6 @@ class SettingsDialog(wx.Dialog):
         self._timer_interval_spin.SetValue(PERFORMANCE_DEFAULTS['timer_interval_ms'] // 1000)
         
         # Reset beta features (all disabled except net_linker)
-        self._beta_table_cb.SetValue(BETA_DEFAULTS['beta_table'])
         self._beta_markdown_cb.SetValue(BETA_DEFAULTS['beta_markdown'])
         self._beta_bom_cb.SetValue(BETA_DEFAULTS['beta_bom'])
         self._beta_version_log_cb.SetValue(BETA_DEFAULTS['beta_version_log'])
@@ -853,11 +876,13 @@ class SettingsDialog(wx.Dialog):
         if is_dark:
             dark_bg_choices = list(DARK_BACKGROUND_COLORS.keys())
             self._bg_choice = wx.Choice(panel, choices=dark_bg_choices)
+            block_scroll_wheel(self._bg_choice)  # Prevent accidental value changes while scrolling
             dark_bg_name = self._config.get('dark_bg_color_name', 'Charcoal')
             self._bg_choice.SetSelection(dark_bg_choices.index(dark_bg_name) if dark_bg_name in dark_bg_choices else 0)
         else:
             bg_choices = list(BACKGROUND_COLORS.keys())
             self._bg_choice = wx.Choice(panel, choices=bg_choices)
+            block_scroll_wheel(self._bg_choice)  # Prevent accidental value changes while scrolling
             bg_name = self._config.get('bg_color_name', 'Ivory Paper')
             self._bg_choice.SetSelection(bg_choices.index(bg_name) if bg_name in bg_choices else 0)
         
@@ -872,11 +897,13 @@ class SettingsDialog(wx.Dialog):
         if is_dark:
             dark_txt_choices = list(DARK_TEXT_COLORS.keys())
             self._txt_choice = wx.Choice(panel, choices=dark_txt_choices)
+            block_scroll_wheel(self._txt_choice)  # Prevent accidental value changes while scrolling
             dark_txt_name = self._config.get('dark_text_color_name', 'Pure White')
             self._txt_choice.SetSelection(dark_txt_choices.index(dark_txt_name) if dark_txt_name in dark_txt_choices else 0)
         else:
             txt_choices = list(TEXT_COLORS.keys())
             self._txt_choice = wx.Choice(panel, choices=txt_choices)
+            block_scroll_wheel(self._txt_choice)  # Prevent accidental value changes while scrolling
             txt_name = self._config.get('text_color_name', 'Carbon Black')
             self._txt_choice.SetSelection(txt_choices.index(txt_name) if txt_name in txt_choices else 0)
         
@@ -941,7 +968,6 @@ class SettingsDialog(wx.Dialog):
             'panel_width': self._panel_width_spin.GetValue(),
             'panel_height': self._panel_height_spin.GetValue(),
             'timer_interval_ms': self._timer_interval_spin.GetValue() * 1000,  # Convert seconds to ms
-            'beta_table': self._beta_table_cb.GetValue(),
             'beta_markdown': self._beta_markdown_cb.GetValue(),
             'beta_bom': self._beta_bom_cb.GetValue(),
             'beta_version_log': self._beta_version_log_cb.GetValue(),

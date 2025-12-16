@@ -23,7 +23,11 @@ import re
 import sys
 import functools
 
-from .defaultsConfig import DESIGNATOR_PREFIXES
+# Handle import in both KiCad plugin context and standalone
+try:
+    from .defaultsConfig import DESIGNATOR_PREFIXES
+except ImportError:
+    from core.defaultsConfig import DESIGNATOR_PREFIXES
 
 def _kinotes_log(msg: str):
     """Log message to console, handling KiCad's None stdout."""

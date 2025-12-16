@@ -16,11 +16,17 @@ import time
 import re
 import fnmatch
 
-# Import centralized defaults
-from ..core.defaultsConfig import (
-    DEFAULTS, BETA_DEFAULTS, WINDOW_DEFAULTS, DEBUG_MODULES,
-    PERFORMANCE_DEFAULTS, debug_print
-)
+# Import centralized defaults - handle both KiCad plugin and standalone context
+try:
+    from ..core.defaultsConfig import (
+        DEFAULTS, BETA_DEFAULTS, WINDOW_DEFAULTS, DEBUG_MODULES,
+        PERFORMANCE_DEFAULTS, debug_print
+    )
+except ImportError:
+    from core.defaultsConfig import (
+        DEFAULTS, BETA_DEFAULTS, WINDOW_DEFAULTS, DEBUG_MODULES,
+        PERFORMANCE_DEFAULTS, debug_print
+    )
 
 # Visual Note Editor for WYSIWYG mode
 try:
@@ -29,6 +35,13 @@ try:
     VISUAL_EDITOR_AVAILABLE = True
 except ImportError:
     VISUAL_EDITOR_AVAILABLE = False
+
+# Markdown Editor for power user mode
+try:
+    from .markdown_editor import MarkdownEditor
+    MARKDOWN_EDITOR_AVAILABLE = True
+except ImportError:
+    MARKDOWN_EDITOR_AVAILABLE = False
 
 # Import extracted modules
 from .themes import (
@@ -130,7 +143,6 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         
         # Beta features (from centralized defaults)
         self._beta_features_enabled = BETA_DEFAULTS['beta_features_enabled']
-        self._beta_table = BETA_DEFAULTS['beta_table']
         self._beta_markdown = BETA_DEFAULTS['beta_markdown']
         self._beta_bom = BETA_DEFAULTS['beta_bom']
         self._beta_version_log = BETA_DEFAULTS['beta_version_log']
@@ -163,6 +175,8 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         
         self._theme = DARK_THEME if self._dark_mode else LIGHT_THEME
         self.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        
+        debug_print(f"[KiNotes SIZE] MainPanel init, parent size: {parent.GetSize()}")
         
         try:
             self._init_ui()
@@ -211,7 +225,6 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 # Beta features - default disabled
                 self._beta_features_enabled = settings.get("beta_features_enabled", False)
                 # Individual beta features
-                self._beta_table = settings.get("beta_table", False)
                 self._beta_markdown = settings.get("beta_markdown", False)
                 self._beta_bom = settings.get("beta_bom", False)
                 self._beta_version_log = settings.get("beta_version_log", False)
@@ -257,7 +270,6 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                     # Apply safe configuration
                     self._use_visual_editor = safe_config.get('use_visual_editor', False)
                     self._beta_features_enabled = safe_config.get('beta_features_enabled', False)
-                    self._beta_table = safe_config.get('beta_table', False)
                     self._beta_markdown = safe_config.get('beta_markdown', True)
                     self._beta_bom = safe_config.get('beta_bom', False)
                     self._beta_version_log = safe_config.get('beta_version_log', False)
@@ -307,7 +319,6 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 "net_crossprobe_enabled": getattr(self, '_net_crossprobe_enabled', True),
                 "custom_designators": getattr(self, '_custom_designators', ''),
                 "beta_features_enabled": self._beta_features_enabled,
-                "beta_table": self._beta_table,
                 "beta_markdown": self._beta_markdown,
                 "beta_bom": self._beta_bom,
                 "beta_version_log": self._beta_version_log,
@@ -315,11 +326,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 "debug_modules": self._debug_modules,
                 "pdf_format": getattr(self, '_pdf_format', 'markdown'),
             })
-            # Save panel size if settings dialog controls exist
-            if hasattr(self, '_panel_width_spin') and self._panel_width_spin:
-                settings["panel_width"] = self._panel_width_spin.GetValue()
-            if hasattr(self, '_panel_height_spin') and self._panel_height_spin:
-                settings["panel_height"] = self._panel_height_spin.GetValue()
+            # Save panel size from instance variables (set by settings dialog)
+            if hasattr(self, '_panel_width') and self._panel_width:
+                settings["panel_width"] = self._panel_width
+            if hasattr(self, '_panel_height') and self._panel_height:
+                settings["panel_height"] = self._panel_height
             
             # Save based on mode
             if save_mode == 'global':
@@ -353,7 +364,8 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         
         # === CONTENT AREA ===
         self.content_panel = wx.Panel(self)
-        self.content_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        # Use editor bg color to match notes panel and avoid gray strip
+        self.content_panel.SetBackgroundColour(self._get_editor_bg())
         self.content_sizer = wx.BoxSizer(wx.VERTICAL)
         
         # Create all tab panels
@@ -882,7 +894,6 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         # UI State
         debug_info += "UI State:\n"
         debug_info += f"  Dark Mode: {self._dark_mode}\n"
-        debug_info += f"  Beta Table: {self._beta_table}\n"
         debug_info += f"  Beta Markdown: {self._beta_markdown}\n"
         debug_info += f"  Beta BOM: {self._beta_bom}\n"
         debug_info += f"  Beta Version Log: {self._beta_version_log}\n\n"
@@ -1263,7 +1274,6 @@ You can safely continue working."""
             'use_visual_editor': self._use_visual_editor,
             'visual_editor_available': VISUAL_EDITOR_AVAILABLE,
             'beta_markdown': self._beta_markdown,
-            'beta_table': self._beta_table,
             'beta_bom': self._beta_bom,
             'beta_version_log': self._beta_version_log,
             'beta_net_linker': True,  # Always on - no longer beta
@@ -1328,7 +1338,7 @@ You can safely continue working."""
         new_scale_factor = result['scale_factor']
         set_user_scale_factor(new_scale_factor)
         
-        # Check panel size changes
+        # Check panel size changes and store new values
         current_settings = self.notes_manager.load_settings() or {}
         old_width = current_settings.get("panel_width", 1300)
         old_height = current_settings.get("panel_height", 1170)
@@ -1336,8 +1346,11 @@ You can safely continue working."""
         new_height = result['panel_height']
         panel_size_changed = (old_width != new_width or old_height != new_height)
         
+        # Store panel size for saving
+        self._panel_width = new_width
+        self._panel_height = new_height
+        
         # Update beta feature settings
-        old_beta_table = self._beta_table
         old_beta_markdown = self._beta_markdown
         old_beta_bom = self._beta_bom
         old_beta_version_log = self._beta_version_log
@@ -1346,7 +1359,6 @@ You can safely continue working."""
         old_use_visual_editor = self._use_visual_editor
         old_debug_modules = dict(self._debug_modules)
         
-        self._beta_table = result['beta_table']
         self._beta_markdown = result['beta_markdown']
         self._beta_bom = result['beta_bom']
         self._beta_version_log = result['beta_version_log']
@@ -1383,7 +1395,6 @@ You can safely continue working."""
         self._attach_net_linker_to_editor()
         
         beta_features_changed = (
-            old_beta_table != self._beta_table or
             old_beta_markdown != self._beta_markdown or
             old_beta_bom != self._beta_bom or
             old_beta_version_log != self._beta_version_log or
@@ -1492,7 +1503,8 @@ You can safely continue working."""
         self.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         self.top_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
         self.bottom_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
-        self.content_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        # Use editor bg color for content area to avoid gray strip around notes
+        self.content_panel.SetBackgroundColour(self._get_editor_bg())
         
         # Apply theme to formatting toolbar
         try:
@@ -1596,7 +1608,8 @@ You can safely continue working."""
     def _create_notes_tab(self, parent):
         """Create Notes tab with dual-mode editor support (Visual/Markdown)."""
         panel = wx.Panel(parent)
-        panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        # Use editor background color (not panel bg) to avoid gray strip around editor
+        panel.SetBackgroundColour(self._get_editor_bg())
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         # Store reference to notes panel sizer for editor switching
@@ -1622,7 +1635,7 @@ You can safely continue working."""
                 panel,
                 dark_mode=self._dark_mode,
                 style=wx.BORDER_NONE,
-                beta_features=self._beta_table  # Table button controlled by beta_table setting
+                beta_features=False  # Reserved for future beta features
             )
             
             # Set project directory for file dialogs
@@ -1705,33 +1718,23 @@ You can safely continue working."""
             self._create_markdown_editor(panel, sizer)
     
     def _create_markdown_editor(self, panel, sizer):
-        """Create Markdown Text Editor (Power User Mode)."""
-        # Formatting toolbar for Markdown mode
-        self.format_toolbar = self._create_formatting_toolbar(panel)
-        sizer.Add(self.format_toolbar, 0, wx.EXPAND)
+        """Create Markdown Text Editor (Power User Mode) using MarkdownEditor class."""
+        from .markdown_editor import MarkdownEditor
         
-        # Text editor
-        self.text_editor = wx.TextCtrl(
+        self.markdown_editor = MarkdownEditor(
             panel,
-            style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.BORDER_NONE
+            dark_mode=self._dark_mode,
+            bg_color=self._get_editor_bg(),
+            text_color=self._get_editor_text(),
+            designator_linker=self.designator_linker,
+            on_text_changed=self._on_text_changed,
         )
-        self.text_editor.SetBackgroundColour(self._get_editor_bg())
-        self.text_editor.SetForegroundColour(self._get_editor_text())
-        self.text_editor.SetFont(wx.Font(12, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        sizer.Add(self.markdown_editor, 1, wx.EXPAND)
         
-        # Set default text style
-        font = self.text_editor.GetFont()
-        text_attr = wx.TextAttr(self._get_editor_text(), self._get_editor_bg(), font)
-        self.text_editor.SetDefaultStyle(text_attr)
-        
-        self.text_editor.Bind(wx.EVT_TEXT, self._on_text_changed)
-        self.text_editor.Bind(wx.EVT_LEFT_DOWN, self._on_text_click)
-        self.text_editor.Bind(wx.EVT_KEY_DOWN, self._on_editor_key_down)
-        sizer.Add(self.text_editor, 1, wx.EXPAND | wx.ALL, 12)
-        
-        # Reference for unified API
+        # Alias for unified API
+        self.text_editor = self.markdown_editor._editor
         self.visual_editor = None  # Not using visual editor
-    
+
     def _get_note_content(self):
         """Get note content from active editor (unified API)."""
         if self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor:
@@ -1746,251 +1749,8 @@ You can safely continue working."""
             self.visual_editor.SetValue(content)
         elif hasattr(self, 'text_editor') and self.text_editor:
             self.text_editor.SetValue(content)
-    
-    def _create_formatting_toolbar(self, parent):
-        """Create compact formatting toolbar for Notes tab."""
-        toolbar = wx.Panel(parent)
-        toolbar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
-        toolbar.SetMinSize((-1, 48))
-        
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.AddSpacer(12)
-        
-        # Formatting buttons with icons and tooltips
-        buttons = [
-            ("B", "Bold (Ctrl+B)", self._on_format_bold, wx.FONTWEIGHT_BOLD),
-            ("I", "Italic (Ctrl+I)", self._on_format_italic, None),
-            ("U", "Underline (Ctrl+U)", self._on_format_underline, None),
-            ("|", None, None, None),  # Separator
-            ("H1", "Heading 1 (Ctrl+1)", self._on_format_h1, None),
-            ("H2", "Heading 2 (Ctrl+2)", self._on_format_h2, None),
-            ("|", None, None, None),  # Separator
-            ("•", "Bullet List (Ctrl+Shift+B)", self._on_format_bullet, None),
-            ("1.", "Numbered List (Ctrl+Shift+N)", self._on_format_numbered, None),
-            ("☐", "Task Checkbox (Ctrl+Shift+X)", self._on_format_checkbox, None),
-            ("|", None, None, None),  # Separator
-            ("—", "Insert Divider (Ctrl+Shift+H)", self._on_format_divider, None),
-            ("🕒", "Insert Timestamp (Alt+T)", self._on_format_timestamp, None),
-        ]
-        
-        self.format_buttons = []
-        
-        for item in buttons:
-            if item[0] == "|":
-                # Vertical separator
-                sep = wx.StaticLine(toolbar, style=wx.LI_VERTICAL, size=(1, 32))
-                sep.SetBackgroundColour(hex_to_colour(self._theme["text_secondary"]))
-                sizer.Add(sep, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, 8)
-            else:
-                label, tooltip, handler, font_weight = item
-                btn = wx.Button(toolbar, label=label, size=(36, 36), style=wx.BORDER_NONE)
-                btn.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
-                btn.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-                
-                # Set font
-                if font_weight:
-                    btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, font_weight))
-                elif label == "I":
-                    btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
-                elif label in ["H1", "H2"]:
-                    btn.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-                else:
-                    btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-                
-                if tooltip:
-                    btn.SetToolTip(tooltip)
-                if handler:
-                    btn.Bind(wx.EVT_BUTTON, handler)
-                
-                btn.SetCursor(wx.Cursor(wx.CURSOR_HAND))
-                self.format_buttons.append(btn)
-                sizer.Add(btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
-        
-        toolbar.SetSizer(sizer)
-        return toolbar
-    
-    # Formatting handlers
-    def _on_format_bold(self, event):
-        """Apply bold formatting."""
-        self._wrap_selection("**", "**")
-    
-    def _on_format_italic(self, event):
-        """Apply italic formatting."""
-        self._wrap_selection("*", "*")
-    
-    def _on_format_underline(self, event):
-        """Apply underline formatting."""
-        self._wrap_selection("<u>", "</u>")
-    
-    def _on_format_h1(self, event):
-        """Apply Heading 1 formatting."""
-        self._apply_line_prefix("# ")
-    
-    def _on_format_h2(self, event):
-        """Apply Heading 2 formatting."""
-        self._apply_line_prefix("## ")
-    
-    def _on_format_bullet(self, event):
-        """Apply bullet list formatting."""
-        self._apply_line_prefix("- ")
-    
-    def _on_format_numbered(self, event):
-        """Apply numbered list formatting."""
-        self._apply_line_prefix("1. ")
-    
-    def _on_format_checkbox(self, event):
-        """Apply task checkbox formatting."""
-        self._apply_line_prefix("- [ ] ")
-    
-    def _on_format_divider(self, event):
-        """Insert horizontal divider."""
-        pos = self.text_editor.GetInsertionPoint()
-        self.text_editor.WriteText("\n---\n")
-        self.text_editor.SetInsertionPoint(pos + 5)
-    
-    def _on_format_timestamp(self, event):
-        """Insert current timestamp."""
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        self.text_editor.WriteText(timestamp)
-    
-    def _wrap_selection(self, prefix, suffix):
-        """Wrap selected text with prefix and suffix."""
-        start, end = self.text_editor.GetSelection()
-        
-        if start == end:
-            # No selection - insert template and select placeholder
-            self.text_editor.WriteText(prefix + "text" + suffix)
-            new_pos = start + len(prefix)
-            self.text_editor.SetSelection(new_pos, new_pos + 4)
-        else:
-            # Wrap selection
-            selected_text = self.text_editor.GetStringSelection()
-            self.text_editor.Replace(start, end, prefix + selected_text + suffix)
-            # Restore selection to wrapped content
-            self.text_editor.SetSelection(start + len(prefix), end + len(prefix))
-    
-    def _apply_line_prefix(self, prefix):
-        """Apply prefix to current line or selected lines."""
-        start, end = self.text_editor.GetSelection()
-        
-        # Get line boundaries
-        line_start = self.text_editor.GetRange(0, start).rfind('\n')
-        line_start = 0 if line_start == -1 else line_start + 1
-        
-        line_end = self.text_editor.GetRange(end, self.text_editor.GetLastPosition()).find('\n')
-        line_end = self.text_editor.GetLastPosition() if line_end == -1 else end + line_end
-        
-        # Get current line content
-        line_content = self.text_editor.GetRange(line_start, line_end)
-        
-        # Remove existing heading/list markers
-        import re
-        cleaned = re.sub(r'^(#{1,6}\s+|- \[ \] |- \[x\] |- |1\. |\d+\. )', '', line_content)
-        
-        # Apply new prefix
-        new_content = prefix + cleaned
-        self.text_editor.Replace(line_start, line_end, new_content)
-        
-        # Restore cursor position
-        self.text_editor.SetInsertionPoint(line_start + len(new_content))
-    
-    def _on_editor_key_down(self, event):
-        """Handle keyboard shortcuts for formatting."""
-        keycode = event.GetKeyCode()
-        ctrl = event.ControlDown()
-        shift = event.ShiftDown()
-        alt = event.AltDown()
-        
-        # Ctrl+B = Bold
-        if ctrl and not shift and keycode == ord('B'):
-            self._on_format_bold(None)
-            return
-        
-        # Ctrl+I = Italic
-        if ctrl and not shift and keycode == ord('I'):
-            self._on_format_italic(None)
-            return
-        
-        # Ctrl+U = Underline
-        if ctrl and not shift and keycode == ord('U'):
-            self._on_format_underline(None)
-            return
-        
-        # Ctrl+1 = H1
-        if ctrl and not shift and keycode == ord('1'):
-            self._on_format_h1(None)
-            return
-        
-        # Ctrl+2 = H2
-        if ctrl and not shift and keycode == ord('2'):
-            self._on_format_h2(None)
-            return
-        
-        # Ctrl+Shift+B = Bullet
-        if ctrl and shift and keycode == ord('B'):
-            self._on_format_bullet(None)
-            return
-        
-        # Ctrl+Shift+N = Numbered
-        if ctrl and shift and keycode == ord('N'):
-            self._on_format_numbered(None)
-            return
-        
-        # Ctrl+Shift+X = Checkbox
-        if ctrl and shift and keycode == ord('X'):
-            self._on_format_checkbox(None)
-            return
-        
-        # Ctrl+Shift+H = Divider
-        if ctrl and shift and keycode == ord('H'):
-            self._on_format_divider(None)
-            return
-        
-        # Alt+T = Timestamp
-        if alt and not ctrl and keycode == ord('T'):
-            self._on_format_timestamp(None)
-            return
-        
-        # Enter key in list - continue list
-        if keycode == wx.WXK_RETURN:
-            self._handle_list_continuation()
-            return
-        
-        event.Skip()
-    
-    def _handle_list_continuation(self):
-        """Auto-continue lists when pressing Enter."""
-        pos = self.text_editor.GetInsertionPoint()
-        
-        # Get current line
-        line_start = self.text_editor.GetRange(0, pos).rfind('\n')
-        line_start = 0 if line_start == -1 else line_start + 1
-        line_content = self.text_editor.GetRange(line_start, pos)
-        
-        import re
-        
-        # Check for list markers
-        bullet_match = re.match(r'^(\s*- )', line_content)
-        checkbox_match = re.match(r'^(\s*- \[ \] )', line_content)
-        numbered_match = re.match(r'^(\s*)(\d+)\. ', line_content)
-        
-        if checkbox_match:
-            # Continue checkbox list
-            indent = checkbox_match.group(1)
-            self.text_editor.WriteText('\n' + indent)
-        elif bullet_match:
-            # Continue bullet list
-            indent = bullet_match.group(1)
-            self.text_editor.WriteText('\n' + indent)
-        elif numbered_match:
-            # Continue numbered list with incremented number
-            indent = numbered_match.group(1)
-            num = int(numbered_match.group(2)) + 1
-            self.text_editor.WriteText(f'\n{indent}{num}. ')
-        else:
-            # Normal enter
-            self.text_editor.WriteText('\n')
+        elif hasattr(self, 'markdown_editor') and self.markdown_editor:
+            self.markdown_editor.SetValue(content)
     
     # ============================================================
     # TAB 2: TODO LIST

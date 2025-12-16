@@ -13,7 +13,7 @@ import wx
 import wx.lib.scrolledpanel as scrolled
 
 from ..themes import hex_to_colour
-from ..components import RoundedButton, PlayPauseButton, Icons
+from ..components import RoundedButton, Icons
 
 
 class TodoTabMixin:
@@ -40,15 +40,6 @@ class TodoTabMixin:
         )
         self.add_todo_btn.Bind_Click(self._on_add_todo)
         tb_sizer.Add(self.add_todo_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
-        
-        # Clear task button
-        self.clear_done_btn = RoundedButton(
-            toolbar, label="Clear Task", size=(140, 42),
-            bg_color=self._theme["bg_button"], fg_color=self._theme["text_primary"],
-            corner_radius=10, font_size=11, font_weight=wx.FONTWEIGHT_NORMAL
-        )
-        self.clear_done_btn.Bind_Click(self._on_clear_done)
-        tb_sizer.Add(self.clear_done_btn, 0, wx.ALIGN_CENTER_VERTICAL)
         
         tb_sizer.AddStretchSpacer()
         
@@ -90,16 +81,14 @@ class TodoTabMixin:
         if done:
             self.time_tracker.task_timers[item_id]["done"] = done
         
-        # Main container panel with vertical layout
+        # Main container panel - use theme colors
         container_panel = wx.Panel(self.todo_scroll)
-        if self._dark_mode:
-            container_bg = "#3A3A3A"
-            text_input_bg = "#4A4A4A"
-            memo_bg = "#2D4A2D"
-        else:
-            container_bg = "#FAFAFA"
-            text_input_bg = "#FFFFFF"
-            memo_bg = "#E8F5E9"
+        container_bg = self._theme["bg_toolbar"]
+        memo_bg = self._theme["bg_button"]
+        
+        # Get user's custom editor colors (same as Notes panel)
+        editor_bg = self._get_editor_bg()
+        editor_text = self._get_editor_text()
         
         container_panel.SetBackgroundColour(hex_to_colour(container_bg))
         container_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -116,14 +105,19 @@ class TodoTabMixin:
         item_sizer.Add(cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 14)
         item_sizer.AddSpacer(12)
         
-        # Timer play/stop button
-        timer_btn = PlayPauseButton(item_panel, size=(50, 32), is_on=False)
-        timer_btn.Bind_Change(lambda is_on, iid=item_id: self._on_timer_toggle(iid, is_on))
+        # Timer start/stop button - use theme accent colors
+        timer_btn = RoundedButton(
+            item_panel, label="Start", size=(60, 32),
+            bg_color=self._theme["accent_green"],
+            fg_color="#FFFFFF",
+            corner_radius=6, font_size=10, font_weight=wx.FONTWEIGHT_BOLD
+        )
+        timer_btn.Bind_Click(lambda e, iid=item_id: self._on_timer_toggle(iid, None))
         item_sizer.Add(timer_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
         
-        # Text input
+        # Text input - use user's custom editor colors (matches Notes panel)
         txt = wx.TextCtrl(item_panel, value=text, style=wx.BORDER_SIMPLE | wx.TE_PROCESS_ENTER)
-        txt.SetBackgroundColour(hex_to_colour(text_input_bg))
+        txt.SetBackgroundColour(editor_bg)
         
         if done:
             font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
@@ -132,7 +126,7 @@ class TodoTabMixin:
             txt.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
         else:
             txt.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            txt.SetForegroundColour(hex_to_colour("#E0E0E0" if self._dark_mode else "#2D2D2D"))
+            txt.SetForegroundColour(editor_text)
         
         txt.Bind(wx.EVT_TEXT, lambda e, iid=item_id: self._on_todo_text_change(iid))
         txt.Bind(wx.EVT_TEXT_ENTER, lambda e: self._on_add_todo(None))
@@ -159,7 +153,7 @@ class TodoTabMixin:
         
         item_sizer.Add(rtc_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
         
-        # Delete button
+        # Delete button - use theme colors
         del_btn = wx.Button(item_panel, label=Icons.DELETE, size=(40, 40), style=wx.BORDER_NONE)
         del_btn.SetBackgroundColour(hex_to_colour(container_bg))
         del_btn.SetForegroundColour(hex_to_colour(self._theme["accent_red"]))
@@ -170,7 +164,7 @@ class TodoTabMixin:
         item_panel.SetSizer(item_sizer)
         container_sizer.Add(item_panel, 0, wx.EXPAND)
         
-        # === ROW 2: Session memo row ===
+        # === ROW 2: Session memo row - use theme colors ===
         memo_panel = wx.Panel(container_panel)
         memo_panel.SetBackgroundColour(hex_to_colour(memo_bg))
         memo_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -181,12 +175,9 @@ class TodoTabMixin:
         
         memo_txt = wx.TextCtrl(memo_panel, value="", style=wx.BORDER_SIMPLE)
         memo_txt.SetHint("Session memo - what are you working on?")
-        if self._dark_mode:
-            memo_txt.SetBackgroundColour(hex_to_colour("#3A5A3A"))
-            memo_txt.SetForegroundColour(hex_to_colour("#E0E0E0"))
-        else:
-            memo_txt.SetBackgroundColour(hex_to_colour("#FFFFFF"))
-            memo_txt.SetForegroundColour(hex_to_colour("#2D2D2D"))
+        # Use user's custom editor colors (matches Notes panel and task text)
+        memo_txt.SetBackgroundColour(editor_bg)
+        memo_txt.SetForegroundColour(editor_text)
         memo_txt.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
         memo_txt.Bind(wx.EVT_TEXT, lambda e, iid=item_id: self._on_memo_change(iid))
         memo_sizer.Add(memo_txt, 1, wx.EXPAND | wx.ALL, 8)
@@ -223,7 +214,7 @@ class TodoTabMixin:
         txt.SetFocus()
         self._save_todos()
     
-    def _on_timer_toggle(self, item_id, is_on):
+    def _on_timer_toggle(self, item_id, _unused):
         """Handle timer start/stop for a task."""
         current_item = None
         for item in self._todo_items:
@@ -231,14 +222,22 @@ class TodoTabMixin:
                 current_item = item
                 break
         
+        # Get current running state and toggle
+        is_currently_running = self.time_tracker.is_task_running(item_id)
+        is_on = not is_currently_running  # Toggle state
+        
         if is_on:
             prev_running = self.time_tracker.current_running_task_id
             self.time_tracker.start_task(item_id)
             
+            # Update button to show "Stop"
+            if current_item:
+                self._update_timer_button(current_item, True)
+            
             if prev_running is not None and prev_running != item_id:
                 for item in self._todo_items:
                     if item["id"] == prev_running:
-                        item["timer_switch"].SetValue(False)
+                        self._update_timer_button(item, False)
                         if "memo_panel" in item and item["memo_panel"]:
                             memo_text = item["memo_text"].GetValue().strip()
                             if memo_text:
@@ -258,6 +257,10 @@ class TodoTabMixin:
             
             self.time_tracker.stop_task(item_id)
             
+            # Update button to show "Start"
+            if current_item:
+                self._update_timer_button(current_item, False)
+            
             if current_item and "memo_panel" in current_item:
                 current_item["memo_text"].SetValue("")
                 current_item["memo_panel"].Hide()
@@ -267,6 +270,22 @@ class TodoTabMixin:
         self.todo_scroll.Layout()
         self._update_timer_displays()
         self._save_todos()
+    
+    def _update_timer_button(self, item, is_running):
+        """Update timer button appearance based on running state using theme colors."""
+        btn = item.get("timer_switch")
+        if not btn:
+            return
+        
+        if is_running:
+            btn.label = "Stop"
+            btn.bg_color = hex_to_colour(self._theme["accent_red"])
+            btn.fg_color = hex_to_colour("#FFFFFF")
+        else:
+            btn.label = "Start"
+            btn.bg_color = hex_to_colour(self._theme["accent_green"])
+            btn.fg_color = hex_to_colour("#FFFFFF")
+        btn.Refresh()
     
     def _save_memo_to_last_session(self, item_id, memo_text):
         """Save a memo to the last session in history."""
@@ -294,7 +313,7 @@ class TodoTabMixin:
                 
                 if item["done"]:
                     self.time_tracker.mark_task_done(item_id)
-                    item["timer_switch"].SetValue(False)
+                    self._update_timer_button(item, False)  # Reset to "Start" state
                     if "memo_panel" in item and item["memo_panel"]:
                         item["memo_panel"].Hide()
                         item["container"].Layout()
@@ -307,7 +326,8 @@ class TodoTabMixin:
                 else:
                     font.SetStrikethrough(False)
                     item["text"].SetFont(font)
-                    item["text"].SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+                    # Use custom editor text color when unchecked
+                    item["text"].SetForegroundColour(self._get_editor_text())
                 
                 item["text"].Refresh()
                 break

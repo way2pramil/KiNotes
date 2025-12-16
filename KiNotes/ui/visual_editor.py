@@ -27,7 +27,21 @@ import datetime
 from typing import Optional, Tuple, List
 
 from .debug_event_logger import EventLevel
-from ..core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS, debug_print
+
+# Handle import in both KiCad plugin context and standalone
+try:
+    from ..core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS, EDITOR_LAYOUT, debug_print
+except ImportError:
+    try:
+        from core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS, EDITOR_LAYOUT, debug_print
+    except ImportError:
+        # Fallback defaults if import fails completely
+        def debug_print(msg):
+            pass
+        FONT_DEFAULTS = {'default_font_size': 14, 'min_font_size': 8, 'max_font_size': 72}
+        EDITOR_MARKERS = {'smart_link_start': '[[', 'smart_link_end': ']]'}
+        COLORS = {'light_backgrounds': [], 'light_text': [], 'dark_backgrounds': [], 'dark_text': []}
+        EDITOR_LAYOUT = {'margin_left': 12, 'margin_right': 8, 'padding_horizontal': 4, 'padding_bottom': 4}
 
 
 def _kinotes_log(msg: str):
@@ -188,129 +202,6 @@ class VisualEditorStyles:
         
         return attr
     
-    @classmethod
-    def get_table_header_style(cls, dark_mode: bool = False, text_color: wx.Colour = None, bg_color: wx.Colour = None) -> rt.RichTextAttr:
-        """Get table header cell style.
-        
-        Args:
-            dark_mode: Whether dark mode is enabled
-            text_color: Custom text color (uses theme default if None)
-            bg_color: Custom background color for header (uses theme default if None)
-        """
-        attr = rt.RichTextAttr()
-        attr.SetFontSize(cls.FONT_SIZE_NORMAL)
-        attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
-        
-        # Text color
-        if text_color:
-            attr.SetTextColour(text_color)
-        elif dark_mode:
-            attr.SetTextColour(wx.Colour(255, 255, 255))
-        else:
-            attr.SetTextColour(wx.Colour(30, 30, 30))
-        
-        # Header background - slightly different from main bg for contrast
-        if bg_color:
-            # Adjust provided bg for header contrast
-            r, g, b = bg_color.Red(), bg_color.Green(), bg_color.Blue()
-            if dark_mode:
-                attr.SetBackgroundColour(wx.Colour(min(255, r + 20), min(255, g + 20), min(255, b + 20)))
-            else:
-                attr.SetBackgroundColour(wx.Colour(max(0, r - 15), max(0, g - 15), max(0, b - 15)))
-        elif dark_mode:
-            attr.SetBackgroundColour(wx.Colour(58, 58, 60))
-        else:
-            attr.SetBackgroundColour(wx.Colour(240, 240, 240))
-        
-        return attr
-    
-    @classmethod
-    def get_table_cell_style(cls, dark_mode: bool = False, text_color: wx.Colour = None) -> rt.RichTextAttr:
-        """Get table cell style.
-        
-        Args:
-            dark_mode: Whether dark mode is enabled
-            text_color: Custom text color (uses theme default if None)
-        """
-        attr = rt.RichTextAttr()
-        attr.SetFontSize(cls.FONT_SIZE_NORMAL)
-        attr.SetFontWeight(wx.FONTWEIGHT_NORMAL)
-        
-        if text_color:
-            attr.SetTextColour(text_color)
-        elif dark_mode:
-            attr.SetTextColour(wx.Colour(230, 230, 230))
-        else:
-            attr.SetTextColour(wx.Colour(50, 50, 50))
-        
-        return attr
-
-
-# ============================================================
-# MARGIN PANEL - Clean left margin for breathing space
-# ============================================================
-
-class MarginPanel(wx.Panel):
-    """
-    Simple left margin panel for the visual editor.
-    Provides breathing space between panel edge and text content.
-    Matches theme colors seamlessly.
-    """
-    
-    def __init__(self, parent, dark_mode: bool = False):
-        super().__init__(parent, style=wx.BORDER_NONE)
-        
-        self._dark_mode = dark_mode
-        
-        # Margin width - 20 pixels for clean breathing space
-        self._width = 20
-        self.SetMinSize((self._width, 100))
-        self.SetSize((self._width, -1))
-        
-        self._update_colors()
-        self.SetBackgroundColour(self._bg_color)
-        
-        self.Bind(wx.EVT_PAINT, self._on_paint)
-    
-    def _update_colors(self):
-        """Update colors based on dark mode."""
-        if self._dark_mode:
-            # Match dark editor background
-            self._bg_color = wx.Colour(30, 30, 32)
-        else:
-            # Match light editor background
-            self._bg_color = wx.Colour(255, 255, 255)
-    
-    def set_editor(self, editor):
-        """Set the associated editor (for API compatibility)."""
-        pass  # No longer needed, but keep for compatibility
-    
-    def update_from_editor(self):
-        """Update from editor (for API compatibility)."""
-        pass  # No longer needed
-    
-    def _update_line_height(self):
-        """For API compatibility."""
-        pass
-    
-    def update_dark_mode(self, dark_mode: bool):
-        """Update dark mode setting."""
-        self._dark_mode = dark_mode
-        self._update_colors()
-        self.SetBackgroundColour(self._bg_color)
-        self.Refresh()
-    
-    def _on_paint(self, event):
-        """Paint the margin - just a clean solid color."""
-        dc = wx.BufferedPaintDC(self)
-        dc.SetBackground(wx.Brush(self._bg_color))
-        dc.Clear()
-
-
-# Alias for backward compatibility
-LineNumberPanel = MarginPanel
-
-
 # ============================================================
 # VISUAL NOTE EDITOR - Main Editor Control
 # ============================================================
@@ -336,12 +227,12 @@ class VisualNoteEditor(wx.Panel):
             parent: Parent wx.Window
             dark_mode: Enable dark theme colors
             style: Window style flags (e.g., wx.BORDER_NONE)
-            beta_features: Enable beta features like Table insertion
+            beta_features: Reserved for future beta features (currently unused)
         """
         super().__init__(parent, style=style)
         
         self._dark_mode = dark_mode
-        self._beta_features = beta_features
+        self._beta_features = beta_features  # Reserved for future use
         self._modified = False
         self._current_list_type = None  # 'bullet', 'numbered', 'checkbox'
         self._list_item_number = 0
@@ -404,10 +295,6 @@ class VisualNoteEditor(wx.Panel):
         self._dark_mode = dark_mode
         self._update_theme_colors()
         self._apply_visual_theme()
-        
-        # Update line numbers panel
-        if hasattr(self, '_line_numbers') and self._line_numbers:
-            self._line_numbers.update_dark_mode(dark_mode)
     
     def set_custom_colors(self, bg_color: wx.Colour = None, text_color: wx.Colour = None):
         """
@@ -485,20 +372,15 @@ class VisualNoteEditor(wx.Panel):
 
     def _init_ui(self):
         """Initialize UI components."""
+        debug_print(f"[KiNotes SIZE] VisualEditor init, parent size: {self.GetParent().GetSize()}")
+        
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         
         # Create formatting toolbar
         self._toolbar = self._create_toolbar()
         main_sizer.Add(self._toolbar, 0, wx.EXPAND)
         
-        # Create horizontal sizer for line numbers + editor
-        editor_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        # Create line number panel
-        self._line_numbers = LineNumberPanel(self, self._dark_mode)
-        editor_sizer.Add(self._line_numbers, 0, wx.EXPAND)
-        
-        # Create rich text editor
+        # Create rich text editor with proper margins
         self._editor = rt.RichTextCtrl(
             self,
             style=wx.VSCROLL | wx.HSCROLL | wx.BORDER_NONE | wx.WANTS_CHARS
@@ -506,16 +388,24 @@ class VisualNoteEditor(wx.Panel):
         
         # Configure editor appearance
         self._editor.SetBackgroundColour(self._bg_color)
+        
+        # Set editor margins for readability (from centralized EDITOR_LAYOUT config)
+        # RichTextCtrl uses SetMargins for internal padding
+        try:
+            self._editor.SetMargins(
+                scale_size(EDITOR_LAYOUT['margin_left'], self),
+                scale_size(EDITOR_LAYOUT['margin_right'], self)
+            )
+        except:
+            pass
         self._configure_editor_styles()
         
-        # Connect line numbers to editor
-        self._line_numbers.set_editor(self._editor)
-        
-        editor_sizer.Add(self._editor, 1, wx.EXPAND)
-        
-        main_sizer.Add(editor_sizer, 1, wx.EXPAND | wx.ALL, 8)
+        # Add editor with external padding as fallback for margin support
+        main_sizer.Add(self._editor, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 
+                       scale_size(EDITOR_LAYOUT['padding_horizontal'], self))
         
         self.SetSizer(main_sizer)
+        debug_print(f"[KiNotes SIZE] VisualEditor created, size: {self.GetSize()}")
     
     def _create_toolbar(self) -> wx.Panel:
         """Create the formatting toolbar with all buttons."""
@@ -529,15 +419,13 @@ class VisualNoteEditor(wx.Panel):
         # Define toolbar buttons
         # Format: (label, tooltip, callback, is_toggle)
         
-        # Insert group - Table only shown when beta features enabled
+        # Insert group
         insert_buttons = [
             ("—", "Divider", self._on_divider, False),
             ("⏱", "Timestamp", self._on_timestamp, False),
             ("⛓", "Link", self._on_insert_link, False),
             ("🖼", "Image", self._on_insert_image, False),
         ]
-        if self._beta_features:
-            insert_buttons.append(("⊞", "Table (Beta)", self._on_insert_table, False))
         
         button_groups = [
             # Text formatting - unified simple text icons
@@ -762,20 +650,6 @@ class VisualNoteEditor(wx.Panel):
             debug_print(f"[KiNotes] set_font_size: About to call _configure_editor_styles()")
             self._configure_editor_styles()
             debug_print(f"[KiNotes] set_font_size: _configure_editor_styles() completed")
-            # Update line numbers panel line height (with safety checks)
-            if hasattr(self, '_line_numbers') and self._line_numbers:
-                try:
-                    debug_print(f"[KiNotes] set_font_size: About to update line height")
-                    self._line_numbers._update_line_height()
-                    debug_print(f"[KiNotes] set_font_size: Line height updated")
-                except Exception as e:
-                    debug_print(f"[KiNotes] Line number height update warning: {e}")
-                try:
-                    debug_print(f"[KiNotes] set_font_size: About to update line numbers from editor")
-                    self._line_numbers.update_from_editor()
-                    debug_print(f"[KiNotes] set_font_size: Line numbers updated")
-                except Exception as e:
-                    debug_print(f"[KiNotes] Line number update warning: {e}")
             debug_print(f"[KiNotes] set_font_size: Exiting successfully")
         except Exception as e:
             debug_print(f"[KiNotes] Font size setting warning: {e}")
@@ -872,7 +746,6 @@ class VisualNoteEditor(wx.Panel):
             
             # Clear references
             self._editor = None
-            self._line_numbers = None
             self._toolbar = None
             self._toolbar_buttons = None
             self._designator_linker = None
@@ -892,10 +765,6 @@ class VisualNoteEditor(wx.Panel):
         try:
             # Use RichTextCtrl's built-in method to show the caret
             self._editor.ShowPosition(self._editor.GetInsertionPoint())
-            
-            # Update line numbers panel after scroll
-            if hasattr(self, '_line_numbers') and self._line_numbers:
-                wx.CallAfter(self._line_numbers.update_from_editor)
         except:
             pass
     
@@ -912,9 +781,6 @@ class VisualNoteEditor(wx.Panel):
         if key in nav_keys:
             # Ensure cursor is visible after navigation
             wx.CallAfter(self._ensure_cursor_visible)
-            # Also update line numbers
-            if hasattr(self, '_line_numbers') and self._line_numbers:
-                wx.CallAfter(self._line_numbers.update_from_editor)
         
         event.Skip()
     
@@ -1162,418 +1028,6 @@ class VisualNoteEditor(wx.Panel):
         
         dlg.Destroy()
     
-    def _on_insert_table(self, event):
-        """Insert a proper RichText table with visual styling."""
-        # Ask for table dimensions - scale dialog size for DPI
-        dlg_size = scale_size((320, 320), self)
-        dlg = wx.Dialog(self, title="Insert Table", size=dlg_size,
-                       style=wx.DEFAULT_DIALOG_STYLE)
-        dlg.SetBackgroundColour(self._bg_color)
-        
-        panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        panel_sizer.AddSpacer(scale_size(16, self))
-        
-        # Rows input (including header row)
-        row_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        row_label = wx.StaticText(dlg, label="Rows:")
-        row_label.SetForegroundColour(self._text_color)
-        row_label.SetMinSize((scale_size(100, self), -1))
-        row_sizer.Add(row_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
-        row_spin = wx.SpinCtrl(dlg, min=2, max=100, initial=4)
-        row_spin.SetMinSize((scale_size(100, self), -1))
-        row_sizer.Add(row_spin, 0, wx.EXPAND)
-        panel_sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
-        
-        panel_sizer.AddSpacer(scale_size(10, self))
-        
-        # Columns input
-        col_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        col_label = wx.StaticText(dlg, label="Columns:")
-        col_label.SetForegroundColour(self._text_color)
-        col_label.SetMinSize((scale_size(100, self), -1))
-        col_sizer.Add(col_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
-        col_spin = wx.SpinCtrl(dlg, min=2, max=10, initial=4)
-        col_spin.SetMinSize((scale_size(100, self), -1))
-        col_sizer.Add(col_spin, 0, wx.EXPAND)
-        panel_sizer.Add(col_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
-        
-        panel_sizer.AddSpacer(scale_size(10, self))
-        
-        # Row Height input
-        height_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        height_label = wx.StaticText(dlg, label="Row Height:")
-        height_label.SetForegroundColour(self._text_color)
-        height_label.SetMinSize((scale_size(100, self), -1))
-        height_sizer.Add(height_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
-        height_spin = wx.SpinCtrl(dlg, min=20, max=200, initial=30)
-        height_spin.SetMinSize((scale_size(80, self), -1))
-        height_sizer.Add(height_spin, 0)
-        height_unit = wx.StaticText(dlg, label="px")
-        height_unit.SetForegroundColour(self._text_color)
-        height_sizer.Add(height_unit, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, scale_size(5, self))
-        panel_sizer.Add(height_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
-        
-        panel_sizer.AddSpacer(scale_size(10, self))
-        
-        # Column Width input
-        width_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        width_label = wx.StaticText(dlg, label="Column Width:")
-        width_label.SetForegroundColour(self._text_color)
-        width_label.SetMinSize((scale_size(100, self), -1))
-        width_sizer.Add(width_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, scale_size(10, self))
-        width_spin = wx.SpinCtrl(dlg, min=40, max=500, initial=100)
-        width_spin.SetMinSize((scale_size(80, self), -1))
-        width_sizer.Add(width_spin, 0)
-        width_unit = wx.StaticText(dlg, label="px")
-        width_unit.SetForegroundColour(self._text_color)
-        width_sizer.Add(width_unit, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, scale_size(5, self))
-        panel_sizer.Add(width_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, scale_size(20, self))
-        
-        panel_sizer.AddStretchSpacer()
-        
-        # Buttons - ensure visibility
-        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        btn_sizer.AddStretchSpacer()
-        
-        cancel_btn = wx.Button(dlg, wx.ID_CANCEL, "Cancel")
-        cancel_btn.SetMinSize(scale_size((80, 32), self))
-        btn_sizer.Add(cancel_btn, 0, wx.RIGHT, scale_size(10, self))
-        
-        ok_btn = wx.Button(dlg, wx.ID_OK, "Insert Table")
-        ok_btn.SetMinSize(scale_size((100, 32), self))
-        ok_btn.SetDefault()
-        btn_sizer.Add(ok_btn, 0)
-        
-        panel_sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, scale_size(16, self))
-        
-        dlg.SetSizer(panel_sizer)
-        dlg.Layout()
-        dlg.CenterOnParent()
-        
-        if dlg.ShowModal() == wx.ID_OK:
-            rows = row_spin.GetValue()
-            cols = col_spin.GetValue()
-            row_height = height_spin.GetValue()
-            col_width = width_spin.GetValue()
-            # Create header row with "Column 1", "Column 2", etc.
-            headers = [f"Column {i+1}" for i in range(cols)]
-            self._insert_rich_table(rows, cols, True, headers=headers, row_height=row_height, col_width=col_width)
-        
-        dlg.Destroy()
-    
-    def _insert_rich_table(self, rows: int, cols: int, has_header: bool = True, 
-                          headers: List[str] = None, data: List[List[str]] = None,
-                          row_height: int = None, col_width: int = None):
-        """
-        Insert a proper RichTextTable with styling and borders.
-        
-        Args:
-            rows: Number of rows (including header if has_header)
-            cols: Number of columns
-            has_header: Whether first row is header
-            headers: Optional header text list
-            data: Optional data rows list
-            row_height: Optional row height in pixels (default: 30)
-            col_width: Optional column width in pixels (default: auto-calculated)
-        """
-        # Ensure we're at end of line
-        pos = self._editor.GetInsertionPoint()
-        text = self._editor.GetValue()
-        if pos > 0 and len(text) > 0 and text[pos - 1] != '\n':
-            self._editor.WriteText("\n")
-        
-        # Default column width - auto-calculate based on editor width
-        if col_width is None:
-            editor_width = self._editor.GetClientSize().GetWidth() - 60
-            col_width = max(80, min(200, editor_width // cols))
-        
-        # Default row height
-        if row_height is None:
-            row_height = 30
-        
-        # Set border color based on theme
-        if self._dark_mode:
-            border_color = wx.Colour(100, 100, 100)  # Gray border for dark mode
-        else:
-            border_color = wx.Colour(180, 180, 180)  # Light gray for light mode
-        
-        # Create table attributes with proper column widths
-        table_attr = rt.RichTextAttr()
-        try:
-            # Set up text box attributes for the table
-            text_box_attr = table_attr.GetTextBoxAttr()
-            
-            # Set table width to total of all columns
-            total_width = col_width * cols
-            text_box_attr.GetWidth().SetValue(total_width, rt.TEXT_ATTR_UNITS_PIXELS)
-            
-            # Set border
-            text_box_attr.GetBorder().SetColour(border_color)
-            text_box_attr.GetBorder().SetWidth(1, rt.TEXT_ATTR_UNITS_PIXELS)
-            text_box_attr.GetBorder().SetStyle(wx.BORDER_SIMPLE)
-        except Exception as e:
-            pass  # Table attribute API may vary
-        
-        # Create the table with attributes
-        table = self._editor.WriteTable(rows, cols, table_attr)
-        
-        if table is None:
-            # Table creation failed - raise exception to trigger fallback
-            raise Exception("WriteTable returned None - rich table not supported")
-        
-        # Set cell properties (width, height, border) without writing text
-        # Writing text into cells with SetCaretPosition causes crashes in KiCad
-        for row_idx in range(rows):
-            for col_idx in range(cols):
-                cell = table.GetCell(row_idx, col_idx)
-                if cell:
-                    try:
-                        cell_props = cell.GetProperties()
-                        cell_box = cell_props.GetTextBoxAttr()
-                        
-                        # Set cell width
-                        cell_box.GetWidth().SetValue(col_width, rt.TEXT_ATTR_UNITS_PIXELS)
-                        
-                        # Set cell height
-                        cell_box.GetHeight().SetValue(row_height, rt.TEXT_ATTR_UNITS_PIXELS)
-                        
-                        # Set cell padding
-                        cell_box.GetPadding().Set(5, rt.TEXT_ATTR_UNITS_PIXELS)
-                        
-                        # Set cell border
-                        cell_box.GetBorder().SetColour(border_color)
-                        cell_box.GetBorder().SetWidth(1, rt.TEXT_ATTR_UNITS_PIXELS)
-                        cell_box.GetBorder().SetStyle(wx.BORDER_SIMPLE)
-                        
-                        cell.SetProperties(cell_props)
-                    except Exception as e:
-                        pass  # Cell properties API may vary
-        
-        # Move cursor to end of document after table insertion
-        self._editor.MoveEnd()
-        self._editor.WriteText("\n\n")
-        self._modified = True
-        self._editor.WriteText("\n\n")
-        self._modified = True
-    
-    def insert_data_table(self, headers: List[str], data: List[List[str]], title: str = None):
-        """
-        Public method to insert a formatted data table (for BOM, metadata, etc.)
-        Uses ASCII table format for reliable cross-platform rendering.
-        
-        Args:
-            headers: List of column header strings
-            data: List of row data (each row is a list of cell values)
-            title: Optional title to insert before table
-        """
-        # Insert title if provided
-        if title:
-            self._editor.BeginBold()
-            self._editor.BeginFontSize(14)
-            self._editor.WriteText(f"\n{title}\n")
-            self._editor.EndFontSize()
-            self._editor.EndBold()
-        
-        # Always use ASCII table for reliable rendering
-        # RichTextTable has issues with cell positioning in KiCad's wxPython
-        if headers:
-            self._insert_ascii_table(headers, data if data else [])
-        
-        self._modified = True
-    
-    def insert_markdown_as_formatted(self, markdown_text: str):
-        """
-        Parse markdown text and insert as properly formatted rich text.
-        Handles tables, headings, lists, inline bold/italic, etc.
-        
-        Args:
-            markdown_text: Markdown formatted string
-        """
-        lines = markdown_text.split('\n')
-        i = 0
-        
-        while i < len(lines):
-            line = lines[i]
-            
-            # Check for markdown table
-            if line.strip().startswith('|') and '|' in line[1:]:
-                # Collect all table lines
-                table_lines = []
-                while i < len(lines) and lines[i].strip().startswith('|'):
-                    table_lines.append(lines[i])
-                    i += 1
-                
-                # Parse and insert as rich table
-                self._parse_and_insert_markdown_table(table_lines)
-                continue
-            
-            # Check for heading
-            if line.startswith('#'):
-                match = re.match(r'^(#{1,3})\s+(.+)$', line)
-                if match:
-                    level = len(match.group(1))
-                    text = match.group(2)
-                    self._insert_heading(text, level)
-                    i += 1
-                    continue
-            
-            # Check for bullet list
-            if re.match(r'^\s*[-*+]\s+', line):
-                match = re.match(r'^(\s*)[-*+]\s+(.+)$', line)
-                if match:
-                    text = match.group(2)
-                    self._editor.WriteText("• ")
-                    self._write_inline_formatted_text(text)
-                    self._editor.WriteText("\n")
-                    i += 1
-                    continue
-            
-            # Regular text with possible inline formatting
-            if line.strip():
-                self._write_inline_formatted_text(line)
-                self._editor.WriteText("\n")
-            else:
-                self._editor.WriteText("\n")
-            i += 1
-        
-        self._modified = True
-    
-    def _write_inline_formatted_text(self, text: str):
-        """
-        Write text with inline markdown formatting (bold, italic).
-        Handles **bold**, *italic*, and ***bold italic***.
-        """
-        # Pattern to match **bold**, *italic*, or ***bold italic***
-        # Process from left to right, handling nested formatting
-        pattern = r'(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*)'
-        
-        last_end = 0
-        for match in re.finditer(pattern, text):
-            # Write any text before this match as normal
-            if match.start() > last_end:
-                self._editor.WriteText(text[last_end:match.start()])
-            
-            full_match = match.group(0)
-            
-            # Determine formatting type
-            if full_match.startswith('***'):
-                # Bold italic
-                content = match.group(2)
-                attr = rt.RichTextAttr()
-                attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
-                attr.SetFontStyle(wx.FONTSTYLE_ITALIC)
-                self._editor.BeginStyle(attr)
-                self._editor.WriteText(content)
-                self._editor.EndStyle()
-            elif full_match.startswith('**'):
-                # Bold
-                content = match.group(3)
-                attr = rt.RichTextAttr()
-                attr.SetFontWeight(wx.FONTWEIGHT_BOLD)
-                self._editor.BeginStyle(attr)
-                self._editor.WriteText(content)
-                self._editor.EndStyle()
-            elif full_match.startswith('*'):
-                # Italic
-                content = match.group(4)
-                attr = rt.RichTextAttr()
-                attr.SetFontStyle(wx.FONTSTYLE_ITALIC)
-                self._editor.BeginStyle(attr)
-                self._editor.WriteText(content)
-                self._editor.EndStyle()
-            
-            last_end = match.end()
-        
-        # Write any remaining text after the last match
-        if last_end < len(text):
-            self._editor.WriteText(text[last_end:])
-    
-    def _parse_and_insert_markdown_table(self, table_lines: List[str]):
-        """Parse markdown table lines and insert as RichTextTable."""
-        if len(table_lines) < 2:
-            return
-        
-        # Parse headers (first line)
-        header_line = table_lines[0]
-        headers = [cell.strip() for cell in header_line.strip('|').split('|')]
-        headers = [h for h in headers if h]  # Remove empty strings
-        
-        if not headers:
-            return
-        
-        # Skip separator line (second line with ---)
-        # Parse data rows
-        data = []
-        for line in table_lines[2:]:
-            if '---' in line or not line.strip():
-                continue
-            cells = [cell.strip() for cell in line.strip('|').split('|')]
-            cells = [c for c in cells if c]  # Remove empty strings
-            if cells:
-                # Ensure row has same number of columns as headers
-                while len(cells) < len(headers):
-                    cells.append("")
-                data.append(cells[:len(headers)])  # Trim to header count
-        
-        # Try to insert as rich table, fallback to ASCII table if it fails
-        if headers and data:
-            try:
-                self.insert_data_table(headers, data)
-            except Exception as e:
-                # Fallback: Insert as formatted ASCII table
-                self._insert_ascii_table(headers, data)
-        elif headers:
-            # No data rows - just show headers
-            self._insert_ascii_table(headers, [])
-    
-    def _insert_ascii_table(self, headers: List[str], data: List[List[str]]):
-        """Insert table as formatted ASCII text with proper alignment."""
-        if not headers:
-            return
-        
-        # Ensure newline before table
-        pos = self._editor.GetInsertionPoint()
-        text = self._editor.GetValue()
-        if pos > 0 and len(text) > 0 and text[pos - 1] != '\n':
-            self._editor.WriteText("\n")
-        
-        # Calculate column widths (min 8 chars for readability)
-        col_widths = [max(8, len(str(h))) for h in headers]
-        for row in data:
-            for i, cell in enumerate(row):
-                if i < len(col_widths):
-                    col_widths[i] = max(col_widths[i], len(str(cell)))
-        
-        # Cap max width to prevent overly wide columns
-        col_widths = [min(w, 40) for w in col_widths]
-        
-        # Insert header row with bold
-        self._editor.BeginBold()
-        header_cells = []
-        for i, h in enumerate(headers):
-            if i < len(col_widths):
-                header_cells.append(str(h)[:col_widths[i]].ljust(col_widths[i]))
-        self._editor.WriteText(" │ ".join(header_cells) + "\n")
-        self._editor.EndBold()
-        
-        # Insert separator line
-        separator_parts = ["─" * w for w in col_widths]
-        self._editor.WriteText("─┼─".join(separator_parts) + "\n")
-        
-        # Insert data rows
-        for row in data:
-            cells_padded = []
-            for i in range(len(headers)):
-                if i < len(row):
-                    cell_text = str(row[i])[:col_widths[i]]  # Truncate if needed
-                else:
-                    cell_text = ""
-                cells_padded.append(cell_text.ljust(col_widths[i]))
-            self._editor.WriteText(" │ ".join(cells_padded) + "\n")
-        
-        # Add empty line after table
-        self._editor.WriteText("\n")
-    
     def _on_undo(self, event):
         """Undo last action."""
         self._editor.Undo()
@@ -1641,9 +1095,6 @@ class VisualNoteEditor(wx.Panel):
         self._modified = True
         # Ensure cursor stays visible when typing
         wx.CallAfter(self._ensure_cursor_visible)
-        # Update line numbers panel
-        if hasattr(self, '_line_numbers') and self._line_numbers:
-            wx.CallAfter(self._line_numbers.update_from_editor)
         event.Skip()
     
     def _on_key_down(self, event):

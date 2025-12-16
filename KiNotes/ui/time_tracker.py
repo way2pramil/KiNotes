@@ -17,7 +17,11 @@ Usage:
 import time
 import datetime
 
-from ..core.defaultsConfig import TIME_TRACKER_DEFAULTS
+# Handle import in both KiCad plugin context and standalone
+try:
+    from ..core.defaultsConfig import TIME_TRACKER_DEFAULTS
+except ImportError:
+    from core.defaultsConfig import TIME_TRACKER_DEFAULTS
 
 
 class TimeTracker:
@@ -51,6 +55,12 @@ class TimeTracker:
             self.task_timers[task_id]["is_running"] = True
             self.task_timers[task_id]["last_start_time"] = time.time()
             self.current_running_task_id = task_id
+    
+    def is_task_running(self, task_id):
+        """Check if a task timer is currently running."""
+        if task_id in self.task_timers:
+            return self.task_timers[task_id].get("is_running", False)
+        return False
     
     def stop_task(self, task_id):
         """Stop timer for a task and accumulate time_spent."""

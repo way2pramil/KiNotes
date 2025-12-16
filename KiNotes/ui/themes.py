@@ -16,8 +16,11 @@ Usage:
 """
 import wx
 
-# Import from centralized defaults
-from ..core.defaultsConfig import THEMES, COLORS
+# Import from centralized defaults - handle both KiCad plugin and standalone context
+try:
+    from ..core.defaultsConfig import THEMES, COLORS
+except ImportError:
+    from core.defaultsConfig import THEMES, COLORS
 
 # ============================================================
 # RE-EXPORT FROM CENTRALIZED CONFIG (backward compatibility)

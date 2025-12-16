@@ -176,7 +176,6 @@ class CrashSafetyManager:
         return {
             'use_visual_editor': False,  # Fallback to markdown
             'beta_features_enabled': False,
-            'beta_table': False,
             'beta_markdown': True,  # Use safe markdown mode
             'beta_bom': False,
             'beta_version_log': False,

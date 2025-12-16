@@ -4,7 +4,16 @@ KiNotes PDF Exporter - Export notes as PDF
 import os
 from datetime import datetime
 
-from .defaultsConfig import debug_print
+# Handle import in both KiCad plugin context and standalone
+try:
+    from .defaultsConfig import debug_print
+except ImportError:
+    try:
+        from core.defaultsConfig import debug_print
+    except ImportError:
+        # Fallback: define debug_print locally if all imports fail
+        def debug_print(msg):
+            pass  # Silent fallback
 
 try:
     import wx

@@ -22,6 +22,16 @@ try:
 except ImportError:
     __version__ = "1.4.2"  # Fallback
 
+# Import debug_print
+try:
+    from ...core.defaultsConfig import debug_print
+except ImportError:
+    try:
+        from core.defaultsConfig import debug_print
+    except ImportError:
+        def debug_print(msg):
+            pass
+
 
 def show_about_dialog(parent, theme, open_url_callback):
     """
@@ -36,6 +46,7 @@ def show_about_dialog(parent, theme, open_url_callback):
                    style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
     dlg.SetMinSize((700, 500))
     dlg.SetBackgroundColour(hex_to_colour(theme["bg_panel"]))
+    debug_print(f"[KiNotes SIZE] AboutDialog created: size={dlg.GetSize()}, minSize={dlg.GetMinSize()}")
     
     main_sizer = wx.BoxSizer(wx.VERTICAL)
     

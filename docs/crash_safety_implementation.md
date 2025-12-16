@@ -156,7 +156,6 @@ def _show_crash_recovery_dialog(self):
 safe_config = {
     'use_visual_editor': False,      # Markdown stable
     'beta_features_enabled': False,  # All beta off
-    'beta_table': False,
     'beta_markdown': True,           # Keep stable markdown
     'beta_bom': False,
     'beta_version_log': False,
