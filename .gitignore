@@ -30,6 +30,9 @@ functionChecklist.md
 # Debug folder (development only - never commit)
 .debug/
 
+# Documentation (development notes, not user docs)
+docs/
+
 # Legacy debug files (kept for backward compatibility in gitignore)
 debug_standalone.py
 test_*.py
