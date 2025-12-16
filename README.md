@@ -202,14 +202,6 @@ See `.github/copilot-instructions.md` for architecture details.
 
 ---
 
-## 👨‍💻 Author
-
-**KiNotes** by [PCBtools.xyz](https://pcbtools.xyz)
-
-Current version: See [metadata.json](KiNotes/metadata.json) or [__version__.py](KiNotes/__version__.py)
-
----
-
 <p align="center">
   <sub>Built with ❤️ for hardware engineers who take notes</sub>
 </p>
