@@ -799,23 +799,26 @@ class VisualNoteEditor(wx.Panel):
         mouse_pos = event.GetPosition()
         hit_result, hit_pos = self._editor.HitTest(mouse_pos)
         
-        # Check if clicking on a link - only if DIRECTLY on text
-        if hit_result == wx.richtext.RICHTEXT_HITTEST_ON:
+        _kinotes_log(f"[KiNotes Click] mouse_pos={mouse_pos}, hit_result={hit_result}, hit_pos={hit_pos}")
+        
+        # Check for URL at position
+        # hit_result: 0=NONE, 1=BEFORE, 2=AFTER, 4=ON
+        # Only check URL when NOT clicking AFTER text (hit_result != 2)
+        # hit_result=2 means clicking in empty space after line end
+        text_len = len(self._editor.GetValue())
+        if hit_result != 2 and hit_pos >= 0 and hit_pos < text_len:
             try:
-                text = self._editor.GetValue()
-                if hit_pos < len(text):
-                    attr = rt.RichTextAttr()
-                    if self._editor.GetStyle(hit_pos, attr):
-                        url = attr.GetURL()
-                        char_at_pos = text[hit_pos] if hit_pos < len(text) else ''
-                        if url and char_at_pos and char_at_pos not in ' \t\n\r':
-                            _kinotes_log(f"[KiNotes LeftDown] Opening link: {url}")
-                            import webbrowser
-                            webbrowser.open(url)
-                            # Don't skip - we handled the link click
-                            return
+                attr = rt.RichTextAttr()
+                if self._editor.GetStyle(hit_pos, attr):
+                    url = attr.GetURL()
+                    _kinotes_log(f"[KiNotes Click] Position {hit_pos}, URL: {repr(url)}")
+                    if url:
+                        _kinotes_log(f"[KiNotes Click] Opening link: {url}")
+                        import webbrowser
+                        webbrowser.open(url)
+                        return  # Don't propagate - we handled it
             except Exception as e:
-                _kinotes_log(f"[KiNotes LeftDown] Error: {e}")
+                _kinotes_log(f"[KiNotes Click] Error: {e}")
         
         # Let the event propagate for normal text selection
         event.Skip()
@@ -826,19 +829,16 @@ class VisualNoteEditor(wx.Panel):
             mouse_pos = event.GetPosition()
             hit_result, hit_pos = self._editor.HitTest(mouse_pos)
             
-            # Check if hovering over a link
-            if hit_result == wx.richtext.RICHTEXT_HITTEST_ON:
-                text = self._editor.GetValue()
-                if hit_pos < len(text):
-                    attr = rt.RichTextAttr()
-                    if self._editor.GetStyle(hit_pos, attr):
-                        url = attr.GetURL()
-                        char_at_pos = text[hit_pos] if hit_pos < len(text) else ''
-                        if url and char_at_pos and char_at_pos not in ' \t\n\r':
-                            # Show hand cursor over link
-                            self._editor.SetCursor(wx.Cursor(wx.CURSOR_HAND))
-                            event.Skip()
-                            return
+            # Only show hand cursor when NOT hovering AFTER text (hit_result != 2)
+            text_len = len(self._editor.GetValue())
+            if hit_result != 2 and hit_pos >= 0 and hit_pos < text_len:
+                attr = rt.RichTextAttr()
+                if self._editor.GetStyle(hit_pos, attr):
+                    url = attr.GetURL()
+                    if url:
+                        self._editor.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+                        event.Skip()
+                        return
             
             # Reset to default cursor
             self._editor.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
