@@ -16,6 +16,12 @@ import wx
 from ..themes import hex_to_colour
 from ..components import RoundedButton
 
+# Import version from single source
+try:
+    from ...__version__ import __version__
+except ImportError:
+    __version__ = "1.4.2"  # Fallback
+
 
 def show_about_dialog(parent, theme, open_url_callback):
     """
@@ -56,7 +62,7 @@ def show_about_dialog(parent, theme, open_url_callback):
     title.SetForegroundColour(hex_to_colour(theme["text_primary"]))
     title_box.Add(title, 0)
     
-    version = wx.StaticText(scroll_win, label="Engineering Notes for KiCad • v1.4")
+    version = wx.StaticText(scroll_win, label=f"Engineering Notes for KiCad • v{__version__}")
     version.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
     version.SetForegroundColour(hex_to_colour(theme["text_secondary"]))
     title_box.Add(version, 0, wx.TOP, 4)
@@ -88,6 +94,8 @@ Here's what I noticed after years of PCB work: the projects that succeeded weren
 KiNotes started as a simple text file I kept open next to KiCad. Nothing fancy—just a scratch pad for design decisions. But I kept losing it, forgetting to save, opening the wrong version. The notes lived outside the project, and that was the problem.
 
 So I built this. A notes panel that lives inside KiCad, saves automatically with your project, and stays out of your way until you need it. No cloud accounts, no sync conflicts, no friction.
+
+And yes—it auto-saves. Because let's be honest: when vias, traces, and layers are dancing in your head, Ctrl+S is the last thing you remember. Your notes survive your forgetting.
 
 Over time, it grew. Task tracking for those TODO lists that always pile up. Time logging because clients ask "how long did that take?" BOM integration because you shouldn't need three tools open to design one board.
 

@@ -2115,18 +2115,65 @@ class VisualNoteEditor(wx.Panel):
             
             if result:
                 self._log_debug("designator", EventLevel.SUCCESS, f"[KiNotes Cross-Probe] Successfully highlighted {designator}")
-                self._editor.SetToolTip(f"✓ {designator} selected on PCB")
+                
+                # === MERGED TOOLTIP: Show component info ===
+                tooltip_text = self._get_component_tooltip(designator)
+                self._editor.SetToolTip(tooltip_text)
             else:
                 self._log_debug("designator", EventLevel.WARNING, f"[KiNotes Cross-Probe] Component {designator} not found on board")
                 self._editor.SetToolTip(f"✗ {designator} not found on board")
             
-            # Clear tooltip after 2 seconds
-            wx.CallLater(2000, lambda: self._editor.SetToolTip(""))
+            # Clear tooltip after 3 seconds (longer for reading component info)
+            wx.CallLater(3000, lambda: self._editor.SetToolTip(""))
             return result
             
         except Exception as e:
             self._log_debug("designator", EventLevel.ERROR, f"[KiNotes Cross-Probe] Error: {e}")
             return False
+    
+    def _get_component_tooltip(self, designator: str) -> str:
+        """
+        Build component tooltip with info from ComponentTooltipProvider.
+        Shows: Reference, Value, MPN, Footprint, Type, Layer
+        """
+        try:
+            from core.component_tooltip import ComponentTooltipProvider
+            
+            tooltip = ComponentTooltipProvider()
+            info = tooltip.get_component_info(designator)
+            
+            if info:
+                # Build multi-line tooltip
+                lines = [f"✓ {info.reference} selected"]
+                
+                if info.value and str(info.value) != "~":
+                    lines.append(f"Value: {info.value}")
+                
+                # Show MPN if available (always labeled as MPN:)
+                if info.mpn:
+                    lines.append(f"MPN: {info.mpn}")
+                
+                if info.footprint:
+                    # Show just the footprint name, not full library path
+                    # Convert to str first (KiCad returns UTF8 object)
+                    fp_str = str(info.footprint)
+                    fp_name = fp_str.split(':')[-1] if ':' in fp_str else fp_str
+                    lines.append(f"Footprint: {fp_name}")
+                
+                if info.component_type:
+                    lines.append(f"Type: {info.component_type.value}")
+                
+                if info.layer:
+                    lines.append(f"Layer: {info.layer}")
+                
+                return "\n".join(lines)
+            else:
+                return f"✓ {designator} selected on PCB"
+                
+        except Exception as e:
+            # Fallback to simple tooltip if component info fails
+            _kinotes_log(f"[KiNotes Tooltip] Error getting component info: {e}")
+            return f"✓ {designator} selected on PCB"
     
     def _apply_crossprobe_style(self, start_pos: int, end_pos: int, success: bool):
         """Apply Bold + Color styling to designator based on cross-probe result."""

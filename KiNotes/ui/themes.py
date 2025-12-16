@@ -63,8 +63,8 @@ DARK_THEME = {
     "text_primary": "#FFFFFF",      # Pure White
     "text_secondary": "#98989D",    # Apple System Gray (Text)
     "border":       "#38383A",      # Subtle separators
-    "accent_blue":  "#0A84FF",      # iOS Blue (Dark Mode)
-    "accent_green": "#30D158",      # iOS Green (Dark Mode)
+    "accent_blue":  "#5A9BD5",      # Muted professional blue
+    "accent_green": "#6AAF6A",      # Muted professional green
     "accent_red":   "#FF453A",      # iOS Red (Dark Mode)
 }
 
@@ -77,8 +77,8 @@ LIGHT_THEME = {
     "text_primary": "#000000",
     "text_secondary": "#8E8E93",
     "border":       "#C6C6C8",
-    "accent_blue":  "#007AFF",      # iOS Blue
-    "accent_green": "#34C759",      # iOS Green
+    "accent_blue":  "#3B82F6",      # Muted professional blue
+    "accent_green": "#10B981",      # #10B981 Muted professional green
     "accent_red":   "#FF3B30",      # iOS Red
 }
 

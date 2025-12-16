@@ -27,10 +27,10 @@ ENV/
 # Testing artifacts
 functionChecklist.md
 
-# Local development scripts (contain user-specific paths)
-*.bat
+# Debug folder (development only - never commit)
+.debug/
 
-# Debug and test scripts (development only)
+# Legacy debug files (kept for backward compatibility in gitignore)
 debug_standalone.py
 test_*.py
 

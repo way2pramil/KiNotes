@@ -8,9 +8,12 @@ import shutil
 from datetime import datetime
 from typing import Optional, Dict, Tuple
 
+# Import version from single source of truth
+try:
+    from ..__version__ import __version__ as PLUGIN_VERSION
+except ImportError:
+    PLUGIN_VERSION = "1.4.2"  # Fallback
 
-# Current plugin version - bump this when releasing
-PLUGIN_VERSION = "1.2.0"
 DATA_VERSION = "1.0"
 
 

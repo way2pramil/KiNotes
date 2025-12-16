@@ -180,7 +180,38 @@ class DesignatorLinker:
                 return False
             
             # Select and highlight the footprint (all calls protected)
-            return self._highlight_footprint_safe(board, footprint, designator)
+            result = self._highlight_footprint_safe(board, footprint, designator)
+            
+            # === CONSOLE OUTPUT: Show component info in KiCad scripting console ===
+            # Note: UI tooltip is handled separately by visual_editor.py
+            if result:
+                try:
+                    from .component_tooltip import ComponentTooltipProvider
+                    tooltip_provider = ComponentTooltipProvider()
+                    info = tooltip_provider.get_component_info(designator)
+                    if info:
+                        # Combined output: highlight confirmation + component details
+                        _kinotes_log(f"\n{'─' * 40}")
+                        _kinotes_log(f"[Smart-Link] {designator} highlighted on PCB")
+                        _kinotes_log(f"{'─' * 40}")
+                        _kinotes_log(f"  Value:     {info.value or 'N/A'}")
+                        if info.mpn:
+                            _kinotes_log(f"  MPN:       {info.mpn}")
+                        _kinotes_log(f"  Footprint: {info.footprint or 'N/A'}")
+                        _kinotes_log(f"  Type:      {info.component_type.value}")
+                        _kinotes_log(f"  Layer:     {info.layer or 'N/A'}")
+                        if info.position != (0.0, 0.0):
+                            _kinotes_log(f"  Position:  ({info.position[0]:.2f}, {info.position[1]:.2f}) mm")
+                        if info.dnp:
+                            _kinotes_log(f"  Status:    DNP (Do Not Populate)")
+                        if info.properties:
+                            for key, val in list(info.properties.items())[:3]:
+                                _kinotes_log(f"  {key}: {val}")
+                        _kinotes_log(f"{'─' * 40}\n")
+                except Exception as tooltip_err:
+                    _kinotes_log(f"[ComponentTooltip] Error: {tooltip_err}")
+            
+            return result
             
         except Exception as e:
             _kinotes_log(f"[KiNotes Cross-Probe] Highlight operation failed: {e}")
@@ -202,7 +233,6 @@ class DesignatorLinker:
             # Select the target footprint
             try:
                 footprint.SetSelected()
-                _kinotes_log(f"[KiNotes Cross-Probe] Selected {designator} on PCB")
             except Exception as e:
                 _kinotes_log(f"[KiNotes Cross-Probe] Could not select: {e}")
                 return False

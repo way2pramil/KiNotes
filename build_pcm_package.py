@@ -26,8 +26,18 @@ import hashlib
 import json
 from pathlib import Path
 
-# Configuration
-VERSION = "1.4.1"
+# Configuration - read version from metadata.json (single source of truth)
+def get_version_from_metadata():
+    try:
+        with open(Path("KiNotes/metadata.json"), "r") as f:
+            data = json.load(f)
+            if "versions" in data and len(data["versions"]) > 0:
+                return data["versions"][0].get("version", "1.4.2")
+    except:
+        pass
+    return "1.4.2"
+
+VERSION = get_version_from_metadata()
 PACKAGE_NAME = "com.pcbtools.kinotes"
 OUTPUT_DIR = Path("dist/pcm")
 SOURCE_DIR = Path("KiNotes")

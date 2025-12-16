@@ -81,6 +81,21 @@ my_project/
 - **No cloud dependency**: Works offline, forever
 - **No accounts**: Just files on your disk
 - **Plain Markdown format**: Notes readable by any text editor, easy for future tools and analysis
+
+---
+
+## 🧠 Auto-Save (Because Engineers Forget)
+
+> *"Ctrl+S? What's that?"* — Me, while mentally routing a 4-layer stackup
+
+Let's be honest. Pressing **Ctrl+S** takes half a second. It's the easiest thing in the world. And yet... 🤷
+
+When your brain is juggling impedance calculations, component placement, thermal reliefs, and that one via that *refuses* to fit—saving is the last thing you remember. You close KiCad, realize you lost an hour of notes, and stare at the ceiling questioning your life choices.
+
+**KiNotes just saves.** 💾 Every edit, automatically. No popup asking "Do you want to save?" No panic when KiCad crashes. Your notes survive your forgetting.
+
+*Built by someone who has lost notes too many times to admit.* 😅
+
 ---
 
 ## ✨ Features
@@ -114,8 +129,8 @@ my_project/
 |---------|--------|
 | **KiCad Plugin Manager** | Pending submission |
 | **Image embed** | Planned |
-| **Voice Input** | Speech-to-text for hands-free notes |
-| **Smart-Link Tooltips** | Hover over R1/GND → show component/net attributes |
+| **Smart-Link Tooltips** | Hover over R1 → show component attributes like Value, MPN,Layer etc.|
+| **Voice input for KiNotes** | add notes hands-free using local speech-to-text, with full editor-aware insertion and privacy-first processin | 
 
 ---
 
@@ -161,7 +176,11 @@ KiNotes is open source because good tools should be shared. If it helps you ship
 ## 🔧 Requirements
 
 - **KiCad 9.0** (Python 3.9+, wxPython 4.2+)
-- No external dependencies
+- **Optional:** `reportlab` — for PDF export support
+  ```bash
+  pip install reportlab
+  ```
+  Without it, PDF export falls back to plain text format.
 
 ---
 
@@ -187,7 +206,7 @@ See `.github/copilot-instructions.md` for architecture details.
 
 **KiNotes** by [PCBtools.xyz](https://pcbtools.xyz)
 
-Current version: **v1.4.2**
+Current version: See [metadata.json](KiNotes/metadata.json) or [__version__.py](KiNotes/__version__.py)
 
 ---
 

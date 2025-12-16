@@ -117,8 +117,8 @@ from core.metadata_extractor import MetadataExtractor
 from core.pdf_exporter import PDFExporter
 from ui.main_panel import KiNotesMainPanel
 
-# Plugin version - change this to force reload
-_PLUGIN_VERSION = "1.5.0"
+# Import version from single source of truth
+from __version__ import __version__ as _PLUGIN_VERSION
 print(f"KiNotes v{_PLUGIN_VERSION} loaded - Crash-safe edition with atomic saves")
 
 

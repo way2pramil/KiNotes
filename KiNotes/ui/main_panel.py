@@ -133,6 +133,7 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             "net": False,
             "designator": False,
         }
+        self._pdf_format = "markdown"  # PDF export format: 'markdown' or 'visual'
         
         # Initialize net cache manager (centralized net caching + board change detection)
         self.net_cache_manager = get_net_cache_manager() if HAS_NET_CACHE_MANAGER else None
@@ -215,6 +216,8 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 for key in ("save", "net", "designator"):
                     if key not in self._debug_modules:
                         self._debug_modules[key] = False
+                # PDF export format setting
+                self._pdf_format = settings.get("pdf_format", "markdown")
         except:
             pass
     
@@ -303,6 +306,7 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 "beta_version_log": self._beta_version_log,
                 "beta_debug_panel": self._beta_debug_panel,
                 "debug_modules": self._debug_modules,
+                "pdf_format": getattr(self, '_pdf_format', 'markdown'),
             })
             # Save panel size if settings dialog controls exist
             if hasattr(self, '_panel_width_spin') and self._panel_width_spin:
@@ -701,7 +705,6 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         donate_id = wx.NewIdRef()
         bug_id = wx.NewIdRef()
         debug_id = wx.NewIdRef()
-        refresh_nets_id = wx.NewIdRef() if self._beta_net_linker else None
         about_id = wx.NewIdRef()
         
         # Add menu items with icons (using Unicode for consistency)
@@ -712,12 +715,6 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         
         # Add debug option
         debug_item = menu.Append(debug_id, "🔧  Debug Info")
-        
-        # Add refresh nets if beta net linker is enabled
-        if self._beta_net_linker and refresh_nets_id:
-            menu.AppendSeparator()
-            refresh_nets_item = menu.Append(refresh_nets_id, "↻  Refresh Nets")
-            self.Bind(wx.EVT_MENU, self._on_refresh_nets, refresh_nets_item)
         
         menu.AppendSeparator()
         about_item = menu.Append(about_id, "ℹ️  About KiNotes")
@@ -1095,13 +1092,51 @@ You can safely continue working."""
     
     def _on_open_work_logs_folder(self, event):
         """Open the .kinotes work logs folder in file explorer."""
-        # Use notes_manager's project directory for consistency
-        kinotes_dir = os.path.join(self.notes_manager.project_dir, ".kinotes")
+        print("[KiNotes Directory] Click handler called")
+        
+        # Get actual project directory from board (most reliable)
+        kinotes_dir = None
+        try:
+            import pcbnew
+            board = pcbnew.GetBoard()
+            print(f"[KiNotes Directory] board: {board}")
+            if board:
+                board_file = board.GetFileName()
+                print(f"[KiNotes Directory] board.GetFileName(): {board_file}")
+                if board_file:
+                    project_dir = os.path.dirname(board_file)
+                    kinotes_dir = os.path.join(project_dir, ".kinotes")
+                    print(f"[KiNotes Directory] From board: {kinotes_dir}")
+        except Exception as e:
+            print(f"[KiNotes Directory] pcbnew error: {e}")
+        
+        # Fallback to notes_manager's notes_dir (canonical location)
+        if not kinotes_dir:
+            if hasattr(self, 'notes_manager') and self.notes_manager:
+                if hasattr(self.notes_manager, 'notes_dir') and self.notes_manager.notes_dir:
+                    kinotes_dir = self.notes_manager.notes_dir
+                    print(f"[KiNotes Directory] From notes_manager.notes_dir: {kinotes_dir}")
+                elif hasattr(self.notes_manager, 'project_dir') and self.notes_manager.project_dir:
+                    kinotes_dir = os.path.join(self.notes_manager.project_dir, ".kinotes")
+                    print(f"[KiNotes Directory] From notes_manager.project_dir: {kinotes_dir}")
+        
+        # Final fallback - should never reach here
+        if not kinotes_dir:
+            kinotes_dir = os.path.join(os.getcwd(), ".kinotes")
+            print(f"[KiNotes Directory] FALLBACK to cwd: {kinotes_dir}")
+        
+        print(f"[KiNotes Directory] Final path: {kinotes_dir}")
+        print(f"[KiNotes Directory] Exists: {os.path.exists(kinotes_dir)}")
+        
+        # Normalize path for Windows (fix mixed / and \ separators)
+        kinotes_dir = os.path.normpath(kinotes_dir)
+        print(f"[KiNotes Directory] Normalized path: {kinotes_dir}")
         
         # Ensure directory exists
         if not os.path.exists(kinotes_dir):
             try:
                 os.makedirs(kinotes_dir, exist_ok=True)
+                print(f"[KiNotes Directory] Created folder")
             except Exception as e:
                 wx.MessageBox(
                     f"Could not create .kinotes directory:\n{e}",
@@ -1113,8 +1148,10 @@ You can safely continue working."""
         # Open folder in system file explorer
         import subprocess
         try:
+            print(f"[KiNotes Directory] Opening: {kinotes_dir}")
             if sys.platform.startswith("win"):
-                subprocess.Popen(f'explorer "{kinotes_dir}"')
+                # Use os.startfile for most reliable Windows folder opening
+                os.startfile(kinotes_dir)
             elif sys.platform == "darwin":
                 subprocess.Popen(["open", kinotes_dir])
             else:
@@ -1226,6 +1263,7 @@ You can safely continue working."""
             'beta_debug_panel': self._beta_debug_panel,
             'debug_modules': self._debug_modules,
             'notes_manager': self.notes_manager,
+            'pdf_format': getattr(self, '_pdf_format', 'markdown'),
         }
         
         result, save_mode = show_settings_dialog(self, config)
@@ -1313,6 +1351,9 @@ You can safely continue working."""
         for key in ("save", "net", "designator"):
             if key not in self._debug_modules:
                 self._debug_modules[key] = False
+        
+        # PDF format setting
+        self._pdf_format = result.get('pdf_format', 'markdown')
         
         # IMPORTANT: beta_markdown checkbox controls the actual editor mode
         # If beta_markdown is enabled, use Markdown editor (set use_visual_editor to False)
@@ -2125,10 +2166,19 @@ You can safely continue working."""
             wx.MessageBox(f"Error inserting text: {e}", "Insert Error", wx.OK | wx.ICON_ERROR)
 
     def _on_export_pdf(self):
-        """Export notes to PDF."""
+        """Export notes to PDF based on format setting."""
         try:
-            content = self._get_note_content()
-            filepath = self.pdf_exporter.export(content)
+            # Check PDF format setting
+            pdf_format = getattr(self, '_pdf_format', 'markdown')
+            
+            if pdf_format == 'visual' and self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor:
+                # Export from Visual Editor with formatting
+                filepath = self.pdf_exporter.export_visual(self.visual_editor.editor)
+            else:
+                # Export as Markdown (plain text)
+                content = self._get_note_content()
+                filepath = self.pdf_exporter.export(content)
+            
             if filepath:
                 wx.MessageBox("Exported to:\n" + filepath, "PDF Export", wx.OK | wx.ICON_INFORMATION)
         except Exception as e:

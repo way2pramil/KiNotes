@@ -458,6 +458,41 @@ class SettingsDialog(wx.Dialog):
         sizer.AddSpacer(SECTION_SPACING)
         self._add_separator(parent, sizer)
         sizer.AddSpacer(SECTION_SPACING)
+        
+        # PDF Export Format Section
+        self._build_pdf_format_section(self._scroll_panel, sizer)
+    
+    def _build_pdf_format_section(self, parent, sizer):
+        """Build PDF export format settings section."""
+        pdf_header = wx.StaticText(parent, label="💾 PDF Export Format")
+        set_label_style(pdf_header, self._theme, bold=True, size=10)
+        sizer.Add(pdf_header, 0, wx.LEFT | wx.BOTTOM, SECTION_MARGIN)
+        
+        pdf_panel = wx.Panel(parent)
+        pdf_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
+        pdf_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Get current setting from config (passed from main_panel)
+        current_format = self._config.get('pdf_format', 'markdown')
+        is_visual = (current_format == 'visual')
+        
+        # Radio buttons for PDF format
+        self._pdf_markdown_radio = wx.RadioButton(pdf_panel, label="  📝 Markdown (Plain text, lightweight)", style=wx.RB_GROUP)
+        self._pdf_markdown_radio.SetValue(not is_visual)
+        self._pdf_markdown_radio.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        pdf_sizer.Add(self._pdf_markdown_radio, 0, wx.ALL, 8)
+        
+        self._pdf_visual_radio = wx.RadioButton(pdf_panel, label="  🎨 Formatted (Preserves bold, italic, lists)")
+        self._pdf_visual_radio.SetValue(is_visual)
+        self._pdf_visual_radio.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        pdf_sizer.Add(self._pdf_visual_radio, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        
+        pdf_panel.SetSizer(pdf_sizer)
+        sizer.Add(pdf_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SECTION_MARGIN)
+        
+        sizer.AddSpacer(SECTION_SPACING)
+        self._add_separator(parent, sizer)
+        sizer.AddSpacer(SECTION_SPACING)
     
     def _build_beta_section(self, parent, sizer):
         """Build beta features section."""
@@ -730,6 +765,7 @@ class SettingsDialog(wx.Dialog):
             'beta_debug_panel': self._beta_debug_panel_cb.GetValue(),
             # Module filters are now in main debug panel, preserve existing settings
             'debug_modules': self._config.get('debug_modules', {'save': False, 'net': False, 'designator': False}),
+            'pdf_format': 'visual' if self._pdf_visual_radio.GetValue() else 'markdown',
         }
 
 
