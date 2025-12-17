@@ -21,7 +21,7 @@ License: MIT
 try:
     from .__version__ import __version__
 except ImportError:
-    __version__ = "1.4.2"  # Fallback
+    __version__ = "1.5.0"  # Fallback
 
 __author__ = "PCBtools.xyz"
 __license__ = "MIT"

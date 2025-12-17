@@ -94,6 +94,18 @@ try:
 except ImportError:
     HAS_NET_CACHE_MANAGER = False
 
+# Import image handler for clipboard paste / image management
+try:
+    from ..core.image_handler import ImageHandler
+    HAS_IMAGE_HANDLER = True
+except ImportError:
+    try:
+        from core.image_handler import ImageHandler
+        HAS_IMAGE_HANDLER = True
+    except ImportError:
+        HAS_IMAGE_HANDLER = False
+        ImageHandler = None
+
 # Import crash safety manager (optional)
 try:
     from ..core.crash_safety import CrashSafetyManager, PLUGIN_VERSION
@@ -160,6 +172,15 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         # Beta flag defaults to True; linker will be lazy-loaded when needed
         debug_print(f"[KiNotes] Net cache manager available: {bool(self.net_cache_manager)}. beta={self._beta_net_linker}")
         
+        # Initialize image handler for clipboard paste / image management
+        self.image_handler = None
+        if HAS_IMAGE_HANDLER and notes_manager:
+            try:
+                self.image_handler = ImageHandler(notes_manager.notes_dir)
+                debug_print(f"[KiNotes] Image handler initialized: {notes_manager.notes_dir}")
+            except Exception as e:
+                debug_print(f"[KiNotes] Image handler init warning: {e}")
+        
         # Load timer interval from settings (default from PERFORMANCE_DEFAULTS)
         self._timer_interval_ms = PERFORMANCE_DEFAULTS['timer_interval_ms']
 
@@ -209,8 +230,8 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 # Only use visual if available
                 if self._use_visual_editor and not VISUAL_EDITOR_AVAILABLE:
                     self._use_visual_editor = False
-                # UI Scale factor - None means auto
-                ui_scale = settings.get("ui_scale_factor", None)
+                # UI Scale factor - default 125% (most stable across screens)
+                ui_scale = settings.get("ui_scale_factor", DEFAULTS['ui_scale_factor'])
                 set_user_scale_factor(ui_scale)
                 # Cross-probe setting - default enabled
                 self._crossprobe_enabled = settings.get("crossprobe_enabled", True)
@@ -532,10 +553,18 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         sizer.AddStretchSpacer()
         
         # Global time tracker display - right side before buttons
-        self.global_time_label = wx.StaticText(bottom_bar, label="⏱ Total: 00:00:00")
-        self.global_time_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        # Use a panel with subtle background for gentle highlight
+        self.time_panel = wx.Panel(bottom_bar)
+        self.time_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
+        time_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.time_panel.SetSizer(time_sizer)
+        
+        self.global_time_label = wx.StaticText(self.time_panel, label="⏱ Total: 00:00:00")
+        self.global_time_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         self.global_time_label.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        sizer.Add(self.global_time_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
+        time_sizer.Add(self.global_time_label, 0, wx.ALL, 8)
+        
+        sizer.Add(self.time_panel, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 16)
         
         # Export work diary button - right side before Save/PDF
         self.export_diary_btn = RoundedButton(
@@ -1023,6 +1052,17 @@ You can safely continue working."""
         except Exception as e:
             debug_print(f"[KiNotes] Error clearing crash history: {e}")
     
+    def _get_project_name(self):
+        """Get the current project name from KiCad board or fallback."""
+        try:
+            import pcbnew
+            board = pcbnew.GetBoard()
+            if board and board.GetFileName():
+                return os.path.splitext(os.path.basename(board.GetFileName()))[0]
+        except:
+            pass
+        return "KiCad Project"
+    
     def _get_work_diary_path(self):
         """
         Get the work diary file path in .kinotes directory.
@@ -1059,7 +1099,9 @@ You can safely continue working."""
     def _on_export_work_diary(self):
         """Insert work diary at cursor position in notes and refresh display."""
         try:
-            content = self.time_tracker.export_work_diary(format_24h=self.time_tracker.time_format_24h)
+            # Get project name for diary title
+            project_name = self._get_project_name()
+            content = self.time_tracker.export_work_diary(format_24h=self.time_tracker.time_format_24h, project_name=project_name)
             if not content.strip():
                 wx.MessageBox("No tasks to export.", "Export Diary", wx.OK | wx.ICON_INFORMATION)
                 return
@@ -1099,7 +1141,8 @@ You can safely continue working."""
         """Automatically save work diary to file on close - safe, no UI operations."""
         try:
             # Only export to file, don't touch UI during close
-            content = self.time_tracker.export_work_diary(format_24h=self.time_tracker.time_format_24h)
+            project_name = self._get_project_name()
+            content = self.time_tracker.export_work_diary(format_24h=self.time_tracker.time_format_24h, project_name=project_name)
             if content and content.strip():
                 filepath, kinotes_dir = self._get_work_diary_path()
                 with open(filepath, "w", encoding="utf-8") as f:
@@ -1212,14 +1255,14 @@ You can safely continue working."""
             self.save_btn.Show()
             self.pdf_btn.Show()
             self.export_diary_btn.Hide()
-            self.global_time_label.Hide()
+            self.time_panel.Hide()
         elif idx == 1:  # Todo tab
             self.todo_panel.Show()
             self.import_btn.Hide()
             self.save_btn.Hide()
             self.pdf_btn.Hide()
             self.export_diary_btn.Show()
-            self.global_time_label.Show()
+            self.time_panel.Show()
             try:
                 self.todo_scroll.FitInside()
             except:
@@ -1230,7 +1273,7 @@ You can safely continue working."""
             self.save_btn.Show()  # Keep Save for BOM settings
             self.pdf_btn.Hide()
             self.export_diary_btn.Hide()
-            self.global_time_label.Hide()
+            self.time_panel.Hide()
             try:
                 self.bom_panel.FitInside()
             except:
@@ -1241,7 +1284,7 @@ You can safely continue working."""
             self.save_btn.Hide()
             self.pdf_btn.Hide()
             self.export_diary_btn.Hide()
-            self.global_time_label.Hide()
+            self.time_panel.Hide()
             try:
                 self.version_log_scroll.FitInside()
             except:
@@ -1536,9 +1579,11 @@ You can safely continue working."""
         self.pdf_btn.SetColors(self._theme["accent_blue"], "#FFFFFF")
         self.export_diary_btn.SetColors(self._theme["bg_button"], self._theme["text_primary"])
         
-        # Update global time label
+        # Update global time label and panel
         try:
-            self.global_time_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+            self.time_panel.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
+            self.global_time_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+            self.time_panel.Refresh()
         except:
             pass
         
@@ -1687,6 +1732,15 @@ You can safely continue working."""
             except Exception as e:
                 debug_print(f"[KiNotes] Net linker setup warning: {e}")
 
+            # Set up image handler for clipboard paste
+            debug_print("[KiNotes] About to setup image handler...")
+            try:
+                if self.image_handler:
+                    self.visual_editor.set_image_handler(self.image_handler)
+                    debug_print("[KiNotes] Image handler connected to visual editor")
+            except Exception as e:
+                debug_print(f"[KiNotes] Image handler setup warning: {e}")
+
             # Attach debug logger if enabled
             debug_print("[KiNotes] About to setup debug logger...")
             try:
@@ -1778,7 +1832,7 @@ You can safely continue working."""
         if is_visual_mode:
             # Limited menu for Visual Editor - only non-table imports
             items = [
-                (Icons.BOARD + "  Board Info", self._import_board_info),
+                (Icons.BOARD + "  Fab Summary", self._import_fab_summary),
                 (Icons.NETLIST + "  Differential Pairs", self._import_diff_pairs),
                 (Icons.RULES + "  Design Rules", self._import_design_rules),
                 (None, None),
@@ -1787,7 +1841,7 @@ You can safely continue working."""
         else:
             # Full menu for Markdown mode
             items = [
-                (Icons.BOARD + "  Board Info", self._import_board_info),
+                (Icons.BOARD + "  Fab Summary", self._import_fab_summary),
                 (Icons.BOM + "  Bill of Materials (BOM)", self._import_bom),
                 (Icons.LAYERS + "  Layer Stackup", self._import_stackup),
                 (Icons.LAYERS + "  Layer Info", self._import_layers),
@@ -1818,6 +1872,27 @@ You can safely continue working."""
         """Generate header with title and date for imported content."""
         date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         return f"## {title}\n**Imported:** {date_str}\n\n"
+    
+    def _import_fab_summary(self, event):
+        """Import fab house requirements summary with section selection."""
+        try:
+            from .dialogs import show_fab_import_dialog
+            
+            # Show selection dialog
+            sections = show_fab_import_dialog(self, self._dark_mode)
+            
+            if sections is None:  # User cancelled
+                return
+            
+            if not sections:  # No sections selected
+                wx.MessageBox("No sections selected.", "Import", wx.OK | wx.ICON_INFORMATION)
+                return
+            
+            header = self._get_import_header("Fab Summary")
+            info = self.metadata_extractor.extract_fab_summary(sections)
+            self._insert_text(header + info)
+        except Exception as e:
+            wx.MessageBox(f"Error importing fab summary: {e}", "Import Error", wx.OK | wx.ICON_ERROR)
     
     def _import_board_info(self, event):
         """Import board size/info."""

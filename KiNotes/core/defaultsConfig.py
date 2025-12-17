@@ -34,6 +34,7 @@ DEFAULTS = {
     'autosave_interval': 5,          # seconds (min: 3, max: 60)
     'font_size': 11,                 # points (8-24)
     'pdf_format': 'markdown',        # 'markdown' or 'visual'
+    'ui_scale_factor': 1.25,         # UI scale (1.25 = 125%, most stable)
     
     # Theme
     'dark_mode': False,
@@ -74,8 +75,8 @@ PERFORMANCE_DEFAULTS = {
 # ============================================================
 # DEBUG SETTINGS - Console output control
 # ============================================================
-DEBUG_ENABLED = True  # Master debug flag - set True for development only
-DEPLOY_BUILD = 11      # Incremented by deploy script - verifies fresh deployment
+DEBUG_ENABLED = False  # Master debug flag - set True for development only
+DEPLOY_BUILD = 33      # Incremented by deploy script - verifies fresh deployment
 
 def debug_print(msg: str) -> None:
     """Print debug message only if DEBUG_ENABLED is True."""
@@ -148,6 +149,19 @@ EDITOR_LAYOUT = {
     # External padding (sizer padding around editor)
     'padding_horizontal': 4,  # Left/right gap between editor and panel
     'padding_bottom': 4,      # Bottom gap
+}
+
+# ============================================================
+# IMAGE HANDLING DEFAULTS
+# ============================================================
+IMAGE_DEFAULTS = {
+    'folder_name': 'images',           # Subfolder in .kinotes/
+    'max_size_kb': 2048,               # Max image size (2MB)
+    'max_dimension': 1920,             # Max width/height (resize if larger)
+    'thumbnail_size': 400,             # Display size in editor
+    'supported_formats': ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'],
+    'default_format': 'png',           # Save format for clipboard images
+    'quality': 85,                     # JPEG quality (1-100)
 }
 
 # ============================================================
@@ -289,11 +303,42 @@ VERSION_LOG_TEMPLATE = {
 # ============================================================
 # DEBUG MODULES - Default states
 # ============================================================
+# Set True to enable debug output for specific modules
+# This allows focused debugging without console spam
 DEBUG_MODULES = {
-    'save': False,
-    'net': False,
-    'designator': False,
+    # Core modules
+    'image': True,       # Image handler - paste, save, load
+    'pdf': True,         # PDF export
+    'md_export': True,   # Markdown export (RichText → MD)
+    'md_import': True,   # Markdown import (MD → RichText)
+    
+    # UI modules
+    'save': False,       # Save operations
+    'click': False,      # Click events
+    'size': False,       # Window sizing
+    'editor': False,     # Visual editor operations
+    
+    # Crossprobe
+    'net': False,        # Net linker
+    'designator': False, # Designator linker
 }
+
+
+def debug_module(module: str, msg: str) -> None:
+    """
+    Print debug message only if module is enabled.
+    
+    Usage:
+        debug_module('image', f"Saved: {filename}")
+        debug_module('pdf', f"Exporting to: {path}")
+    
+    Args:
+        module: Module key from DEBUG_MODULES
+        msg: Message to print (without [KiNotes] prefix)
+    """
+    if DEBUG_ENABLED and DEBUG_MODULES.get(module, False):
+        prefix = module.upper()
+        print(f"[KiNotes {prefix}] {msg}")
 
 
 # ============================================================
@@ -331,6 +376,27 @@ def get_notes_template(project_name: str) -> str:
 def get_version_log_template() -> dict:
     """Get default version log structure."""
     return VERSION_LOG_TEMPLATE.copy()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

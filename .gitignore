@@ -5,21 +5,26 @@
 dist/
 build/
 *.egg-info/
+*.zip
 
 # Python
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
 
 # Virtual environments
 venv/
 env/
 ENV/
 .env
+.venv/
 
 # IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # GitHub and development instructions
 .github/copilot-instructions.md
@@ -43,4 +48,8 @@ test_*.py
 # macOS / Windows
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Logs
+*.log
 

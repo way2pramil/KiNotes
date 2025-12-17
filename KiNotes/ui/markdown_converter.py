@@ -22,6 +22,18 @@ import re
 from typing import List, Tuple, Optional, Dict, Any
 from dataclasses import dataclass, field
 
+# Import debug_print and debug_module for logging
+try:
+    from ..core.defaultsConfig import debug_print, debug_module
+except ImportError:
+    try:
+        from core.defaultsConfig import debug_print, debug_module
+    except ImportError:
+        def debug_print(msg):
+            pass
+        def debug_module(module, msg):
+            pass
+
 
 # ============================================================
 # DATA STRUCTURES
@@ -336,7 +348,8 @@ class MarkdownToRichText:
     """
     
     def __init__(self, editor: rt.RichTextCtrl, dark_mode: bool = False, 
-                 text_color: wx.Colour = None, bg_color: wx.Colour = None):
+                 text_color: wx.Colour = None, bg_color: wx.Colour = None,
+                 kinotes_dir: str = None):
         """
         Initialize converter.
         
@@ -345,22 +358,26 @@ class MarkdownToRichText:
             dark_mode: Use dark theme colors
             text_color: Custom text color (uses theme default if None)
             bg_color: Custom background color (uses theme default if None)
+            kinotes_dir: Path to .kinotes directory for resolving relative image paths
         """
         self.editor = editor
         self.dark_mode = dark_mode
         self.custom_text_color = text_color
         self.custom_bg_color = bg_color
+        self.kinotes_dir = kinotes_dir
         self.parser = MarkdownParser()
     
-    def convert(self, markdown_text: str):
+    def convert(self, markdown_text: str, append: bool = False):
         """
         Convert Markdown to rich text and populate editor.
         
         Args:
             markdown_text: Markdown formatted string
+            append: If True, append to existing content instead of clearing
         """
-        # Clear editor
-        self.editor.Clear()
+        # Clear editor only if not appending
+        if not append:
+            self.editor.Clear()
         
         # Parse markdown
         blocks = self.parser.parse(markdown_text)
@@ -549,21 +566,34 @@ class MarkdownToRichText:
         self.editor.Newline()
     
     def _write_image(self, block: MarkdownBlock):
-        """Write image."""
+        """Write image with relative path resolution."""
         try:
-            if block.url.startswith(('http://', 'https://')):
+            image_url = block.url
+            
+            if image_url.startswith(('http://', 'https://')):
                 # For URLs, just show placeholder text
                 attr = rt.RichTextAttr()
                 attr.SetTextColour(wx.Colour(100, 100, 100))
                 attr.SetFontStyle(wx.FONTSTYLE_ITALIC)
                 
                 self.editor.BeginStyle(attr)
-                self.editor.WriteText(f"[Image: {block.content or block.url}]")
+                self.editor.WriteText(f"[Image: {block.content or image_url}]")
                 self.editor.EndStyle()
             else:
+                # Resolve relative path (./images/file.png) to absolute
+                abs_path = image_url
+                if image_url.startswith('./'):
+                    if self.kinotes_dir:
+                        # ./images/file.png -> /path/to/.kinotes/images/file.png
+                        rel_part = image_url[2:]  # Remove "./"
+                        abs_path = os.path.join(self.kinotes_dir, rel_part)
+                        debug_module('md_import', f"Resolved image path: {image_url} -> {abs_path}")
+                    else:
+                        debug_module('md_import', f"No kinotes_dir, cannot resolve: {image_url}")
+                
                 # Try to load local image
-                if os.path.exists(block.url):
-                    image = wx.Image(block.url, wx.BITMAP_TYPE_ANY)
+                if os.path.exists(abs_path):
+                    image = wx.Image(abs_path, wx.BITMAP_TYPE_ANY)
                     if image.IsOk():
                         # Scale if needed
                         max_width = 400
@@ -571,13 +601,37 @@ class MarkdownToRichText:
                             ratio = max_width / image.GetWidth()
                             new_height = int(image.GetHeight() * ratio)
                             image = image.Scale(max_width, new_height, wx.IMAGE_QUALITY_HIGH)
+                        
+                        # Add invisible marker BEFORE image for round-trip save/load
+                        # This marker is converted back to ![Image](...) on export
+                        marker_text = f"\u200D{image_url}\u200D"
+                        
+                        # Style marker to be invisible (font size 1, same bg color)
+                        marker_attr = rt.RichTextAttr()
+                        marker_attr.SetFontSize(1)
+                        try:
+                            bg_color = self.editor.GetBackgroundColour()
+                            marker_attr.SetTextColour(bg_color)
+                            marker_attr.SetBackgroundColour(bg_color)
+                        except:
+                            marker_attr.SetTextColour(wx.Colour(30, 30, 46))
+                        
+                        self.editor.BeginStyle(marker_attr)
+                        self.editor.WriteText(marker_text)
+                        self.editor.EndStyle()
+                        
+                        # Now write the actual image
                         self.editor.WriteImage(image)
+                        debug_module('md_import', f"Image loaded with marker: {abs_path}")
                     else:
-                        self.editor.WriteText(f"[Image not found: {block.url}]")
+                        self.editor.WriteText(f"[Image load failed: {image_url}]")
+                        debug_module('md_import', f"Image not ok: {abs_path}")
                 else:
-                    self.editor.WriteText(f"[Image: {block.url}]")
+                    self.editor.WriteText(f"[Image not found: {image_url}]")
+                    debug_module('md_import', f"Image file not found: {abs_path}")
         except Exception as e:
             self.editor.WriteText(f"[Image error: {e}]")
+            debug_module('md_import', f"Image error: {e}")
         
         self.editor.Newline()
     
@@ -657,21 +711,40 @@ class RichTextToMarkdown:
             Markdown formatted string
         """
         lines = []
-        text = self.editor.GetValue()
+        original_text = self.editor.GetValue()
         
-        if not text:
+        if not original_text:
             return ""
         
-        # Process line by line
-        text_lines = text.split('\n')
+        debug_module('md_export', f"Raw text length: {len(original_text)}")
+        debug_module('md_export', f"Raw text preview: {repr(original_text[:200])}")
         
-        for line_num, line in enumerate(text_lines):
+        # Process line by line using ORIGINAL text for position mapping
+        original_lines = original_text.split('\n')
+        
+        for line_num, line in enumerate(original_lines):
+            # Get position in editor FIRST (before any text modification)
+            pos = self._get_line_start_position(line_num)
+            
+            # Check for invisible image markers and convert them
+            # Pattern: \u200D./images/file.png\u200D → ![Image](./images/file.png)
+            if '\u200D' in line:
+                line = re.sub(r'\u200D(\./images/[^\u200D]+)\u200D', r'![Image](\1)', line)
+                debug_module('md_export', f"Converted image marker in line {line_num}: {repr(line)}")
+            
+            # Also handle old pattern
+            if '\u200B' in line:
+                line = re.sub(r'\u200B<(\./images/[^>]+)>', r'![Image](\1)', line)
+            
             if not line.strip():
                 lines.append("")
                 continue
             
-            # Get position in editor
-            pos = self._get_line_start_position(line_num)
+            # Check if this is already an image markdown line - preserve as-is
+            if line.strip().startswith('![') and '](' in line:
+                debug_module('md_export', f"Preserving image line: {line}")
+                lines.append(line)
+                continue
             
             # Check if this is a divider
             if line.strip() and all(c in '─═-_' for c in line.strip()):
@@ -748,7 +821,7 @@ class RichTextToMarkdown:
         """Convert a line with inline formatting to Markdown."""
         result = []
         
-        print(f"[KiNotes MD] Converting line: {repr(line)}, start_pos: {start_pos}")
+        debug_module('md_export', f"Converting line: {repr(line)}, start_pos: {start_pos}")
         
         i = 0
         while i < len(line):
@@ -780,7 +853,7 @@ class RichTextToMarkdown:
             # Debug output
             url = attr.GetURL() if has_style else ""
             is_bold = attr.GetFontWeight() == wx.FONTWEIGHT_BOLD if has_style else False
-            print(f"[KiNotes MD]   Span [{i}:{j}]: {repr(span_text)}, bold={is_bold}, url={repr(url)}")
+            debug_module('md_export', f"  Span [{i}:{j}]: {repr(span_text)}, bold={is_bold}, url={repr(url)}")
             
             # Apply Markdown formatting
             if has_style:

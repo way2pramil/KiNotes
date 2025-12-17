@@ -25,15 +25,20 @@ except ImportError:
     pcbnew = None
     HAS_PCBNEW = False
 
+# Import debug_module for per-module debug control
+try:
+    from .defaultsConfig import debug_module
+except ImportError:
+    try:
+        from defaultsConfig import debug_module
+    except ImportError:
+        def debug_module(module, msg):
+            pass
+
 
 def _log(msg: str) -> None:
-    """Print to stdout with flush."""
-    try:
-        if sys.stdout:
-            print(msg)
-            sys.stdout.flush()
-    except Exception:
-        pass
+    """Route to debug_module for 'net' category."""
+    debug_module('net', msg.replace('[KiNotes NetCacheManager] ', '').replace('[KiNotes] ', ''))
 
 
 class NetCacheManager:

@@ -139,7 +139,7 @@ class TimeTracker:
             self.stop_task(task_id)
             del self.task_timers[task_id]
     
-    def export_work_diary(self, format_24h=True):
+    def export_work_diary(self, format_24h=True, project_name=None):
         """Generate Markdown work diary content with session memos."""
         total_sec = self.get_total_seconds()
         hours = total_sec // 3600
@@ -148,8 +148,11 @@ class TimeTracker:
         # Choose time format based on setting
         time_fmt = "%H:%M" if format_24h else "%I:%M %p"
         
+        # Use project name if provided, otherwise generic
+        title = project_name if project_name else "KiCad Project"
+        
         lines = [
-            "# Work Log — KiCad Project",
+            f"# Work Log — {title}",
             f"**Total: {hours}h {minutes}m**",
             ""
         ]

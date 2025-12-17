@@ -6,13 +6,15 @@ from datetime import datetime
 
 # Handle import in both KiCad plugin context and standalone
 try:
-    from .defaultsConfig import debug_print
+    from .defaultsConfig import debug_print, debug_module
 except ImportError:
     try:
-        from core.defaultsConfig import debug_print
+        from core.defaultsConfig import debug_print, debug_module
     except ImportError:
-        # Fallback: define debug_print locally if all imports fail
+        # Fallback: define locally if all imports fail
         def debug_print(msg):
+            pass  # Silent fallback
+        def debug_module(module, msg):
             pass  # Silent fallback
 
 try:
@@ -116,7 +118,7 @@ class PDFExporter:
     def _try_create_visual_pdf(self, rich_text_ctrl, filepath):
         """Try to create PDF from RichTextCtrl using reportlab - convert via markdown first."""
         try:
-            debug_print("[KiNotes PDF] Starting visual PDF export...")
+            debug_module('pdf', "Starting visual PDF export...")
             
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -124,16 +126,16 @@ class PDFExporter:
             from reportlab.lib.colors import HexColor
             from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
             
-            debug_print("[KiNotes PDF] reportlab imported successfully")
+            debug_module('pdf', "reportlab imported successfully")
             
             # Use the markdown converter to extract formatting properly
             try:
                 from ui.markdown_converter import richtext_to_markdown
-                debug_print("[KiNotes PDF] markdown_converter imported (method 1)")
+                debug_module('pdf', "markdown_converter imported (method 1)")
             except ImportError:
                 try:
                     from ..ui.markdown_converter import richtext_to_markdown
-                    debug_print("[KiNotes PDF] markdown_converter imported (method 2)")
+                    debug_module('pdf', "markdown_converter imported (method 2)")
                 except ImportError:
                     # Fallback: direct import for different package structures
                     import sys
@@ -142,25 +144,25 @@ class PDFExporter:
                     if plugin_dir not in sys.path:
                         sys.path.insert(0, plugin_dir)
                     from ui.markdown_converter import richtext_to_markdown
-                    debug_print("[KiNotes PDF] markdown_converter imported (method 3)")
+                    debug_module('pdf', "markdown_converter imported (method 3)")
             
             # Convert RichTextCtrl to Markdown (this extracts all formatting)
-            debug_print("[KiNotes PDF] Converting RichText to Markdown...")
+            debug_module('pdf', "Converting RichText to Markdown...")
             markdown_content = richtext_to_markdown(rich_text_ctrl)
             
             # DEBUG: Show first 500 chars of markdown
-            debug_print(f"[KiNotes PDF] Markdown content ({len(markdown_content)} chars):")
-            debug_print("=" * 50)
+            debug_module('pdf', f"Markdown content ({len(markdown_content)} chars):")
+            debug_module('pdf', "=" * 50)
             for line in markdown_content.split('\n')[:15]:
-                debug_print(f"  {repr(line)}")
-            debug_print("=" * 50)
+                debug_module('pdf', f"  {repr(line)}")
+            debug_module('pdf', "=" * 50)
             
             # Check if formatting markers exist
             has_bold = '**' in markdown_content
             has_italic = '*' in markdown_content.replace('**', '')
             has_heading = markdown_content.strip().startswith('#') or '\n#' in markdown_content
             has_hr = '---' in markdown_content or '___' in markdown_content
-            debug_print(f"[KiNotes PDF] Formatting detected: bold={has_bold}, italic={has_italic}, heading={has_heading}, hr={has_hr}")
+            debug_module('pdf', f"Formatting detected: bold={has_bold}, italic={has_italic}, heading={has_heading}, hr={has_hr}")
             
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
             project_name = self._get_project_name()
@@ -279,22 +281,39 @@ class PDFExporter:
                     story.append(self._safe_paragraph(f"{checkbox_char} {formatted}", bullet_style))
                     continue
                 
+                # Check for image ![alt](path)
+                image_match = re.match(r'^!\[([^\]]*)\]\(([^)]+)\)$', line.strip())
+                if image_match:
+                    alt_text = image_match.group(1)
+                    img_path = image_match.group(2)
+                    debug_module('pdf', f"Found image: alt='{alt_text}', path='{img_path}'")
+                    img_element = self._get_image_element(img_path)
+                    if img_element:
+                        story.append(img_element)
+                        story.append(Spacer(1, 0.1*inch))
+                        debug_module('pdf', "Image added to PDF")
+                    else:
+                        # Fallback: show as text if image not found
+                        debug_module('pdf', "Image element was None, showing text fallback")
+                        story.append(self._safe_paragraph(f"[Image: {alt_text or img_path}]", body_style))
+                    continue
+                
                 # Regular paragraph - use full fallback chain
                 if line.strip():
                     story.append(self._convert_and_paragraph(line, body_style))
                 else:
                     story.append(Spacer(1, 0.1*inch))
             
-            debug_print(f"[KiNotes PDF] Building PDF with {len(story)} story elements...")
+            debug_module('pdf', f"Building PDF with {len(story)} story elements...")
             doc.build(story, onFirstPage=add_footer, onLaterPages=add_footer)
-            debug_print(f"[KiNotes PDF] SUCCESS! PDF created at: {filepath}")
+            debug_module('pdf', f"SUCCESS! PDF created at: {filepath}")
             return filepath
             
         except ImportError as e:
-            debug_print(f"[KiNotes PDF] IMPORT ERROR: {e}")
+            debug_module('pdf', f"IMPORT ERROR: {e}")
             return None
         except Exception as e:
-            debug_print(f"[KiNotes PDF] EXCEPTION: {e}")
+            debug_module('pdf', f"EXCEPTION: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -328,6 +347,61 @@ class PDFExporter:
             plain = re.sub(r'<[^>]+>', '', text)
             return Paragraph(plain, style)
     
+    def _get_image_element(self, img_path, max_width=400):
+        """
+        Get ReportLab Image element for a markdown image path.
+        
+        Args:
+            img_path: Path like "./images/file.png" or absolute path
+            max_width: Maximum width in points
+        
+        Returns:
+            Image flowable or None if not found
+        """
+        try:
+            from reportlab.platypus import Image
+            
+            debug_print(f"[KiNotes PDF] _get_image_element: input path='{img_path}'")
+            debug_print(f"[KiNotes PDF] _get_image_element: project_dir='{self.project_dir}'")
+            
+            # Resolve relative path
+            if img_path.startswith('./'):
+                # Relative to .kinotes folder
+                kinotes_dir = os.path.join(self.project_dir, '.kinotes')
+                abs_path = os.path.join(kinotes_dir, img_path[2:])
+                debug_print(f"[KiNotes PDF] Resolved relative path: {abs_path}")
+            elif os.path.isabs(img_path):
+                abs_path = img_path
+                debug_print(f"[KiNotes PDF] Using absolute path: {abs_path}")
+            else:
+                # Try as relative to project
+                abs_path = os.path.join(self.project_dir, img_path)
+                debug_print(f"[KiNotes PDF] Resolved project-relative: {abs_path}")
+            
+            if not os.path.exists(abs_path):
+                debug_print(f"[KiNotes PDF] Image not found: {abs_path}")
+                return None
+            
+            debug_print(f"[KiNotes PDF] Image file exists: {abs_path}")
+            
+            # Create image element with max width
+            img = Image(abs_path)
+            
+            # Scale to fit max width while maintaining aspect ratio
+            if img.drawWidth > max_width:
+                scale = max_width / img.drawWidth
+                img.drawWidth = max_width
+                img.drawHeight = img.drawHeight * scale
+            
+            debug_print(f"[KiNotes PDF] Added image: {abs_path}, size: {img.drawWidth}x{img.drawHeight}")
+            return img
+            
+        except Exception as e:
+            debug_print(f"[KiNotes PDF] Image error: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
     def _convert_and_paragraph(self, raw_text, style):
         """Convert markdown to XML and create Paragraph with link fallback.
         

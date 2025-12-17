@@ -30,28 +30,54 @@ from .debug_event_logger import EventLevel
 
 # Handle import in both KiCad plugin context and standalone
 try:
-    from ..core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS, EDITOR_LAYOUT, debug_print
+    from ..core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS, EDITOR_LAYOUT, IMAGE_DEFAULTS, debug_print
+    from ..core.image_handler import ImageHandler, get_clipboard_image, is_clipboard_image
 except ImportError:
     try:
-        from core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS, EDITOR_LAYOUT, debug_print
+        from core.defaultsConfig import FONT_DEFAULTS, EDITOR_MARKERS, COLORS, EDITOR_LAYOUT, IMAGE_DEFAULTS, debug_print
+        from core.image_handler import ImageHandler, get_clipboard_image, is_clipboard_image
     except ImportError:
         # Fallback defaults if import fails completely
         def debug_print(msg):
             pass
+        def get_clipboard_image():
+            return None
+        def is_clipboard_image():
+            return False
+        ImageHandler = None
         FONT_DEFAULTS = {'default_font_size': 14, 'min_font_size': 8, 'max_font_size': 72}
         EDITOR_MARKERS = {'smart_link_start': '[[', 'smart_link_end': ']]'}
         COLORS = {'light_backgrounds': [], 'light_text': [], 'dark_backgrounds': [], 'dark_text': []}
         EDITOR_LAYOUT = {'margin_left': 12, 'margin_right': 8, 'padding_horizontal': 4, 'padding_bottom': 4}
+        IMAGE_DEFAULTS = {'folder_name': 'images', 'thumbnail_size': 400}
+        def debug_module(module, msg):
+            pass
+
+# Import debug_module for per-module debug control
+try:
+    from core.defaultsConfig import debug_module
+except ImportError:
+    try:
+        from ..core.defaultsConfig import debug_module
+    except ImportError:
+        def debug_module(module, msg):
+            pass
 
 
 def _kinotes_log(msg: str):
-    """Log message to console, handling KiCad's None stdout."""
-    try:
-        if sys.stdout is not None:
-            print(msg)
-            sys.stdout.flush()
-    except:
-        pass  # Silently ignore if stdout not available
+    """Log message - routes through debug_module for 'click' events."""
+    # Extract module from message prefix
+    if '[KiNotes Click]' in msg:
+        debug_module('click', msg.replace('[KiNotes Click] ', ''))
+    elif '[KiNotes Cross-Probe]' in msg:
+        debug_module('designator', msg.replace('[KiNotes Cross-Probe] ', ''))
+    elif '[KiNotes Net' in msg:
+        debug_module('net', msg.replace('[KiNotes Net Linker] ', '').replace('[KiNotes Net Detection] ', ''))
+    elif '[KiNotes Tooltip]' in msg:
+        debug_module('designator', msg.replace('[KiNotes Tooltip] ', ''))
+    else:
+        # Fallback for other messages
+        debug_module('editor', msg.replace('[KiNotes] ', ''))
 
 
 # ============================================================
@@ -244,6 +270,9 @@ class VisualNoteEditor(wx.Panel):
         self._net_linker = None  # Set by main panel (Beta)
         self._debug_logger = None
         self._debug_modules = {"net": False, "designator": False}
+        
+        # Image handler - set by main panel via set_image_handler()
+        self._image_handler = None
         
         # Theme colors - custom colors override defaults
         self._custom_bg_color = None  # User-selected background color
@@ -635,6 +664,9 @@ class VisualNoteEditor(wx.Panel):
         attr.SetFontWeight(wx.FONTWEIGHT_NORMAL)
         attr.SetFontStyle(wx.FONTSTYLE_NORMAL)
         attr.SetFontUnderlined(False)
+        # Clear strikethrough effect
+        attr.SetTextEffects(0)  # Clear all text effects
+        attr.SetTextEffectFlags(wx.TEXT_ATTR_EFFECT_STRIKETHROUGH)  # Apply only to strikethrough
         attr.SetParagraphSpacingBefore(4)
         attr.SetParagraphSpacingAfter(4)
         # Use the editor's actual theme colors
@@ -990,15 +1022,13 @@ class VisualNoteEditor(wx.Panel):
         dlg.Destroy()
     
     def _on_insert_image(self, event):
-        """Insert an image."""
+        """Insert an image using ImageHandler to save to .kinotes/images/."""
         wildcard = "Image files (*.png;*.jpg;*.jpeg;*.gif;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.bmp"
         
-        # Default to .kinotes/ folder if available
+        # Default to home folder or project dir
         default_dir = ""
         if hasattr(self, 'project_dir') and self.project_dir:
-            kinotes_dir = os.path.join(self.project_dir, '.kinotes')
-            if os.path.exists(kinotes_dir):
-                default_dir = kinotes_dir
+            default_dir = self.project_dir
         
         dlg = wx.FileDialog(
             self,
@@ -1010,21 +1040,28 @@ class VisualNoteEditor(wx.Panel):
         
         if dlg.ShowModal() == wx.ID_OK:
             image_path = dlg.GetPath()
-            try:
-                # Load and insert image
-                image = wx.Image(image_path, wx.BITMAP_TYPE_ANY)
-                
-                # Scale if too large
-                max_width = 400
-                if image.GetWidth() > max_width:
-                    ratio = max_width / image.GetWidth()
-                    new_height = int(image.GetHeight() * ratio)
-                    image = image.Scale(max_width, new_height, wx.IMAGE_QUALITY_HIGH)
-                
-                self._editor.WriteImage(image)
-                self._modified = True
-            except Exception as e:
-                wx.MessageBox(f"Failed to insert image: {e}", "Error", wx.OK | wx.ICON_ERROR)
+            debug_print(f"[KiNotes Image] Selected file: {image_path}")
+            
+            # Use image handler if available (saves to .kinotes/images/)
+            if self._image_handler:
+                if self.insert_image_from_file(image_path):
+                    debug_print("[KiNotes Image] Inserted via handler")
+                else:
+                    wx.MessageBox("Failed to insert image", "Error", wx.OK | wx.ICON_ERROR)
+            else:
+                # Fallback: direct insert without saving (legacy)
+                debug_print("[KiNotes Image] No handler, using legacy insert")
+                try:
+                    image = wx.Image(image_path, wx.BITMAP_TYPE_ANY)
+                    max_width = 400
+                    if image.GetWidth() > max_width:
+                        ratio = max_width / image.GetWidth()
+                        new_height = int(image.GetHeight() * ratio)
+                        image = image.Scale(max_width, new_height, wx.IMAGE_QUALITY_HIGH)
+                    self._editor.WriteImage(image)
+                    self._modified = True
+                except Exception as e:
+                    wx.MessageBox(f"Failed to insert image: {e}", "Error", wx.OK | wx.ICON_ERROR)
         
         dlg.Destroy()
     
@@ -1151,6 +1188,14 @@ class VisualNoteEditor(wx.Panel):
             elif key == ord('Y'):
                 self._on_redo(None)
                 return
+            elif key == ord('V'):
+                # Check for image in clipboard first
+                debug_print("[KiNotes Image] Ctrl+V pressed, checking for image...")
+                if self._try_paste_image():
+                    debug_print("[KiNotes Image] Image pasted, skipping text paste")
+                    return
+                debug_print("[KiNotes Image] No image, falling through to text paste")
+                # Fall through to default paste for text
         
         elif ctrl and shift:
             if key == ord('B'):
@@ -1294,17 +1339,35 @@ class VisualNoteEditor(wx.Panel):
         """
         Load Markdown content into the visual editor.
         Converts Markdown to rich text formatting.
+        Also stores the original markdown for perfect round-trip.
         
         Args:
             markdown_text: Markdown formatted string
         """
         from .markdown_converter import MarkdownToRichText
-        # Pass theme colors to converter for proper heading/text coloring
+        
+        # Store original markdown for round-trip preservation
+        try:
+            from ..core.format_store import get_format_store
+        except ImportError:
+            from core.format_store import get_format_store
+        
+        format_store = get_format_store()
+        format_store.set_source(markdown_text)
+        
+        # Get kinotes_dir from image handler for resolving relative image paths
+        kinotes_dir = None
+        if self._image_handler:
+            kinotes_dir = self._image_handler.kinotes_dir
+            debug_print(f"[KiNotes] SetValue: Using kinotes_dir={kinotes_dir}")
+        
+        # Pass theme colors and kinotes_dir to converter
         converter = MarkdownToRichText(
             self._editor, 
             self._dark_mode, 
             text_color=self._text_color,
-            bg_color=self._bg_color
+            bg_color=self._bg_color,
+            kinotes_dir=kinotes_dir
         )
         converter.convert(markdown_text)
         self._modified = False
@@ -1312,11 +1375,13 @@ class VisualNoteEditor(wx.Panel):
     def GetValue(self) -> str:
         """
         Get content as Markdown string.
-        Converts rich text formatting to Markdown.
+        Uses format store only when content is unchanged, otherwise converts.
         
         Returns:
             Markdown formatted string
         """
+        # Always use the converter to get current content
+        # The FormatStore approach was flawed - it ignored edits
         from .markdown_converter import RichTextToMarkdown
         converter = RichTextToMarkdown(self._editor)
         return converter.convert()
@@ -1351,7 +1416,44 @@ class VisualNoteEditor(wx.Panel):
     def SetInsertionPointEnd(self):
         """Move cursor to end of document."""
         self._editor.SetInsertionPointEnd()
-    
+
+    def insert_markdown_as_formatted(self, markdown_text: str):
+        """
+        Insert markdown content at cursor position, converting to rich text.
+        Used by import functions to add formatted content (headings, bold, etc).
+        
+        Args:
+            markdown_text: Markdown formatted string to insert
+        """
+        from .markdown_converter import MarkdownToRichText
+        
+        # Move to end of document
+        self._editor.SetInsertionPointEnd()
+        
+        # Add newline separator if there's existing content
+        if self._editor.GetValue():
+            self._editor.WriteText("\n\n")
+        
+        # Get insertion point before adding content
+        start_pos = self._editor.GetInsertionPoint()
+        
+        # Get kinotes_dir for image path resolution
+        kinotes_dir = None
+        if self._image_handler:
+            kinotes_dir = self._image_handler.kinotes_dir
+        
+        # Use the converter to add formatted content at current position
+        converter = MarkdownToRichText(
+            self._editor,
+            self._dark_mode,
+            text_color=self._text_color,
+            bg_color=self._bg_color,
+            kinotes_dir=kinotes_dir
+        )
+        converter.convert(markdown_text, append=True)  # append mode - don't clear existing
+        
+        self._modified = True
+
     def GetInsertionPoint(self) -> int:
         """Get current cursor position."""
         return self._editor.GetInsertionPoint()
@@ -1409,6 +1511,132 @@ class VisualNoteEditor(wx.Panel):
                 self._debug_logger.log(level, message)
         except Exception:
             pass
+    
+    # ============================================================
+    # IMAGE HANDLING
+    # ============================================================
+    
+    def set_image_handler(self, handler):
+        """Set the image handler for paste/insert operations."""
+        self._image_handler = handler
+        if handler:
+            debug_print("[KiNotes] Visual editor received image handler")
+    
+    def _try_paste_image(self) -> bool:
+        """
+        Try to paste image from clipboard.
+        
+        Returns:
+            True if image was pasted, False if no image in clipboard
+        """
+        debug_print("[KiNotes Image] _try_paste_image called")
+        
+        if not self._image_handler:
+            debug_print("[KiNotes Image] No image handler set")
+            return False
+        
+        debug_print("[KiNotes Image] Checking clipboard...")
+        if not is_clipboard_image():
+            debug_print("[KiNotes Image] No image in clipboard")
+            return False
+        
+        debug_print("[KiNotes Image] Image found, getting bitmap...")
+        bitmap = get_clipboard_image()
+        if not bitmap:
+            debug_print("[KiNotes Image] Failed to get bitmap from clipboard")
+            return False
+        
+        debug_print(f"[KiNotes Image] Bitmap ok: {bitmap.IsOk()}, size: {bitmap.GetWidth()}x{bitmap.GetHeight()}")
+        
+        # Save image to .kinotes/images/
+        rel_path = self._image_handler.save_from_bitmap(bitmap, prefix="paste")
+        if not rel_path:
+            debug_print("[KiNotes Image] Failed to save pasted image")
+            return False
+        
+        debug_print(f"[KiNotes Image] Saved to: {rel_path}")
+        
+        # Insert image into editor
+        self._insert_image(rel_path)
+        self._modified = True
+        debug_print("[KiNotes Image] Paste complete!")
+        return True
+    
+    def _insert_image(self, relative_path: str):
+        """
+        Insert image at cursor position.
+        
+        Args:
+            relative_path: Path like "./images/file.png"
+        """
+        if not self._image_handler:
+            return
+        
+        # Update format store with new image
+        try:
+            from ..core.format_store import get_format_store
+        except ImportError:
+            try:
+                from core.format_store import get_format_store
+            except ImportError:
+                get_format_store = None
+        
+        if get_format_store:
+            format_store = get_format_store()
+            format_store.insert_image(relative_path)
+        
+        # Load image as bitmap for display
+        max_width = IMAGE_DEFAULTS.get('thumbnail_size', 400)
+        bitmap = self._image_handler.load_wx_bitmap(relative_path, max_width)
+        
+        if bitmap and bitmap.IsOk():
+            # Insert newline before if not at start of line
+            pos = self._editor.GetInsertionPoint()
+            if pos > 0:
+                text = self._editor.GetValue()
+                if text[pos-1] != '\n':
+                    self._editor.WriteText('\n')
+            
+            # Insert the image
+            self._editor.WriteImage(bitmap)
+            
+            # Add hidden marker for markdown export - styled to be invisible
+            # Using font size 1 and background-matching color
+            marker_text = f'\u200D{relative_path}\u200D'
+            hidden_attr = rt.RichTextAttr()
+            hidden_attr.SetFontSize(1)
+            hidden_attr.SetTextColour(self._bg_color if self._bg_color else wx.Colour(30, 30, 46))
+            
+            self._editor.BeginStyle(hidden_attr)
+            self._editor.WriteText(marker_text)
+            self._editor.EndStyle()
+            self._editor.WriteText('\n')
+            
+            debug_print(f"[KiNotes Image] Inserted: {relative_path}")
+        else:
+            # Fallback: insert as markdown syntax
+            self._editor.WriteText(f'\n![Image]({relative_path})\n')
+            debug_print(f"[KiNotes Image] Inserted as text: {relative_path}")
+    
+    def insert_image_from_file(self, file_path: str) -> bool:
+        """
+        Insert image from file path.
+        
+        Args:
+            file_path: Absolute path to image file
+        
+        Returns:
+            True on success
+        """
+        if not self._image_handler:
+            return False
+        
+        rel_path = self._image_handler.save_from_file(file_path, prefix="imported")
+        if rel_path:
+            self._insert_image(rel_path)
+            self._modified = True
+            return True
+        return False
     
     def _get_word_at_position(self, pos: int) -> Tuple[str, int, int]:
         """

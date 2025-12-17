@@ -4,7 +4,10 @@
   <img src="KiNotes/resources/icon.svg" alt="KiNotes" width="220"/>
 </p>
 
-**Your design decisions shouldn't live in a separate notepad.** KiNotes keeps engineering notes right inside KiCad—where they belong.
+**Version 1.5.0** — Your design decisions shouldn't live in a separate notepad. KiNotes keeps engineering notes right inside KiCad—where they belong.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![KiCad 9.0+](https://img.shields.io/badge/KiCad-9.0+-green.svg)](https://www.kicad.org/)
 
 > 🎯 **For KiCad 9.0+** — Built for modern KiCad with Python 3 and wxPython 4.
 
@@ -119,17 +122,18 @@ When your brain is juggling impedance calculations, component placement, thermal
 | Feature | Status |
 |---------|--------|
 | **Markdown Editor Mode** | Toggle between visual and raw markdown |
-| **BOM Tab** | Dedicated Bill of Materials generator | Thaks for *iBOM*
+| **BOM Tab** | Dedicated Bill of Materials generator |
 | **Version Log Tab** | Design revision tracking (in progress) |
 | **Debug Panel** | Event logging for troubleshooting |
+| **Image Paste** | Ctrl+V to paste images from clipboard → saved to `.kinotes/images/` |
+| **Fab Summary Import** | Import board fabrication info with section selection |
 
 ### Planned
 | Feature | Status |
 |---------|--------|
-| **KiCad Plugin Manager** | Pending submission |
-| **Image embed** | Planned |
-| **Smart-Link Tooltips** | Hover over R1 → show component attributes like Value, MPN,Layer etc.|
-| **Voice input for KiNotes** | add notes hands-free using local speech-to-text, with full editor-aware insertion and privacy-first processin | 
+| **KiCad Plugin Manager** | ✅ Available in v1.5.0 |
+| **Smart-Link Tooltips** | Hover over R1 → show component attributes like Value, MPN, Layer etc.|
+| **Voice input for KiNotes** | Add notes hands-free using local speech-to-text | 
 
 ---
 
@@ -137,8 +141,14 @@ When your brain is juggling impedance calculations, component placement, thermal
 
 ### Installation
 
-**Manual Installation** (until PCM approval)
-1. Download the latest release
+**Via KiCad Plugin Manager (Recommended)**
+1. Open KiCad → Plugin and Content Manager
+2. Search for "KiNotes"
+3. Click Install
+4. Restart KiCad
+
+**Manual Installation**
+1. Download the latest release from [GitHub Releases](https://github.com/way2pramil/KiNotes/releases)
 2. Copy `KiNotes/` folder to:
    - **Windows:** `%APPDATA%\kicad\9.0\scripting\plugins\`
    - **macOS:** `~/Library/Preferences/kicad/9.0/scripting/plugins/`

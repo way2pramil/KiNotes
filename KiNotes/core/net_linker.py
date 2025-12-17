@@ -29,14 +29,20 @@ except ImportError:
     pcbnew = None
     HAS_PCBNEW = False
 
+# Import debug_module for per-module debug control
+try:
+    from .defaultsConfig import debug_module
+except ImportError:
+    try:
+        from defaultsConfig import debug_module
+    except ImportError:
+        def debug_module(module, msg):
+            pass
+
 
 def _log(msg: str) -> None:
-    try:
-        if sys.stdout:
-            print(msg)
-            sys.stdout.flush()
-    except Exception:
-        pass
+    """Legacy log - use debug_module('net', msg) instead."""
+    debug_module('net', msg.replace('[KiNotes] ', '').replace('[KiNotes NetLinker] ', ''))
 
 
 def safe_pcbnew_call(default=None):

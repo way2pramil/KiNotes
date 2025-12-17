@@ -118,6 +118,7 @@ class TodoTabMixin:
         # Text input - use user's custom editor colors (matches Notes panel)
         txt = wx.TextCtrl(item_panel, value=text, style=wx.BORDER_SIMPLE | wx.TE_PROCESS_ENTER)
         txt.SetBackgroundColour(editor_bg)
+        txt.SetForegroundColour(editor_text)  # Set default text color first
         
         if done:
             font = wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
@@ -126,7 +127,8 @@ class TodoTabMixin:
             txt.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
         else:
             txt.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-            txt.SetForegroundColour(editor_text)
+        
+        txt.Refresh()  # Force refresh to apply colors on Windows
         
         txt.Bind(wx.EVT_TEXT, lambda e, iid=item_id: self._on_todo_text_change(iid))
         txt.Bind(wx.EVT_TEXT_ENTER, lambda e: self._on_add_todo(None))
@@ -179,6 +181,7 @@ class TodoTabMixin:
         memo_txt.SetBackgroundColour(editor_bg)
         memo_txt.SetForegroundColour(editor_text)
         memo_txt.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_ITALIC, wx.FONTWEIGHT_NORMAL))
+        memo_txt.Refresh()  # Force refresh to apply colors on Windows
         memo_txt.Bind(wx.EVT_TEXT, lambda e, iid=item_id: self._on_memo_change(iid))
         memo_sizer.Add(memo_txt, 1, wx.EXPAND | wx.ALL, 8)
         

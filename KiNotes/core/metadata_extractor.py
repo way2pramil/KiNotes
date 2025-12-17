@@ -78,6 +78,7 @@ class MetadataExtractor:
                 'layers': self.extract_layers,
                 'drill_table': self.extract_drill_table,
                 'design_rules': self.extract_design_rules,
+                'fab_summary': self.extract_fab_summary,
                 'all': self.extract_all,
             }
             
@@ -603,36 +604,224 @@ class MetadataExtractor:
             lines.append("### Copper")
             lines.append(f"- **Copper Layers:** {board.GetCopperLayerCount()}")
             
-            # Default track width
-            track_width = None
-            for attr in ['GetCurrentTrackWidth', 'm_CurrentTrackWidth']:
-                if hasattr(ds, attr):
-                    val = getattr(ds, attr)
-                    try:
-                        track_width = val() if callable(val) else val
-                        break
-                    except:
-                        pass
-            if track_width is not None:
-                lines.append(f"- **Default Track Width:** {pcbnew.ToMM(track_width):.3f} mm")
-            
-            # Default via size
-            via_size = None
-            for attr in ['GetCurrentViaSize', 'm_CurrentViaSize']:
-                if hasattr(ds, attr):
-                    val = getattr(ds, attr)
-                    try:
-                        via_size = val() if callable(val) else val
-                        break
-                    except:
-                        pass
-            if via_size is not None:
-                lines.append(f"- **Default Via Size:** {pcbnew.ToMM(via_size):.3f} mm")
-            
         except Exception as e:
             lines.append(f"*Error extracting design rules: {e}*")
         
         lines.append("")
+        return "\n".join(lines)
+    
+    def extract_fab_summary(self, sections=None):
+        """Extract fab house requirements summary - combines selected extractions.
+        
+        Args:
+            sections: List of section keys to include. If None, includes all.
+                      Valid keys: 'board_size', 'board_finish', 'track_analysis',
+                                  'drill_table', 'design_rules', 'fab_checklist'
+        """
+        board = self._get_board()
+        if not board:
+            return "<!-- Error: No board loaded -->"
+        
+        # Default to all sections
+        if sections is None:
+            sections = ['board_size', 'board_finish', 'track_analysis', 
+                        'drill_table', 'design_rules', 'fab_checklist']
+        
+        lines = ["## Fab House Requirements Summary", ""]
+        
+        try:
+            # Map section keys to extractor methods
+            extractors = {
+                'board_size': self.extract_board_size,
+                'board_finish': self.extract_board_finish,
+                'track_analysis': self.extract_track_analysis,
+                'drill_table': self.extract_drill_table,
+                'design_rules': self.extract_design_rules,
+                'fab_checklist': self.extract_fab_checklist,
+            }
+            
+            for key in sections:
+                if key in extractors:
+                    lines.append(extractors[key]())
+            
+        except Exception as e:
+            lines.append(f"*Error extracting fab summary: {e}*")
+        
+        return "\n".join(lines)
+    
+    def extract_board_finish(self):
+        """Extract board finish settings (HASL/ENIG, castellated, edge plating)."""
+        board = self._get_board()
+        if not board:
+            return ""
+        
+        lines = ["### Board Finish", ""]
+        ds = board.GetDesignSettings()
+        
+        # Helper to try multiple API patterns
+        def try_get(obj, attrs, default="Not specified"):
+            for attr in attrs:
+                if hasattr(obj, attr):
+                    val = getattr(obj, attr)
+                    try:
+                        result = val() if callable(val) else val
+                        if result:
+                            return str(result) if result != 0 else default
+                    except:
+                        pass
+            return default
+        
+        # Try stackup descriptor as fallback source
+        stackup = None
+        if hasattr(ds, 'GetStackupDescriptor'):
+            stackup = ds.GetStackupDescriptor()
+        
+        # Copper Finish
+        copper_finish = try_get(ds, ['GetCopperFinish', 'm_CopperFinish'])
+        if copper_finish == "Not specified" and stackup and hasattr(stackup, 'GetFinish'):
+            try:
+                f = stackup.GetFinish()
+                if f:
+                    copper_finish = str(f)
+            except:
+                pass
+        
+        # Castellated Pads
+        has_castellated = try_get(ds, ['GetCastellatedPads', 'm_CastellatedPads'], "No")
+        if has_castellated == "No" and stackup and hasattr(stackup, 'GetCastellatedPads'):
+            try:
+                has_castellated = "Yes" if stackup.GetCastellatedPads() else "No"
+            except:
+                pass
+        else:
+            has_castellated = "Yes" if has_castellated not in ["No", "Not specified", "0", "False"] else "No"
+        
+        # Edge Plating
+        has_edge_plating = try_get(ds, ['GetEdgePlating', 'm_EdgePlating'], "No")
+        if has_edge_plating == "No" and stackup and hasattr(stackup, 'GetEdgePlating'):
+            try:
+                has_edge_plating = "Yes" if stackup.GetEdgePlating() else "No"
+            except:
+                pass
+        else:
+            has_edge_plating = "Yes" if has_edge_plating not in ["No", "Not specified", "0", "False"] else "No"
+        
+        # Edge Connector
+        edge_connector = try_get(ds, ['GetEdgeConnector', 'm_EdgeConnector'], "None")
+        if edge_connector == "None" and stackup and hasattr(stackup, 'GetEdgeConnector'):
+            try:
+                ec = stackup.GetEdgeConnector()
+                if ec and ec != 0:
+                    edge_connector = str(ec)
+            except:
+                pass
+        
+        lines.extend([
+            "| Parameter | Value |",
+            "|-----------|-------|",
+            f"| **Copper Finish** | {copper_finish} |",
+            f"| **Castellated Pads** | {has_castellated} |",
+            f"| **Edge Plating** | {has_edge_plating} |",
+            f"| **Edge Connectors** | {edge_connector} |",
+            ""
+        ])
+        
+        return "\n".join(lines)
+    
+    def extract_track_analysis(self):
+        """Scan actual tracks for min/max width (not just DRC rules)."""
+        board = self._get_board()
+        if not board:
+            return ""
+        
+        lines = ["### Actual Track Analysis", ""]
+        
+        min_width = float('inf')
+        max_width = 0
+        count = 0
+        
+        for track in board.GetTracks():
+            if track.GetClass() in ["PCB_TRACK", "PCB_ARC"]:
+                w = pcbnew.ToMM(track.GetWidth())
+                min_width = min(min_width, w)
+                max_width = max(max_width, w)
+                count += 1
+        
+        if count > 0:
+            lines.extend([
+                "| Parameter | Value |",
+                "|-----------|-------|",
+                f"| **Min Track** | {min_width:.3f} mm ({min_width/0.0254:.1f} mil) |",
+                f"| **Max Track** | {max_width:.3f} mm ({max_width/0.0254:.1f} mil) |",
+                f"| **Total Tracks** | {count} |",
+                ""
+            ])
+        else:
+            lines.append("*No tracks routed yet*\n")
+        
+        return "\n".join(lines)
+    
+    def extract_fab_checklist(self):
+        """Generate fab capability checklist based on board specs."""
+        board = self._get_board()
+        if not board:
+            return ""
+        
+        lines = [
+            "### Fab Capability Checklist",
+            "",
+            "*Verify with your fab house*",
+            ""
+        ]
+        
+        checks = []
+        
+        # Layer count check
+        layers = board.GetCopperLayerCount()
+        if layers <= 2:
+            checks.append("✅ Standard 2-layer")
+        elif layers <= 4:
+            checks.append("✅ Standard 4-layer")
+        elif layers <= 6:
+            checks.append("⚠️ 6-layer (mid-tier fab)")
+        else:
+            checks.append(f"⚠️ {layers}-layer (advanced fab)")
+        
+        # Scan for smallest drill
+        min_drill = float('inf')
+        for track in board.GetTracks():
+            if track.GetClass() == "PCB_VIA":
+                min_drill = min(min_drill, pcbnew.ToMM(track.GetDrillValue()))
+        for fp in board.GetFootprints():
+            for pad in fp.Pads():
+                if pad.GetDrillSize().x > 0:
+                    min_drill = min(min_drill, pcbnew.ToMM(pad.GetDrillSize().x))
+        
+        if min_drill < float('inf'):
+            if min_drill >= 0.3:
+                checks.append("✅ Standard drill (≥0.3mm)")
+            elif min_drill >= 0.2:
+                checks.append("⚠️ Small drill (0.2-0.3mm)")
+            else:
+                checks.append("❌ Micro drill (<0.2mm)")
+        
+        # Scan for smallest track
+        min_track = float('inf')
+        for track in board.GetTracks():
+            if track.GetClass() in ["PCB_TRACK", "PCB_ARC"]:
+                min_track = min(min_track, pcbnew.ToMM(track.GetWidth()))
+        
+        if min_track < float('inf'):
+            if min_track >= 0.15:
+                checks.append("✅ Standard trace (≥6mil)")
+            elif min_track >= 0.1:
+                checks.append("⚠️ Fine pitch (4-6mil)")
+            else:
+                checks.append("❌ Ultra-fine (<4mil)")
+        
+        lines.extend(checks)
+        lines.append("")
+        
         return "\n".join(lines)
     
     def extract_all(self):
