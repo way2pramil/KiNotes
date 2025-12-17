@@ -11,7 +11,7 @@ direct markdown editing. Provides:
 This is the fallback/power-user alternative to the Visual Editor.
 
 Author: KiNotes Team (pcbtools.xyz)
-License: MIT
+License: Apache-2.0
 """
 import wx
 import re

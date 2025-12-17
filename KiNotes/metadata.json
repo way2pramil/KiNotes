@@ -18,7 +18,7 @@
       "web": "https://pcbtools.xyz"
     }
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "resources": {
     "homepage": "https://pcbtools.xyz",
     "repository": "https://github.com/way2pramil/KiNotes",

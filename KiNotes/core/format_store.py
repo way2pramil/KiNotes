@@ -10,7 +10,7 @@ is lossy and unreliable. Instead, we keep the source markdown and only
 update specific parts when the user makes changes.
 
 Author: KiNotes Team (pcbtools.xyz)
-License: MIT
+License: Apache-2.0
 """
 
 import re

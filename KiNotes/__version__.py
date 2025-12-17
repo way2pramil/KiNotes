@@ -10,7 +10,7 @@ import json
 
 __version__ = "1.5.0"
 __author__ = "PCBtools.xyz"
-__license__ = "MIT"
+__license__ = "Apache-2.0"
 
 def get_version():
     """Get version from metadata.json or fallback to hardcoded."""

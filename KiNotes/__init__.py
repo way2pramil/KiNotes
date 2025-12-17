@@ -14,7 +14,7 @@ Features:
 Target: KiCad 9.0+ (Python 3.9+, wxPython 4.2+)
 Website: https://pcbtools.xyz
 Repository: https://github.com/way2pramil/KiNotes
-License: MIT
+License: Apache-2.0
 """
 
 # Import version from single source (metadata.json)
@@ -24,7 +24,7 @@ except ImportError:
     __version__ = "1.5.0"  # Fallback
 
 __author__ = "PCBtools.xyz"
-__license__ = "MIT"
+__license__ = "Apache-2.0"
 
 # Package metadata
 __all__ = [

@@ -13,7 +13,7 @@ Features:
 Compatible with: KiCad 9+ / wxPython 4.1+ / Python 3.8+
 
 Author: KiNotes Team (pcbtools.xyz)
-License: MIT
+License: Apache-2.0
 """
 import wx
 import wx.richtext as rt

@@ -9,7 +9,7 @@ description = "Smart PCB Notes linked to your KiCad design"
 readme = "README.md"
 requires-python = ">=3.8"
 authors = [ { name = "way2pramil" } ]
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 dependencies = []
 
 [tool.setuptools.packages.find]

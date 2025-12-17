@@ -6,7 +6,7 @@
 
 **Version 1.5.0** — Your design decisions shouldn't live in a separate notepad. KiNotes keeps engineering notes right inside KiCad—where they belong.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![KiCad 9.0+](https://img.shields.io/badge/KiCad-9.0+-green.svg)](https://www.kicad.org/)
 
 > 🎯 **For KiCad 9.0+** — Built for modern KiCad with Python 3 and wxPython 4.
@@ -208,7 +208,7 @@ See `.github/copilot-instructions.md` for architecture details.
 
 ## 📄 License
 
-**MIT License** — free for personal and commercial use.
+**Apache License 2.0** — free for personal and commercial use.
 
 ---
 

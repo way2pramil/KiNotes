@@ -12,7 +12,7 @@ Features:
 
 Target: KiCad 9.0+ (Python 3.9+, wxPython 4.2+)
 Author: PCBtools.xyz
-License: MIT
+License: Apache-2.0
 """
 
 import pcbnew

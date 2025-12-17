@@ -16,7 +16,7 @@ All content is stored as Markdown (.md) files for compatibility.
 Requires: wxPython 4.1+ (included in KiCad 9+)
 
 Author: KiNotes Team (pcbtools.xyz)
-License: MIT
+License: Apache-2.0
 """
 import wx
 import wx.richtext as rt

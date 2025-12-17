@@ -159,7 +159,7 @@ Built for engineers who've learned that memory is unreliable, but good notes are
     content_sizer.AddSpacer(16)
     
     # Copyright
-    copyright_text = wx.StaticText(scroll_win, label="© 2024-2025 PCBtools.xyz • Open Source (MIT License)")
+    copyright_text = wx.StaticText(scroll_win, label="© 2024-2025 PCBtools.xyz • Open Source (Apache 2.0)")
     copyright_text.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
     copyright_text.SetForegroundColour(hex_to_colour(theme["text_secondary"]))
     content_sizer.Add(copyright_text, 0, wx.LEFT | wx.RIGHT, 32)

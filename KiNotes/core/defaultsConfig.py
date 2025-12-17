@@ -23,7 +23,7 @@ Usage:
     bg_colors = COLORS['light_backgrounds']
 
 Author: KiNotes Team (pcbtools.xyz)
-License: MIT
+License: Apache-2.0
 """
 
 # ============================================================
