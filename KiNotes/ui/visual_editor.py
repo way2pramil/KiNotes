@@ -17,6 +17,7 @@ Requires: wxPython 4.1+ (included in KiCad 9+)
 
 Author: KiNotes Team (pcbtools.xyz)
 License: Apache-2.0
+SPDX-License-Identifier: Apache-2.0
 """
 import wx
 import wx.richtext as rt

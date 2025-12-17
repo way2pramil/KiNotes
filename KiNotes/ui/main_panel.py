@@ -4,6 +4,7 @@ Tab 1: Notes | Tab 2: Todo List | Tab 3: BOM Tool
 User-selectable background and text colors with dark mode
 Time tracking with per-task stopwatch and work diary export
 Dual-Mode Note Editor: Visual (WYSIWYG) or Markdown
+SPDX-License-Identifier: Apache-2.0
 """
 import wx
 import wx.lib.scrolledpanel as scrolled

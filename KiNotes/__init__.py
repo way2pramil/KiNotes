@@ -15,6 +15,7 @@ Target: KiCad 9.0+ (Python 3.9+, wxPython 4.2+)
 Website: https://pcbtools.xyz
 Repository: https://github.com/way2pramil/KiNotes
 License: Apache-2.0
+SPDX-License-Identifier: Apache-2.0
 """
 
 # Import version from single source (metadata.json)

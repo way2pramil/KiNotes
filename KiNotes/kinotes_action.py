@@ -13,6 +13,7 @@ Features:
 Target: KiCad 9.0+ (Python 3.9+, wxPython 4.2+)
 Author: PCBtools.xyz
 License: Apache-2.0
+SPDX-License-Identifier: Apache-2.0
 """
 
 import pcbnew

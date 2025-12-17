@@ -210,6 +210,8 @@ See `.github/copilot-instructions.md` for architecture details.
 
 **Apache License 2.0** — free for personal and commercial use.
 
+`SPDX-License-Identifier: Apache-2.0`
+
 ---
 
 <p align="center">
