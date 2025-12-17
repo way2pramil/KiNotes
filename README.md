@@ -68,7 +68,8 @@ my_project/
 └── .kinotes/
     ├── KiNotes_my_project.md    ← Your notes
     ├── todos.json                ← Task list
-    └── settings.json             ← Preferences
+    ├── settings.json             ← Preferences
+    └── images/                   ← Pasted images (Beta)
 ```
 
 **What each file contains :**
@@ -104,48 +105,53 @@ When your brain is juggling impedance calculations, component placement, thermal
 ## ✨ Features
 
 ### Core (Stable)
-| Feature | What It Does |
-|---------|--------------|
-| **Visual Editor** | Notion-like rich text—bold, lists, headings |
-| **Smart-Link Designators** | Click R1, U3, C5 → highlight on PCB |
-| **Smart-Link Nets** | Click GND, VCC, SDA → highlight traces and pads |
-| **Auto-Save** | Never lose work—saves on every change |
-| **Dark/Light Mode** | Custom color schemes for both themes |
-| **Import Metadata** | Pull BOM, stackup, board size into notes |
-| **Export PDF** | Print-ready documentation |
-| **Task List** | Simple todos that live with your project |
-| **Time Tracking** | Per-task stopwatch with session history |
-| **Auto-saves** | KiNotes auto-saves as you work |
-    
+| Feature | Function | Status |
+|---------|----------|--------|
+| **Visual Editor** | Notion-like rich text—bold, lists, headings | ✅ Stable |
+| **Smart-Link Designators** | Click R1, U3, C5 → highlight on PCB | ✅ Stable |
+| **Smart-Link Nets** | Click GND, VCC, SDA → highlight traces and pads | ✅ Stable |
+| **Smart-Link Tooltips** | Hover over R1 → show Value, MPN, Layer | ✅ Stable |
+| **Custom Prefixes** | Add your own designators (MOV, NTC, PTC, etc.) | ✅ Stable |
+| **Auto-Save** | Never lose work—saves on every change | ✅ Stable |
+| **Dark/Light Mode** | Custom color schemes for both themes | ✅ Stable |
+| **Import Metadata** | Pull BOM, stackup, board size into notes | ✅ Stable |
+| **Export PDF** | Print-ready documentation | ✅ Stable |
+| **Task List** | Simple todos that live with your project | ✅ Stable |
+| **Time Tracking** | Per-task stopwatch with session history | ✅ Stable |
+| **Export Diary** | Generate work-log summary for timesheets | ✅ Stable |
+| **Session History** | Track when and how long you worked | ✅ Stable |
+| **Keyboard Shortcuts** | Ctrl+B bold, Ctrl+I italic, Ctrl+S save | ✅ Stable |
+| **Git-Friendly Storage** | Plain Markdown files version with your PCB | ✅ Stable |
+| **Resizable Panel** | Drag to resize, remembers your preference | ✅ Stable |
+| **High-DPI Support** | Sharp UI on 4K and Retina displays | ✅ Stable |
+| **Crash Recovery** | Auto-backup prevents data loss | ✅ Stable |
+| **100% Offline** | No internet, no cloud, no accounts ever | ✅ Stable |
+| **Portable Projects** | Move folder = move everything | ✅ Stable |
+| **Undo/Redo** | Full edit history in visual editor | ✅ Stable |
+| **Settings Persistence** | Per-project preferences saved automatically | ✅ Stable |
 
 ### Beta (Experimental)
-| Feature | Status |
-|---------|--------|
-| **Markdown Editor Mode** | Toggle between visual and raw markdown |
-| **BOM Tab** | Dedicated Bill of Materials generator |
-| **Version Log Tab** | Design revision tracking (in progress) |
-| **Debug Panel** | Event logging for troubleshooting |
-| **Image Paste** | Ctrl+V to paste images from clipboard → saved to `.kinotes/images/` |
-| **Fab Summary Import** | Import board fabrication info with section selection |
+| Feature | Function | Status |
+|---------|----------|--------|
+| **Markdown Editor Mode** | Toggle between visual and raw markdown | 🧪 Beta |
+| **BOM Tab** | Dedicated Bill of Materials generator | 🧪 Beta |
+| **Version Log Tab** | Design revision tracking | 🧪 Beta |
+| **Debug Panel** | Event logging for troubleshooting | 🧪 Beta |
+| **Image Paste** | Ctrl+V to paste images → `.kinotes/images/` | 🧪 Beta |
+| **Fab Summary Import** | Import board fabrication info with selection | 🧪 Beta |
+|**Cross-Platform** |  macOS, Linux support | 🧪 Beta |
 
 ### Planned
-| Feature | Status |
-|---------|--------|
-| **KiCad Plugin Manager** | ✅ Available in v1.5.0 |
-| **Smart-Link Tooltips** | Hover over R1 → show component attributes like Value, MPN, Layer etc.|
-| **Voice input for KiNotes** | Add notes hands-free using local speech-to-text | 
+| Feature | Function | Status |
+|---------|----------|--------|
+| **KiCad Plugin Manager** | One-click install from PCM | 📋 Pending Submission |
+| **Voice Input** | Add notes hands-free using local speech-to-text | 📋 Planned |
 
 ---
 
 ## 🚀 Quick Start
 
 ### Installation
-
-**Via KiCad Plugin Manager (Recommended)**
-1. Open KiCad → Plugin and Content Manager
-2. Search for "KiNotes"
-3. Click Install
-4. Restart KiCad
 
 **Manual Installation**
 1. Download the latest release from [GitHub Releases](https://github.com/way2pramil/KiNotes/releases)
@@ -154,6 +160,8 @@ When your brain is juggling impedance calculations, component placement, thermal
    - **macOS:** `~/Library/Preferences/kicad/9.0/scripting/plugins/`
    - **Linux:** `~/.config/kicad/9.0/scripting/plugins/`
 3. Restart KiCad
+
+> 📋 **KiCad Plugin Manager** — Submission pending. Once approved, install directly from PCM.
 
 ### First Use
 1. Open any PCB in pcbnew
