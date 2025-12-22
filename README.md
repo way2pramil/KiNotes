@@ -42,6 +42,7 @@ This works with:
 - **Custom prefixes**: Add your own (MOV, NTC, PTC, whatever you use)
 
 The link works both ways—your notes stay connected to your design, not floating in a separate file.
+<img width="1890" height="1041" alt="image" src="https://github.com/user-attachments/assets/3e301055-0c1d-4394-91cb-f5908af92ae8" />
 
 ---
 
