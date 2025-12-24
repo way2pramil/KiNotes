@@ -162,7 +162,7 @@ When your brain is juggling impedance calculations, component placement, thermal
    - **Linux:** `~/.config/kicad/9.0/scripting/plugins/`
 3. Restart KiCad
 
-> 📋 **KiCad Plugin Manager** — Submission pending. Once approved, install directly from PCM.
+> 📋 **KiCad Plugin Manager** — Submission approved, install directly from PCM.
 
 ### First Use
 1. Open any PCB in pcbnew
@@ -210,8 +210,6 @@ Contributions welcome! The codebase is modular—small, focused files that are e
 1. Fork the repository
 2. Create a feature branch
 3. Submit a pull request
-
-See `.github/copilot-instructions.md` for architecture details.
 
 ---
 
