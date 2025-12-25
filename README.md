@@ -4,10 +4,11 @@
   <img src="KiNotes/resources/icon.svg" alt="KiNotes" width="220"/>
 </p>
 
-**Version 1.5.0** — Your design decisions shouldn't live in a separate notepad. KiNotes keeps engineering notes right inside KiCad—where they belong.
+**Version 1.5.2** — Your design decisions shouldn't live in a separate notepad. KiNotes keeps engineering notes right inside KiCad—where they belong.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![KiCad 9.0+](https://img.shields.io/badge/KiCad-9.0+-green.svg)](https://www.kicad.org/)
+[![Sponsor](https://img.shields.io/badge/Sponsor-💝-ff69b4.svg)](https://github.com/sponsors/way2pramil)
 
 > 🎯 **For KiCad 9.0+** — Built for modern KiCad with Python 3 and wxPython 4.
 
@@ -139,7 +140,7 @@ When your brain is juggling impedance calculations, component placement, thermal
 | **Debug Panel** | Event logging for troubleshooting | 🧪 Beta |
 | **Image Paste** | Ctrl+V to paste images → `.kinotes/images/` | 🧪 Beta |
 | **Fab Summary Import** | Import board fabrication info with selection | 🧪 Beta |
-|**Cross-Platform** |  macOS, Linux support | 🧪 Beta |
+
 
 ### Planned
 | Feature | Function | Status |
@@ -214,7 +215,17 @@ See `.github/copilot-instructions.md` for architecture details.
 
 ---
 
-## 📄 License
+## � Support This Project
+
+If KiNotes helps you ship better boards, consider supporting its development:
+
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor_on_GitHub-💝-ff69b4.svg?style=for-the-badge)](https://github.com/sponsors/way2pramil)
+
+Your sponsorship helps cover development time and keeps the project actively maintained. Every contribution—big or small—is deeply appreciated!
+
+---
+
+## �📄 License
 
 **Apache License 2.0** — free for personal and commercial use.
 
