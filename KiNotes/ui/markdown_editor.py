@@ -341,6 +341,11 @@ class MarkdownEditor(wx.Panel):
         if alt and not ctrl and keycode == ord('T'):
             self._on_format_timestamp(None)
             return
+            
+        # Alt+Backspace = Word Deletion (macOS Option+Delete)
+        if alt and not ctrl and keycode == wx.WXK_BACK:
+            self._delete_word_backwards()
+            return
         
         # Enter key in list - continue list
         if keycode == wx.WXK_RETURN:
@@ -349,6 +354,39 @@ class MarkdownEditor(wx.Panel):
         
         event.Skip()
     
+    def _delete_word_backwards(self):
+        """Implement macOS-style Option+Delete word deletion."""
+        start, end = self._editor.GetSelection()
+        if start != end:
+            self._editor.Remove(start, end)
+            return
+
+        pos = self._editor.GetInsertionPoint()
+        if pos <= 0:
+            return
+
+        text = self._editor.GetValue()
+        if not text:
+            return
+
+        # Ensure pos is within bounds
+        pos = min(pos, len(text))
+        new_pos = pos
+
+        # Scan backward to skip immediate whitespace/punctuation if any
+        while new_pos > 0 and not text[new_pos-1].isalnum():
+            new_pos -= 1
+            
+        if new_pos == 0:
+            self._editor.Remove(0, pos)
+            return
+            
+        # Scan backward until we hit a non-alphanumeric character (word start)
+        while new_pos > 0 and text[new_pos-1].isalnum():
+            new_pos -= 1
+            
+        self._editor.Remove(new_pos, pos)
+
     # ============================================================
     # FORMATTING HANDLERS
     # ============================================================

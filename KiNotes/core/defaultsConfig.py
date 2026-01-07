@@ -203,12 +203,12 @@ THEMES = {
         'text_primary':     '#FFFFFF',   # Pure White
         'text_secondary':   '#98989D',   # Apple System Gray (Text)
         'border':           '#38383A',   # Subtle separators
-        'accent_blue':      '#5A9BD5',   # Muted professional blue
+        'accent_blue':      '#3B82F6',   # Prism Blue (Dark)
         'accent_green':     '#6AAF6A',   # Muted professional green
         'accent_red':       '#FF453A',   # iOS Red (Dark Mode)
     },
     'light': {
-        'bg_panel':         '#F2F2F7',   # Apple System Gray 6 (Light)
+        'bg_panel':         '#FFFFFF',   # Prism Pure White
         'bg_toolbar':       '#FFFFFF',   # Pure white cards
         'bg_button':        '#E5E5EA',   # Apple System Gray 3 (Light)
         'bg_button_hover':  '#D1D1D6',
@@ -216,7 +216,7 @@ THEMES = {
         'text_primary':     '#000000',
         'text_secondary':   '#8E8E93',
         'border':           '#C6C6C8',
-        'accent_blue':      '#3B82F6',   # Muted professional blue
+        'accent_blue':      '#2563EB',   # Prism Blue (Light)
         'accent_green':     '#10B981',   # Muted professional green
         'accent_red':       '#FF3B30',   # iOS Red
     },

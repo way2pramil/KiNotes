@@ -48,13 +48,13 @@ class KiNotesStyles:
     MARGIN_LARGE = 16
     
     # Border radius (for custom drawing)
-    BORDER_RADIUS = 8
-    BORDER_RADIUS_SMALL = 4
+    BORDER_RADIUS = 4
+    BORDER_RADIUS_SMALL = 2
     
     # Button sizes
-    BUTTON_HEIGHT = 28
-    ICON_BUTTON_SIZE = 28
-    TOOLBAR_HEIGHT = 40
+    BUTTON_HEIGHT = 32
+    ICON_BUTTON_SIZE = 32
+    TOOLBAR_HEIGHT = 36
     
     # Checkbox styles
     CHECKBOX_UNCHECKED = "☐"

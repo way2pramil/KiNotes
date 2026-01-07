@@ -421,10 +421,10 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         """Create top bar with tabs + Import button on same line."""
         top_bar = wx.Panel(self)
         top_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
-        top_bar.SetMinSize((-1, scale_size(70, self)))
+        top_bar.SetMinSize((-1, scale_size(48, self)))
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.AddSpacer(scale_size(16, self))
+        sizer.AddSpacer(scale_size(12, self))
         
         # Tab buttons - unified rounded style
         self.tab_buttons = []
@@ -440,11 +440,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 top_bar, 
                 label=label,
                 icon="",
-                size=(100, 42),
+                size=(80, 32),
                 bg_color=self._theme["bg_button"],
                 fg_color=self._theme["text_primary"],
-                corner_radius=10,
-                font_size=11,
+                corner_radius=4,
+                font_size=10,
                 font_weight=wx.FONTWEIGHT_BOLD
             )
             btn.Bind_Click(lambda e, i=idx: self._on_tab_click(i))
@@ -459,11 +459,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             top_bar,
             label="Import",
             icon="",
-            size=(120, 42),
+            size=(80, 32),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
-            corner_radius=10,
-            font_size=11,
+            corner_radius=4,
+            font_size=10,
             font_weight=wx.FONTWEIGHT_NORMAL
         )
         self.import_btn.Bind_Click(self._on_import_click)
@@ -477,11 +477,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 top_bar,
                 label="↻",
                 icon="",
-                size=(42, 42),
+                size=(32, 32),
                 bg_color=self._theme["accent_blue"],
                 fg_color="#FFFFFF",
-                corner_radius=10,
-                font_size=14,
+                corner_radius=4,
+                font_size=12,
                 font_weight=wx.FONTWEIGHT_NORMAL
             )
             self.refresh_net_btn.SetToolTip("Refresh Net Cache")
@@ -493,11 +493,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             top_bar,
             label="Help",
             icon="",
-            size=(80, 42),
+            size=(70, 32),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
-            corner_radius=10,
-            font_size=11,
+            corner_radius=4,
+            font_size=10,
             font_weight=wx.FONTWEIGHT_NORMAL
         )
         self.help_btn.Bind_Click(self._on_help_click)
@@ -508,11 +508,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             top_bar,
             label="Settings",
             icon="",
-            size=(130, 42),
+            size=(90, 32),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
-            corner_radius=10,
-            font_size=11,
+            corner_radius=4,
+            font_size=10,
             font_weight=wx.FONTWEIGHT_NORMAL
         )
         self.settings_btn.Bind_Click(self._on_settings_click)
@@ -526,7 +526,7 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
         """Create bottom bar with pcbtools.xyz link, Save and Export PDF buttons."""
         bottom_bar = wx.Panel(self)
         bottom_bar.SetBackgroundColour(hex_to_colour(self._theme["bg_toolbar"]))
-        bottom_bar.SetMinSize((-1, scale_size(70, self)))
+        bottom_bar.SetMinSize((-1, scale_size(48, self)))
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.AddSpacer(scale_size(16, self))
@@ -572,11 +572,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             bottom_bar,
             label="Export Diary",
             icon="",
-            size=(170, 48),
+            size=(110, 32),
             bg_color=self._theme["bg_button"],
             fg_color=self._theme["text_primary"],
-            corner_radius=10,
-            font_size=11,
+            corner_radius=4,
+            font_size=10,
             font_weight=wx.FONTWEIGHT_NORMAL
         )
         self.export_diary_btn.Bind_Click(lambda e: self._on_export_work_diary())
@@ -587,11 +587,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             bottom_bar,
             label="Save",
             icon="",
-            size=(130, 48),
+            size=(80, 32),
             bg_color=self._theme["accent_green"],
             fg_color="#FFFFFF",
-            corner_radius=10,
-            font_size=12,
+            corner_radius=4,
+            font_size=10,
             font_weight=wx.FONTWEIGHT_BOLD
         )
         self.save_btn.Bind_Click(lambda e: self._on_manual_save())
@@ -602,11 +602,11 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             bottom_bar,
             label="Export PDF",
             icon="",
-            size=(170, 48),
+            size=(110, 32),
             bg_color=self._theme["accent_blue"],
             fg_color="#FFFFFF",
-            corner_radius=10,
-            font_size=12,
+            corner_radius=4,
+            font_size=10,
             font_weight=wx.FONTWEIGHT_BOLD
         )
         self.pdf_btn.Bind_Click(lambda e: self._on_export_pdf())
