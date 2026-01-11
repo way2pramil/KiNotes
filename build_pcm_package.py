@@ -23,11 +23,14 @@ def build():
     zip_name = dist / f"KiNotes-{version}-pcm.zip"
     
     with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zf:
-        # Add plugins/KiNotes/
+        # Add plugins/ content (files directly under plugins/, NOT plugins/KiNotes/)
+        # KiCad PCM extracts to: .../plugins/com_pcbtools_kinotes/
+        # So our files go directly there, not in a KiNotes/ subfolder
         src = Path("KiNotes")
         for f in src.rglob("*"):
             if f.is_file() and "__pycache__" not in str(f):
-                arcname = f"plugins/{f.relative_to(src.parent)}"
+                # Use relative path from KiNotes/ directly under plugins/
+                arcname = f"plugins/{f.relative_to(src)}"
                 zf.write(f, arcname)
                 print(f"  + {arcname}")
         

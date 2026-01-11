@@ -77,7 +77,7 @@ PERFORMANCE_DEFAULTS = {
 # DEBUG SETTINGS - Console output control
 # ============================================================
 DEBUG_ENABLED = False  # Master debug flag - set True for development only
-DEPLOY_BUILD = 33      # Incremented by deploy script - verifies fresh deployment
+DEPLOY_BUILD = 66      # Incremented by deploy script - verifies fresh deployment
 
 def debug_print(msg: str) -> None:
     """Print debug message only if DEBUG_ENABLED is True."""
@@ -103,6 +103,19 @@ TIME_TRACKER_DEFAULTS = {
     'enable_time_tracking': True,
     'time_format_24h': True,
     'show_work_diary_button': True,
+}
+
+# ============================================================
+# KICAD SETTINGS SYNC DEFAULTS
+# ============================================================
+KICAD_SYNC_DEFAULTS = {
+    # Autosave mode: 'kinotes' (default 5s), 'kicad' (sync), 'disabled'
+    'autosave_mode': 'kinotes',
+    # KiNotes default interval when not syncing (ms)
+    'kinotes_default_ms': 5000,
+    # Minimum interval to prevent CPU overload (3s)
+    'sync_min_interval_ms': 3000,
+    # No max cap - matches KiCad exactly (even 15 min = 900000ms)
 }
 
 # ============================================================
@@ -314,7 +327,7 @@ DEBUG_MODULES = {
     'md_import': True,   # Markdown import (MD → RichText)
     
     # UI modules
-    'save': False,       # Save operations
+    'save': True,        # Save operations (auto-save, manual save)
     'click': False,      # Click events
     'size': False,       # Window sizing
     'editor': False,     # Visual editor operations
@@ -338,8 +351,12 @@ def debug_module(module: str, msg: str) -> None:
         msg: Message to print (without [KiNotes] prefix)
     """
     if DEBUG_ENABLED and DEBUG_MODULES.get(module, False):
+        import sys
         prefix = module.upper()
-        print(f"[KiNotes {prefix}] {msg}")
+        output = f"[KiNotes {prefix}] {msg}"
+        # Use stderr for KiCad embedded Python (stdout may be redirected)
+        print(output, file=sys.stderr)
+        sys.stderr.flush()
 
 
 # ============================================================
@@ -366,6 +383,8 @@ def get_default_settings() -> dict:
         'blacklist_empty': DEFAULTS['blacklist_empty'],
         'background_color': DEFAULTS['bg_color_name'],
         'text_color': DEFAULTS['text_color_name'],
+        # KiCad sync settings
+        'autosave_mode': KICAD_SYNC_DEFAULTS['autosave_mode'],
     }
 
 

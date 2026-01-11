@@ -18,9 +18,12 @@ from ..components import RoundedButton
 
 # Import version from single source
 try:
-    from ...__version__ import __version__
+    from __version__ import __version__
 except ImportError:
-    __version__ = "1.4.2"  # Fallback
+    try:
+        from ...__version__ import __version__
+    except ImportError:
+        __version__ = "1.5.2"  # Fallback
 
 # Import debug_print
 try:

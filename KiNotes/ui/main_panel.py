@@ -21,12 +21,24 @@ import fnmatch
 try:
     from ..core.defaultsConfig import (
         DEFAULTS, BETA_DEFAULTS, WINDOW_DEFAULTS, DEBUG_MODULES,
-        PERFORMANCE_DEFAULTS, debug_print
+        PERFORMANCE_DEFAULTS, TIME_TRACKER_DEFAULTS, KICAD_SYNC_DEFAULTS,
+        debug_print, debug_module
+    )
+    from ..core.kicad_extractor import (
+        get_kicad_extractor, get_kicad_sync,
+        get_kicad_version, get_project_name, get_project_dir,
+        is_board_loaded, get_footprint_count, get_net_count
     )
 except ImportError:
     from core.defaultsConfig import (
         DEFAULTS, BETA_DEFAULTS, WINDOW_DEFAULTS, DEBUG_MODULES,
-        PERFORMANCE_DEFAULTS, debug_print
+        PERFORMANCE_DEFAULTS, TIME_TRACKER_DEFAULTS, KICAD_SYNC_DEFAULTS,
+        debug_print, debug_module
+    )
+    from core.kicad_extractor import (
+        get_kicad_extractor, get_kicad_sync,
+        get_kicad_version, get_project_name, get_project_dir,
+        is_board_loaded, get_footprint_count, get_net_count
     )
 
 # Visual Note Editor for WYSIWYG mode
@@ -87,6 +99,21 @@ try:
     HAS_NET_LINKER = True
 except ImportError:
     HAS_NET_LINKER = False
+
+# Import variable snippets for / command autocomplete and Import submenu
+try:
+    from ..core.variable_snippets import get_snippets_by_category, resolve_snippet
+    HAS_SNIPPETS = True
+except ImportError:
+    try:
+        from core.variable_snippets import get_snippets_by_category, resolve_snippet
+        HAS_SNIPPETS = True
+    except ImportError:
+        HAS_SNIPPETS = False
+        def get_snippets_by_category():
+            return {}
+        def resolve_snippet(cmd):
+            return ''
 
 # Import net cache manager (centralized cache + board change detection)
 try:
@@ -260,6 +287,12 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                         self._debug_modules[key] = False
                 # PDF export format setting
                 self._pdf_format = settings.get("pdf_format", "markdown")
+                # Time tracker settings
+                self.time_tracker.enable_time_tracking = settings.get("enable_time_tracking", TIME_TRACKER_DEFAULTS['enable_time_tracking'])
+                self.time_tracker.time_format_24h = settings.get("time_format_24h", TIME_TRACKER_DEFAULTS['time_format_24h'])
+                self.time_tracker.show_work_diary_button = settings.get("show_work_diary", TIME_TRACKER_DEFAULTS['show_work_diary_button'])
+                # KiCad sync settings
+                self._autosave_mode = settings.get("autosave_mode", KICAD_SYNC_DEFAULTS['autosave_mode'])
         except:
             pass
     
@@ -353,6 +386,16 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
                 settings["panel_width"] = self._panel_width
             if hasattr(self, '_panel_height') and self._panel_height:
                 settings["panel_height"] = self._panel_height
+            # Save timer interval (autosave frequency)
+            if hasattr(self, '_timer_interval_ms') and self._timer_interval_ms:
+                settings["timer_interval_ms"] = self._timer_interval_ms
+            # Save time tracker settings
+            settings["enable_time_tracking"] = self.time_tracker.enable_time_tracking
+            settings["time_format_24h"] = self.time_tracker.time_format_24h
+            settings["show_work_diary"] = self.time_tracker.show_work_diary_button
+            # Save KiCad sync settings
+            if hasattr(self, '_autosave_mode'):
+                settings["autosave_mode"] = self._autosave_mode
             
             # Save based on mode
             if save_mode == 'global':
@@ -894,71 +937,214 @@ class KiNotesMainPanel(TodoTabMixin, VersionLogTabMixin, BomTabMixin, wx.Panel):
             pass
     
     def _on_debug_info(self, event):
-        """Show debug information popup."""
+        """Show comprehensive debug information popup."""
+        from __version__ import __version__ as plugin_version
+        from core.defaultsConfig import DEPLOY_BUILD, DEBUG_ENABLED
+        
+        # Use centralized extractor - no inline pcbnew calls
+        extractor = get_kicad_extractor()
+        env = extractor.get_environment()
+        board_info = extractor.get_board_info()
+        
         debug_info = "KiNotes Debug Information\n"
-        debug_info += "=" * 50 + "\n\n"
+        debug_info += "=" * 60 + "\n\n"
+        
+        # ============================================================
+        # ENVIRONMENT (from extractor)
+        # ============================================================
+        debug_info += "📦 ENVIRONMENT\n"
+        debug_info += "-" * 40 + "\n"
+        debug_info += f"  KiNotes Version: v{plugin_version} (Build {DEPLOY_BUILD})\n"
+        debug_info += f"  Python Version: {env.get('python_version', 'Unknown')}\n"
+        debug_info += f"  KiCad Version: {env.get('kicad_version') or 'Unknown'}\n"
+        debug_info += f"  Install Type: {env.get('install_type', 'Unknown')}\n"
+        debug_info += f"  Plugin Path: {env.get('plugin_path', 'Unknown')}\n"
+        debug_info += f"  Debug Mode: {'ON' if DEBUG_ENABLED else 'OFF'}\n\n"
+        
+        # ============================================================
+        # PROJECT STATE (from extractor)
+        # ============================================================
+        debug_info += "📋 PROJECT STATE\n"
+        debug_info += "-" * 40 + "\n"
+        
+        pcb_loaded = board_info.get('loaded', False)
+        if pcb_loaded:
+            pcb_name = os.path.basename(board_info.get('filename', '')) or "Untitled"
+            debug_info += f"  PCB Loaded: ✓ {pcb_name}\n"
+            debug_info += f"  Components: {board_info.get('footprint_count', 0)}\n"
+            debug_info += f"  Nets: {board_info.get('net_count', 0)}\n"
+        else:
+            debug_info += f"  PCB Loaded: ✗ No board open\n"
+        
+        # Project directory (from extractor or notes_manager)
+        project_dir = board_info.get('project_dir')
+        if not project_dir:
+            project_dir = getattr(self.notes_manager, 'project_dir', None)
+        if project_dir:
+            debug_info += f"  Project Dir: {project_dir}\n"
+        else:
+            debug_info += f"  Project Dir: Not set\n"
+        debug_info += "\n"
+        
+        # ============================================================
+        # FEATURE STATUS
+        # ============================================================
+        debug_info += "⚡ FEATURE STATUS\n"
+        debug_info += "-" * 40 + "\n"
         
         # Editor mode
-        debug_info += f"Editor Mode: {'Visual' if self._use_visual_editor else 'Markdown'}\n"
-        debug_info += f"Visual Editor Available: {VISUAL_EDITOR_AVAILABLE}\n\n"
+        editor_status = "Visual (WYSIWYG)" if self._use_visual_editor else "Markdown (Power User)"
+        debug_info += f"  Editor Mode: {editor_status}\n"
         
-        # Cross-probe info
-        debug_info += "Cross-Probe Status:\n"
-        debug_info += f"  Designator Cross-Probe: {self._crossprobe_enabled}\n"
-        debug_info += f"  Designator Linker: {'✓' if self.designator_linker else '✗'}\n\n"
-        
-        # Net linker info (Beta)
-        debug_info += "Net Linker (Beta):\n"
-        debug_info += f"  Net Linker Beta Enabled: {self._beta_net_linker}\n"
-        debug_info += f"  Net Linker Instance: {'✓' if self.net_linker else '✗'}\n"
-        
-        if self.net_linker:
-            net_cache_size = len(self.net_linker._net_map) if hasattr(self.net_linker, '_net_map') else 0
-            debug_info += f"  Cached Nets: {net_cache_size}\n"
-            if net_cache_size > 0 and net_cache_size <= 10:
-                nets = list(self.net_linker._net_map.keys())
-                debug_info += f"  Sample Nets: {', '.join(nets[:5])}\n"
-        
-        debug_info += f"  Visual Editor has Net Linker: {'✓' if (self.visual_editor and hasattr(self.visual_editor, '_net_linker') and self.visual_editor._net_linker) else '✗'}\n\n"
-        
-        # UI State
-        debug_info += "UI State:\n"
-        debug_info += f"  Dark Mode: {self._dark_mode}\n"
-        debug_info += f"  Beta Markdown: {self._beta_markdown}\n"
-        debug_info += f"  Beta BOM: {self._beta_bom}\n"
-        debug_info += f"  Beta Version Log: {self._beta_version_log}\n\n"
-        
-        # Data files
-        debug_info += "Data Storage:\n"
-        try:
-            kinotes_dir = os.path.join(os.path.dirname(self.current_project_path), '.kinotes')
-            if os.path.exists(kinotes_dir):
-                files = os.listdir(kinotes_dir)
-                debug_info += f"  .kinotes folder: {len(files)} files\n"
-                for f in files[:5]:
-                    debug_info += f"    - {f}\n"
+        # Designator Linker
+        if self._crossprobe_enabled:
+            if self.designator_linker:
+                debug_info += f"  Designator Linker: ✓ Active\n"
             else:
-                debug_info += f"  .kinotes folder: NOT FOUND\n"
+                debug_info += f"  Designator Linker: ⚠ Enabled but not initialized\n"
+        else:
+            debug_info += f"  Designator Linker: ✗ Disabled in settings\n"
+        
+        # Net Linker with actionable hints
+        if self._beta_net_linker:
+            if self.net_linker:
+                net_cache_size = len(self.net_linker._net_map) if hasattr(self.net_linker, '_net_map') else 0
+                if net_cache_size > 0:
+                    debug_info += f"  Net Linker: ✓ Active ({net_cache_size} nets cached)\n"
+                else:
+                    debug_info += f"  Net Linker: ⚠ Ready but no nets cached\n"
+                    debug_info += f"    💡 Click ↻ Refresh button to load nets\n"
+            else:
+                if not pcb_loaded:
+                    debug_info += f"  Net Linker: ⚠ Inactive (no PCB loaded)\n"
+                    debug_info += f"    💡 Open a PCB file to activate Net Linker\n"
+                else:
+                    debug_info += f"  Net Linker: ⚠ Not initialized\n"
+                    debug_info += f"    💡 Click ↻ Refresh button to initialize\n"
+        else:
+            debug_info += f"  Net Linker: ✗ Disabled in settings\n"
+        
+        # Auto-save status
+        autosave_mode = getattr(self, '_autosave_mode', 'kinotes')
+        timer_ms = getattr(self, '_timer_interval_ms', 5000)
+        if autosave_mode == 'disabled':
+            debug_info += f"  Auto-Save: ✗ Disabled\n"
+        elif autosave_mode == 'kicad':
+            debug_info += f"  Auto-Save: ✓ KiCad Sync ({timer_ms/1000:.0f}s)\n"
+        else:
+            debug_info += f"  Auto-Save: ✓ KiNotes ({timer_ms/1000:.0f}s)\n"
+        
+        debug_info += "\n"
+        
+        # ============================================================
+        # BETA FEATURES
+        # ============================================================
+        debug_info += "🧪 BETA FEATURES\n"
+        debug_info += "-" * 40 + "\n"
+        debug_info += f"  Markdown Editor: {'✓ Enabled' if self._beta_markdown else '✗ Disabled'}\n"
+        debug_info += f"  BOM Tab: {'✓ Enabled' if self._beta_bom else '✗ Disabled'}\n"
+        debug_info += f"  Version Log Tab: {'✓ Enabled' if self._beta_version_log else '✗ Disabled'}\n"
+        debug_info += f"  Debug Panel: {'✓ Enabled' if self._beta_debug_panel else '✗ Disabled'}\n"
+        debug_info += "\n"
+        
+        # ============================================================
+        # DATA STORAGE
+        # ============================================================
+        debug_info += "💾 DATA STORAGE\n"
+        debug_info += "-" * 40 + "\n"
+        try:
+            project_dir = getattr(self.notes_manager, 'project_dir', None)
+            if not project_dir:
+                project_dir = getattr(self.notes_manager, '_project_dir', None)
+            kinotes_dir = os.path.join(project_dir, '.kinotes') if project_dir else None
+            if kinotes_dir and os.path.exists(kinotes_dir):
+                files = os.listdir(kinotes_dir)
+                total_size = sum(os.path.getsize(os.path.join(kinotes_dir, f)) for f in files if os.path.isfile(os.path.join(kinotes_dir, f)))
+                debug_info += f"  .kinotes Folder: ✓ {len(files)} files ({total_size/1024:.1f} KB)\n"
+                debug_info += f"  Location: {kinotes_dir}\n"
+                # List key files
+                key_files = ['notes.md', 'todos.json', 'settings.json', 'version_log.json']
+                for kf in key_files:
+                    if any(f.endswith(kf.split('.')[-1]) and kf.split('.')[0] in f for f in files) or kf in files:
+                        debug_info += f"    ✓ {kf}\n"
+            else:
+                debug_info += f"  .kinotes Folder: ✗ Not found\n"
+                if kinotes_dir:
+                    debug_info += f"    💡 Notes will be saved to: {kinotes_dir}\n"
         except Exception as e:
-            debug_info += f"  .kinotes folder: Error - {e}\n"
+            debug_info += f"  .kinotes Folder: Error - {e}\n"
+        debug_info += "\n"
+        
+        # ============================================================
+        # DEBUG MODULES
+        # ============================================================
+        debug_info += "🔧 DEBUG MODULES\n"
+        debug_info += "-" * 40 + "\n"
+        for module, enabled in self._debug_modules.items():
+            status = "✓ ON" if enabled else "✗ OFF"
+            debug_info += f"  {module}: {status}\n"
+        debug_info += "\n"
+        
+        # ============================================================
+        # TROUBLESHOOTING HINTS
+        # ============================================================
+        hints = []
+        if not pcb_loaded:
+            hints.append("Open a PCB file to use cross-probe features")
+        if self._beta_net_linker and not self.net_linker:
+            hints.append("Net Linker needs PCB - open a board first")
+        if not self._use_visual_editor:
+            hints.append("Visual Editor disabled - tables won't render in Markdown mode")
+        
+        if hints:
+            debug_info += "💡 TIPS\n"
+            debug_info += "-" * 40 + "\n"
+            for hint in hints:
+                debug_info += f"  • {hint}\n"
         
         # Show popup
-        dlg = wx.Dialog(self, title="Debug Information", size=(600, 500))
+        dlg = wx.Dialog(self, title="KiNotes Debug Information", size=(700, 600))
+        dlg.SetBackgroundColour(hex_to_colour(self._theme["bg_panel"]))
         sizer = wx.BoxSizer(wx.VERTICAL)
         
-        # Text control
+        # Text control with theme colors
         text_ctrl = wx.TextCtrl(dlg, value=debug_info, style=wx.TE_MULTILINE | wx.TE_READONLY)
-        text_ctrl.SetFont(wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        text_ctrl.SetFont(wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        text_ctrl.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
+        text_ctrl.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         sizer.Add(text_ctrl, 1, wx.EXPAND | wx.ALL, 10)
+        
+        # Button row
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # Copy button
+        copy_btn = wx.Button(dlg, label="📋 Copy to Clipboard")
+        copy_btn.Bind(wx.EVT_BUTTON, lambda e: self._copy_to_clipboard(debug_info, dlg))
+        btn_sizer.Add(copy_btn, 0, wx.RIGHT, 10)
+        
+        btn_sizer.AddStretchSpacer()
         
         # Close button
         close_btn = wx.Button(dlg, wx.ID_CLOSE)
-        sizer.Add(close_btn, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
         close_btn.Bind(wx.EVT_BUTTON, lambda e: dlg.Close())
+        btn_sizer.Add(close_btn, 0)
+        
+        sizer.Add(btn_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         
         dlg.SetSizer(sizer)
+        dlg.CenterOnParent()
         dlg.ShowModal()
         dlg.Destroy()
+    
+    def _copy_to_clipboard(self, text, parent_dlg=None):
+        """Copy text to clipboard."""
+        try:
+            if wx.TheClipboard.Open():
+                wx.TheClipboard.SetData(wx.TextDataObject(text))
+                wx.TheClipboard.Close()
+                wx.MessageBox("Debug info copied to clipboard!", "Copied", wx.OK | wx.ICON_INFORMATION)
+        except Exception as e:
+            wx.MessageBox(f"Failed to copy: {e}", "Error", wx.OK | wx.ICON_ERROR)
     
     def _show_about_dialog(self, event):
         """Show About KiNotes dialog with project story."""
@@ -1055,14 +1241,9 @@ You can safely continue working."""
     
     def _get_project_name(self):
         """Get the current project name from KiCad board or fallback."""
-        try:
-            import pcbnew
-            board = pcbnew.GetBoard()
-            if board and board.GetFileName():
-                return os.path.splitext(os.path.basename(board.GetFileName()))[0]
-        except:
-            pass
-        return "KiCad Project"
+        # Use centralized extractor
+        name = get_project_name()
+        return name if name else "KiCad Project"
     
     def _get_work_diary_path(self):
         """
@@ -1070,19 +1251,13 @@ You can safely continue working."""
         Uses a SINGLE daily file per project - overwrites on each save.
         Format: <project>_worklog_<YYYYMMDD>.md
         """
-        # Try to get KiCad project directory, fallback to home directory
-        try:
-            import pcbnew
-            board = pcbnew.GetBoard()
-            if board and board.GetFileName():
-                project_dir = os.path.dirname(board.GetFileName())
-                project_name = os.path.splitext(os.path.basename(board.GetFileName()))[0]
-            else:
-                project_dir = os.path.expanduser("~")
-                project_name = "kinotes"
-        except:
-            # Standalone mode: use home directory
+        # Use centralized extractor
+        project_dir = get_project_dir()
+        project_name = get_project_name()
+        
+        if not project_dir:
             project_dir = os.path.expanduser("~")
+        if not project_name:
             project_name = "kinotes"
         
         # Create .kinotes subdirectory
@@ -1156,21 +1331,14 @@ You can safely continue working."""
         """Open the .kinotes work logs folder in file explorer."""
         debug_print("[KiNotes Directory] Click handler called")
         
-        # Get actual project directory from board (most reliable)
+        # Use centralized extractor for project directory
+        project_dir = get_project_dir()
+        debug_print(f"[KiNotes Directory] From extractor: {project_dir}")
+        
         kinotes_dir = None
-        try:
-            import pcbnew
-            board = pcbnew.GetBoard()
-            debug_print(f"[KiNotes Directory] board: {board}")
-            if board:
-                board_file = board.GetFileName()
-                debug_print(f"[KiNotes Directory] board.GetFileName(): {board_file}")
-                if board_file:
-                    project_dir = os.path.dirname(board_file)
-                    kinotes_dir = os.path.join(project_dir, ".kinotes")
-                    debug_print(f"[KiNotes Directory] From board: {kinotes_dir}")
-        except Exception as e:
-            debug_print(f"[KiNotes Directory] pcbnew error: {e}")
+        if project_dir:
+            kinotes_dir = os.path.join(project_dir, ".kinotes")
+            debug_print(f"[KiNotes Directory] From board: {kinotes_dir}")
         
         # Fallback to notes_manager's notes_dir (canonical location)
         if not kinotes_dir:
@@ -1393,6 +1561,31 @@ You can safely continue working."""
         # Store panel size for saving
         self._panel_width = new_width
         self._panel_height = new_height
+        
+        # Update timer interval for autosave
+        old_timer_interval = getattr(self, '_timer_interval_ms', PERFORMANCE_DEFAULTS['timer_interval_ms'])
+        new_timer_interval = result.get('timer_interval_ms', PERFORMANCE_DEFAULTS['timer_interval_ms'])
+        # Clamp to valid range
+        new_timer_interval = max(PERFORMANCE_DEFAULTS['timer_min_ms'], 
+                                 min(new_timer_interval, PERFORMANCE_DEFAULTS['timer_max_ms']))
+        self._timer_interval_ms = new_timer_interval
+        
+        # Update autosave mode (kinotes/kicad/disabled)
+        old_autosave_mode = getattr(self, '_autosave_mode', KICAD_SYNC_DEFAULTS['autosave_mode'])
+        new_autosave_mode = result.get('autosave_mode', KICAD_SYNC_DEFAULTS['autosave_mode'])
+        self._autosave_mode = new_autosave_mode
+        
+        # Restart timer if interval or mode changed
+        timer_changed = (old_timer_interval != new_timer_interval or old_autosave_mode != new_autosave_mode)
+        if timer_changed:
+            if hasattr(self, '_auto_save_timer') and self._auto_save_timer:
+                self._auto_save_timer.Stop()
+            if new_autosave_mode == 'disabled':
+                debug_print("[KiNotes] Auto-save disabled by user")
+            else:
+                # Restart with new settings - use instance interval for 'kinotes' mode
+                self._start_auto_save_timer(use_instance_interval=True)
+                debug_print(f"[KiNotes] Auto-save timer updated: {self._timer_interval_ms}ms ({new_autosave_mode} mode)")
         
         # Update beta feature settings
         old_beta_markdown = self._beta_markdown
@@ -1822,7 +2015,7 @@ You can safely continue working."""
     # ============================================================
     
     def _on_import_click(self, event):
-        """Handle import button click."""
+        """Handle import button click - shows menu with imports and variable snippets."""
         menu = wx.Menu()
         
         # Check if we're in Visual Editor mode
@@ -1830,6 +2023,32 @@ You can safely continue working."""
         # in Visual Editor mode as they don't render properly yet
         is_visual_mode = self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor
         
+        # ----- Insert Variable Submenu -----
+        if HAS_SNIPPETS:
+            var_menu = wx.Menu()
+            categories = get_snippets_by_category()
+            
+            # Add categories as submenus
+            for category, snippets in categories.items():
+                cat_menu = wx.Menu()
+                for cmd, info in snippets:
+                    label = info.get('label', cmd)
+                    value = resolve_snippet(cmd)
+                    if value:
+                        display = f"{cmd}  {label} → {value}"
+                    else:
+                        display = f"{cmd}  {label}"
+                    
+                    item = cat_menu.Append(wx.ID_ANY, display)
+                    # Bind to the submenu, capture cmd value in default arg
+                    self.Bind(wx.EVT_MENU, lambda e, c=cmd: self._insert_snippet(c), item)
+                
+                var_menu.AppendSubMenu(cat_menu, category)
+            
+            menu.AppendSubMenu(var_menu, "📝  Insert Variable")
+            menu.AppendSeparator()
+        
+        # ----- Import Items -----
         if is_visual_mode:
             # Limited menu for Visual Editor - only non-table imports
             items = [
@@ -1868,6 +2087,23 @@ You can safely continue working."""
         
         self.PopupMenu(menu)
         menu.Destroy()
+    
+    def _insert_snippet(self, command: str):
+        """Insert a snippet value at current cursor position."""
+        try:
+            value = resolve_snippet(command)
+            if not value:
+                value = command  # Insert command as-is if no value
+            
+            # Insert into active editor
+            if self._use_visual_editor and hasattr(self, 'visual_editor') and self.visual_editor:
+                self.visual_editor.insert_snippet_value(command)
+            elif hasattr(self, 'markdown_editor') and self.markdown_editor:
+                self.markdown_editor.editor.WriteText(value)
+            
+            debug_print(f"[KiNotes Snippet] Inserted {command} → {value}")
+        except Exception as e:
+            debug_print(f"[KiNotes Snippet] Error inserting: {e}")
     
     def _get_import_header(self, title):
         """Generate header with title and date for imported content."""
@@ -2081,22 +2317,64 @@ You can safely continue working."""
     # DATA MANAGEMENT
     # ============================================================
     
-    def _start_auto_save_timer(self):
-        """Start auto-save timer - uses configurable interval from settings."""
+    def _start_auto_save_timer(self, use_instance_interval=False):
+        """Start auto-save timer based on autosave_mode setting.
+        
+        Args:
+            use_instance_interval: If True, use self._timer_interval_ms instead of loading from file.
+                                   Used when settings were just applied from dialog.
+        
+        Modes:
+        - 'kinotes': Use custom interval from settings (default 5s)
+        - 'kicad': Sync with KiCad backup interval
+        - 'disabled': No auto-save timer
+        """
         try:
-            # Load interval from settings, fallback to default
-            settings = self.notes_manager.load_settings() or {}
-            self._timer_interval_ms = settings.get('timer_interval_ms', PERFORMANCE_DEFAULTS['timer_interval_ms'])
-            # Enforce min/max bounds
-            self._timer_interval_ms = max(PERFORMANCE_DEFAULTS['timer_min_ms'], 
-                                          min(self._timer_interval_ms, PERFORMANCE_DEFAULTS['timer_max_ms']))
+            # Use instance variable or load from settings
+            if use_instance_interval and hasattr(self, '_autosave_mode'):
+                autosave_mode = self._autosave_mode
+            else:
+                settings = self.notes_manager.load_settings() or {}
+                autosave_mode = settings.get('autosave_mode', KICAD_SYNC_DEFAULTS['autosave_mode'])
+            
+            # Handle disabled mode
+            if autosave_mode == 'disabled':
+                self._timer_interval_ms = 0
+                debug_print("[KiNotes] Auto-save disabled by user setting")
+                return
+            
+            # Handle KiCad sync mode
+            if autosave_mode == 'kicad':
+                try:
+                    kicad_sync = get_kicad_sync()
+                    kicad_interval = kicad_sync.get_autosave_interval_ms()
+                    if kicad_interval:
+                        self._timer_interval_ms = kicad_interval
+                        debug_print(f"[KiNotes] Using KiCad sync interval: {self._timer_interval_ms}ms")
+                    else:
+                        # Fallback to KiNotes default if KiCad unavailable
+                        self._timer_interval_ms = KICAD_SYNC_DEFAULTS['kinotes_default_ms']
+                        debug_print(f"[KiNotes] KiCad sync unavailable, using default: {self._timer_interval_ms}ms")
+                except Exception as e:
+                    self._timer_interval_ms = KICAD_SYNC_DEFAULTS['kinotes_default_ms']
+                    debug_print(f"[KiNotes] KiCad sync error ({e}), using default: {self._timer_interval_ms}ms")
+            elif use_instance_interval and hasattr(self, '_timer_interval_ms') and self._timer_interval_ms:
+                # Use already-set interval from settings dialog
+                pass  # Keep self._timer_interval_ms as-is
+            else:
+                # KiNotes default mode - load from settings file
+                settings = self.notes_manager.load_settings() or {}
+                self._timer_interval_ms = settings.get('timer_interval_ms', PERFORMANCE_DEFAULTS['timer_interval_ms'])
+            
+            # Enforce minimum only (no max cap - matches KiCad exactly)
+            self._timer_interval_ms = max(KICAD_SYNC_DEFAULTS['sync_min_interval_ms'], self._timer_interval_ms)
             
             self._auto_save_timer = wx.Timer(self)
             self.Bind(wx.EVT_TIMER, self._on_auto_save, self._auto_save_timer)
             self._auto_save_timer.Start(self._timer_interval_ms)
-            debug_print(f"[KiNotes] Auto-save timer started: {self._timer_interval_ms}ms interval")
-        except:
-            pass
+            debug_print(f"[KiNotes] Auto-save timer started: {self._timer_interval_ms}ms ({autosave_mode} mode)")
+        except Exception as e:
+            debug_print(f"[KiNotes] Auto-save timer error: {e}")
     
     def _on_auto_save(self, event):
         """Auto-save if modified and update timer displays."""
@@ -2112,14 +2390,25 @@ You can safely continue working."""
         except:
             pass
         
-        # Save if content modified
-        if self._modified:
+        # Check if content is modified (from visual editor or main panel)
+        content_modified = self._modified
+        if hasattr(self, 'visual_editor') and self.visual_editor:
+            content_modified = content_modified or self.visual_editor.is_modified()
+        
+        # Save only if content modified (skip if no changes)
+        if content_modified:
             try:
                 self._save_notes()
                 self._save_todos()
                 self._modified = False
-            except:
-                pass
+                # Clear visual editor modified flag too
+                if hasattr(self, 'visual_editor') and self.visual_editor:
+                    self.visual_editor.clear_modified()
+                debug_module('save', 'Auto-save completed (content modified)')
+            except Exception as e:
+                debug_module('save', f'Auto-save error: {e}')
+        else:
+            debug_module('save', 'Auto-save skipped (no changes)')
         self._timer_update_tick = 0
     
     def _load_all_data(self):
@@ -2165,8 +2454,9 @@ You can safely continue working."""
         """Save notes."""
         try:
             self.notes_manager.save(self._get_note_content())
-        except:
-            pass
+            debug_module('save', 'Notes saved to disk')
+        except Exception as e:
+            debug_module('save', f'Notes save error: {e}')
     
     def _save_todos(self):
         """Save todos with time tracking data."""
@@ -2183,11 +2473,13 @@ You can safely continue working."""
                     "is_running": timer_data.get("is_running", False)
                 })
             self.notes_manager.save_todos(todos)
+            debug_module('save', f'Todos saved ({len(todos)} items)')
         except Exception as e:
-            print(f"[KiNotes] Todo save warning: {e}")
+            debug_module('save', f'Todo save error: {e}')
     
     def force_save(self):
         """Force save all data with full error protection."""
+        debug_module('save', 'Manual save triggered (Ctrl+S or Save button)')
         try:
             self._save_notes()
         except Exception as e:
@@ -2214,6 +2506,8 @@ You can safely continue working."""
             self._auto_export_diary_on_close()
         except Exception as e:
             print(f"[KiNotes] Diary export error: {e}")
+        
+        debug_module('save', 'Manual save completed')
     
     def cleanup(self):
         """Cleanup ALL resources - critical for repeated open/close cycles."""
