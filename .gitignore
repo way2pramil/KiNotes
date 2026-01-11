@@ -26,7 +26,7 @@ ENV/
 *.swp
 *.swo
 
-# GitHub and development instructions
+# GitHub copilot instructions (development only)
 .github/copilot-instructions.md
 
 # Testing artifacts
@@ -38,6 +38,10 @@ functionChecklist.md
 # Documentation (development notes, not user docs)
 docs/
 
+# Markdown files - only README.md and CHANGELOG.md allowed
+# All other .md files are development docs
+KiNotes/features.md
+
 # Legacy debug files (kept for backward compatibility in gitignore)
 debug_standalone.py
 test_*.py
@@ -48,6 +52,22 @@ test_*.py
 # macOS / Windows
 .DS_Store
 Thumbs.db
+
+# KiNotes source code (development only - PCM package built separately)
+KiNotes/__version__.py
+KiNotes/kinotes_action.py
+KiNotes/metadata.json
+KiNotes/__init__.py
+KiNotes/core/
+KiNotes/ui/
+KiNotes/resources/
+
+# Build scripts (development only)
+build_pcm_package.py
+pyproject.toml
+
+# Python package info
+kinotes.egg-info/
 desktop.ini
 
 # Logs

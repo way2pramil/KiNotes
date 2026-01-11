@@ -37,12 +37,16 @@ from ..components import RoundedButton
 # Import centralized defaults - handle both KiCad plugin and standalone context
 try:
     from ...core.defaultsConfig import (
-        WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS, DEFAULTS, BETA_DEFAULTS, TIME_TRACKER_DEFAULTS, debug_print
+        WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS, DEFAULTS, BETA_DEFAULTS, 
+        TIME_TRACKER_DEFAULTS, KICAD_SYNC_DEFAULTS, debug_print
     )
+    from ...core.kicad_extractor import get_kicad_sync
 except ImportError:
     from core.defaultsConfig import (
-        WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS, DEFAULTS, BETA_DEFAULTS, TIME_TRACKER_DEFAULTS, debug_print
+        WINDOW_DEFAULTS, PERFORMANCE_DEFAULTS, DEFAULTS, BETA_DEFAULTS, 
+        TIME_TRACKER_DEFAULTS, KICAD_SYNC_DEFAULTS, debug_print
     )
+    from core.kicad_extractor import get_kicad_sync
 
 
 # ------------------------------ Helpers ---------------------------------
@@ -521,7 +525,7 @@ class SettingsDialog(wx.Dialog):
         self._build_pdf_format_section(self._scroll_panel, sizer)
     
     def _build_performance_section(self, parent, sizer):
-        """Build performance settings section (timer interval)."""
+        """Build performance settings section (autosave mode + timer interval)."""
         perf_header = wx.StaticText(parent, label="⚡ Performance")
         set_label_style(perf_header, self._theme, bold=True, size=10)
         sizer.Add(perf_header, 0, wx.LEFT | wx.BOTTOM, SECTION_MARGIN)
@@ -535,34 +539,121 @@ class SettingsDialog(wx.Dialog):
         current_settings = notes_manager.load_settings() if notes_manager else {}
         current_interval_ms = current_settings.get('timer_interval_ms', PERFORMANCE_DEFAULTS['timer_interval_ms'])
         current_interval_sec = current_interval_ms // 1000  # Convert to seconds for UI
+        current_autosave_mode = current_settings.get('autosave_mode', KICAD_SYNC_DEFAULTS['autosave_mode'])
         
-        # Timer interval row
-        timer_row = wx.BoxSizer(wx.HORIZONTAL)
+        # ========== Autosave Mode Radio Buttons ==========
+        mode_label = wx.StaticText(perf_panel, label="Auto-save mode:")
+        mode_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        perf_sizer.Add(mode_label, 0, wx.LEFT | wx.TOP, 10)
         
-        timer_label = wx.StaticText(perf_panel, label="Auto-save interval:")
-        timer_label.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
-        timer_row.Add(timer_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        # Check KiCad sync availability and get all backup settings
+        kicad_sync = get_kicad_sync()
+        kicad_available = kicad_sync.is_available()
+        kicad_interval_sec = None
+        self._kicad_backup_settings = {}  # Store for info panel
+        if kicad_available:
+            kicad_interval_ms = kicad_sync.get_autosave_interval_ms()
+            if kicad_interval_ms:
+                kicad_interval_sec = kicad_interval_ms // 1000
+            # Get all backup settings for info display
+            self._kicad_backup_settings = kicad_sync.get_all_backup_settings()
         
-        # SpinCtrl for interval (3-60 seconds)
+        # ========== Row 1: KiNotes mode with inline spinner ==========
+        kinotes_row = wx.BoxSizer(wx.HORIZONTAL)
+        
+        self._autosave_mode_kinotes = wx.RadioButton(perf_panel, label="  KiNotes", style=wx.RB_GROUP)
+        self._autosave_mode_kinotes.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        self._autosave_mode_kinotes.SetValue(current_autosave_mode == 'kinotes')
+        self._autosave_mode_kinotes.Bind(wx.EVT_RADIOBUTTON, self._on_autosave_mode_change)
+        kinotes_row.Add(self._autosave_mode_kinotes, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        
+        # SpinCtrl inline with radio (3-300 seconds = 5 min max)
         min_sec = PERFORMANCE_DEFAULTS['timer_min_ms'] // 1000
         max_sec = PERFORMANCE_DEFAULTS['timer_max_ms'] // 1000
         self._timer_interval_spin = wx.SpinCtrl(perf_panel, min=min_sec, max=max_sec, 
-                                                 initial=max(min_sec, min(current_interval_sec, max_sec)))
-        block_scroll_wheel(self._timer_interval_spin)  # Prevent accidental value changes while scrolling
+                                                 initial=max(min_sec, min(current_interval_sec, max_sec)),
+                                                 size=(70, -1))
+        block_scroll_wheel(self._timer_interval_spin)
         self._timer_interval_spin.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
         self._timer_interval_spin.SetBackgroundColour(hex_to_colour(self._theme["bg_editor"]))
-        timer_row.Add(self._timer_interval_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        kinotes_row.Add(self._timer_interval_spin, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
         
-        sec_label = wx.StaticText(perf_panel, label="seconds")
-        sec_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        timer_row.Add(sec_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        self._sec_label = wx.StaticText(perf_panel, label="seconds")
+        self._sec_label.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
+        kinotes_row.Add(self._sec_label, 0, wx.ALIGN_CENTER_VERTICAL)
         
-        perf_sizer.Add(timer_row, 0, wx.ALL, 10)
+        perf_sizer.Add(kinotes_row, 0, wx.LEFT | wx.TOP, 15)
+        
+        # ========== Row 2: Sync with KiCad ==========
+        if kicad_available and kicad_interval_sec:
+            # Format interval for display (e.g., "5 min" or "30s")
+            if kicad_interval_sec >= 60:
+                mins = kicad_interval_sec // 60
+                secs = kicad_interval_sec % 60
+                if secs:
+                    interval_display = f"{mins}m {secs}s"
+                else:
+                    interval_display = f"{mins} min"
+            else:
+                interval_display = f"{kicad_interval_sec}s"
+            kicad_label = f"  Sync with KiCad ({interval_display})"
+        else:
+            kicad_label = "  Sync with KiCad (unavailable)"
+        
+        self._autosave_mode_kicad = wx.RadioButton(perf_panel, label=kicad_label)
+        self._autosave_mode_kicad.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        self._autosave_mode_kicad.SetValue(current_autosave_mode == 'kicad')
+        self._autosave_mode_kicad.Enable(kicad_available and kicad_interval_sec is not None)
+        self._autosave_mode_kicad.Bind(wx.EVT_RADIOBUTTON, self._on_autosave_mode_change)
+        perf_sizer.Add(self._autosave_mode_kicad, 0, wx.LEFT | wx.TOP, 15)
+        
+        # ========== KiCad Info Panel (shown when KiCad sync selected) ==========
+        self._kicad_info_panel = wx.Panel(perf_panel)
+        self._kicad_info_panel.SetBackgroundColour(hex_to_colour(self._theme.get("bg_toolbar", "#F5F5F5")))
+        kicad_info_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # Build info text from KiCad Session settings
+        if self._kicad_backup_settings:
+            session_display = self._kicad_backup_settings.get('session_autosave_display', 'N/A')
+            backup_enabled = self._kicad_backup_settings.get('enabled', False)
+            backup_on_autosave = self._kicad_backup_settings.get('backup_on_autosave', False)
+            
+            info_lines = [
+                f"KiCad → Preferences → Common → Session:",
+                f"  • Auto save: {session_display}",
+                f"",
+                f"Project Backup: {'✓ Enabled' if backup_enabled else '✗ Disabled'}",
+                f"  • Backup on autosave: {'✓' if backup_on_autosave else '✗'}",
+            ]
+            info_text = "\n".join(info_lines)
+        else:
+            info_text = "KiCad settings not available"
+        
+        kicad_info_label = wx.StaticText(self._kicad_info_panel, label=info_text)
+        kicad_info_label.SetForegroundColour(hex_to_colour(self._theme.get("text_secondary", "#666666")))
+        kicad_info_label.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        kicad_info_sizer.Add(kicad_info_label, 0, wx.ALL, 8)
+        
+        self._kicad_info_panel.SetSizer(kicad_info_sizer)
+        perf_sizer.Add(self._kicad_info_panel, 0, wx.LEFT | wx.RIGHT | wx.TOP, 25)
+        
+        # Show/hide based on current mode
+        self._kicad_info_panel.Show(current_autosave_mode == 'kicad')
+        
+        # ========== Row 3: Disabled ==========
+        self._autosave_mode_disabled = wx.RadioButton(perf_panel, label="  Disabled (manual save only)")
+        self._autosave_mode_disabled.SetForegroundColour(hex_to_colour(self._theme["text_primary"]))
+        self._autosave_mode_disabled.SetValue(current_autosave_mode == 'disabled')
+        self._autosave_mode_disabled.Bind(wx.EVT_RADIOBUTTON, self._on_autosave_mode_change)
+        perf_sizer.Add(self._autosave_mode_disabled, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 15)
+        
+        # Enable/disable custom interval based on mode
+        self._update_timer_controls_state()
         
         perf_hint = wx.StaticText(perf_panel, 
-            label="Higher values = better performance, lower = faster saves (Min: 3s)")
+            label="Higher values = better performance, lower = faster saves")
         perf_hint.SetForegroundColour(hex_to_colour(self._theme["text_secondary"]))
-        perf_sizer.Add(perf_hint, 0, wx.LEFT | wx.BOTTOM, 10)
+        perf_sizer.Add(perf_hint, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 10)
         
         perf_panel.SetSizer(perf_sizer)
         sizer.Add(perf_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, SECTION_MARGIN)
@@ -570,6 +661,25 @@ class SettingsDialog(wx.Dialog):
         sizer.AddSpacer(SECTION_SPACING)
         self._add_separator(parent, sizer)
         sizer.AddSpacer(SECTION_SPACING)
+    
+    def _on_autosave_mode_change(self, event):
+        """Handle autosave mode radio button change."""
+        self._update_timer_controls_state()
+        
+        # Show/hide KiCad info panel based on mode
+        is_kicad_mode = self._autosave_mode_kicad.GetValue()
+        if hasattr(self, '_kicad_info_panel'):
+            self._kicad_info_panel.Show(is_kicad_mode)
+            # Relayout the scroll panel
+            self._scroll_panel.Layout()
+            self._scroll_panel.FitInside()
+    
+    def _update_timer_controls_state(self):
+        """Enable/disable custom interval controls based on autosave mode."""
+        # Custom interval only enabled for 'kinotes' mode
+        enabled = self._autosave_mode_kinotes.GetValue()
+        self._timer_interval_spin.Enable(enabled)
+        self._sec_label.Enable(enabled)
     
     def _build_pdf_format_section(self, parent, sizer):
         """Build PDF export format settings section."""
@@ -950,6 +1060,14 @@ class SettingsDialog(wx.Dialog):
             bg_color_name = bg_choices[self._bg_choice.GetSelection()]
             text_color_name = txt_choices[self._txt_choice.GetSelection()]
         
+        # Determine autosave mode from radio buttons
+        if self._autosave_mode_kicad.GetValue():
+            autosave_mode = 'kicad'
+        elif self._autosave_mode_disabled.GetValue():
+            autosave_mode = 'disabled'
+        else:
+            autosave_mode = 'kinotes'
+        
         return {
             'dark_mode': self._selected_theme_dark,
             'bg_color_name': bg_color_name if not self._selected_theme_dark else self._config.get('bg_color_name', 'Ivory Paper'),
@@ -967,6 +1085,7 @@ class SettingsDialog(wx.Dialog):
             'scale_factor': None if self._scale_auto_checkbox.GetValue() else self._scale_slider.GetValue() / 100.0,
             'panel_width': self._panel_width_spin.GetValue(),
             'panel_height': self._panel_height_spin.GetValue(),
+            'autosave_mode': autosave_mode,
             'timer_interval_ms': self._timer_interval_spin.GetValue() * 1000,  # Convert seconds to ms
             'beta_markdown': self._beta_markdown_cb.GetValue(),
             'beta_bom': self._beta_bom_cb.GetValue(),

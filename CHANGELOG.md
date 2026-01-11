@@ -5,7 +5,28 @@ All notable changes to KiNotes will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.0] - 2025-06-17
+## [1.5.2] - 2025-12-25
+
+### Added
+- **KiCad Settings Sync**: Sync autosave interval with KiCad's backup preferences
+  - Three modes: KiNotes default (5s), Sync with KiCad, Disabled
+  - Reads `kicad_common.json` for `auto_backup.min_interval`
+  - Supports Windows, macOS, and Linux paths
+  - No cap on interval - matches KiCad exactly (even 15 min)
+- **GitHub Sponsors**: Added sponsorship support via FUNDING.yml
+
+### Fixed
+- **Time Tracking Settings**: 12hr/24hr format, enable tracking, and show diary button now persist correctly
+- **Autosave Interval**: Timer interval now saves and loads properly between sessions
+- **Debug Info**: Fixed AttributeError in debug panel (changed `current_project_path` to `notes_manager.project_dir`)
+
+## [1.5.1] - 2025-12-23
+
+### Fixed
+- PCM package directory structure (fixed nested KiNotes/KiNotes issue)
+- Import paths for PCM compatibility (absolute to relative imports)
+
+## [1.5.0] - 2025-12-17
 
 ### Added
 - **Fab Summary Import**: One-click import of board fabrication info with section selection dialog

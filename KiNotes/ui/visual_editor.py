@@ -64,6 +64,30 @@ except ImportError:
         def debug_module(module, msg):
             pass
 
+# Import snippet system for / command autocomplete
+try:
+    from ..core.variable_snippets import get_matching_snippets, resolve_snippet, get_snippets_by_category
+except ImportError:
+    try:
+        from core.variable_snippets import get_matching_snippets, resolve_snippet, get_snippets_by_category
+    except ImportError:
+        # Stub functions if import fails
+        def get_matching_snippets(prefix):
+            return []
+        def resolve_snippet(cmd):
+            return ''
+        def get_snippets_by_category():
+            return {}
+
+# Import autocomplete popup (separated for maintainability)
+try:
+    from .components.autocomplete_popup import SnippetAutocompletePopup
+except ImportError:
+    try:
+        from ui.components.autocomplete_popup import SnippetAutocompletePopup
+    except ImportError:
+        SnippetAutocompletePopup = None  # Will create inline if import fails
+
 
 def _kinotes_log(msg: str):
     """Log message - routes through debug_module for 'click' events."""
@@ -228,7 +252,8 @@ class VisualEditorStyles:
             attr.SetTextColour(wx.Colour(0, 102, 204))  # Standard link blue
         
         return attr
-    
+
+
 # ============================================================
 # VISUAL NOTE EDITOR - Main Editor Control
 # ============================================================
@@ -245,7 +270,6 @@ class VisualNoteEditor(wx.Panel):
     - Smart cross-probe for PCB designators
     - KiCad 9+ / wxWidgets 3.2+ compatible
     """
-    
     def __init__(self, parent, dark_mode: bool = False, style: int = 0, beta_features: bool = False):
         """
         Initialize the Visual Note Editor.
@@ -274,6 +298,11 @@ class VisualNoteEditor(wx.Panel):
         
         # Image handler - set by main panel via set_image_handler()
         self._image_handler = None
+        
+        # Autocomplete popup for / commands
+        self._autocomplete_popup = None  # Created lazily
+        self._snippet_prefix = ""  # Tracks text after / for autocomplete
+        self._snippet_start_pos = -1  # Position where / was typed
         
         # Theme colors - custom colors override defaults
         self._custom_bg_color = None  # User-selected background color
@@ -325,6 +354,10 @@ class VisualNoteEditor(wx.Panel):
         self._dark_mode = dark_mode
         self._update_theme_colors()
         self._apply_visual_theme()
+        
+        # Update autocomplete popup if exists
+        if self._autocomplete_popup:
+            self._autocomplete_popup.update_dark_mode(dark_mode)
     
     def set_custom_colors(self, bg_color: wx.Colour = None, text_color: wx.Colour = None):
         """
@@ -704,6 +737,12 @@ class VisualNoteEditor(wx.Panel):
     
     def _on_left_down(self, event):
         """Handle left mouse button down - open links immediately on click."""
+        # Hide autocomplete popup on any click (VS Code behavior)
+        if self._autocomplete_popup and self._autocomplete_popup.IsShown():
+            self._autocomplete_popup.safe_dismiss()
+            self._snippet_start_pos = -1
+            self._snippet_prefix = ""
+        
         mouse_pos = event.GetPosition()
         hit_result, hit_pos = self._editor.HitTest(mouse_pos)
         
@@ -757,6 +796,14 @@ class VisualNoteEditor(wx.Panel):
     def cleanup(self):
         """Clean up resources before destruction."""
         try:
+            # Destroy autocomplete popup
+            if hasattr(self, '_autocomplete_popup') and self._autocomplete_popup:
+                try:
+                    self._autocomplete_popup.Destroy()
+                except:
+                    pass
+                self._autocomplete_popup = None
+            
             # Unbind all editor events
             if hasattr(self, '_editor') and self._editor:
                 try:
@@ -1129,20 +1176,232 @@ class VisualNoteEditor(wx.Panel):
     # ============================================================
     
     def _on_text_changed(self, event):
-        """Handle text changes."""
+        """Handle text changes and autocomplete."""
         self._modified = True
+        
+        # Check for slash command autocomplete
+        self._check_slash_autocomplete()
+        
         # Ensure cursor stays visible when typing
         wx.CallAfter(self._ensure_cursor_visible)
         event.Skip()
     
+    def _check_slash_autocomplete(self):
+        """Check if we should show/update slash command autocomplete."""
+        try:
+            pos = self._editor.GetInsertionPoint()
+            text = self._editor.GetValue()
+            
+            # Find the word being typed (from last space/newline to cursor)
+            line_start = max(0, text.rfind('\n', 0, pos) + 1)
+            word_start = max(line_start, text.rfind(' ', line_start, pos) + 1)
+            current_word = text[word_start:pos]
+            
+            print(f"[KiNotes Snippet] pos={pos}, current_word='{current_word}'")
+            
+            # Check if typing a slash command
+            if current_word.startswith('/') and len(current_word) >= 1:
+                prefix = current_word[1:]  # Text after /
+                self._snippet_start_pos = word_start
+                self._snippet_prefix = prefix
+                print(f"[KiNotes Snippet] Showing popup for prefix='{prefix}'")
+                self._show_autocomplete_popup(prefix)
+            else:
+                # Not a slash command - hide popup
+                self._hide_autocomplete_popup()
+        except Exception as e:
+            print(f"[KiNotes Snippet] Error in autocomplete check: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _show_autocomplete_popup(self, prefix: str):
+        """Show or update the autocomplete popup with dynamic cursor tracking."""
+        try:
+            print(f"[KiNotes Snippet] _show_autocomplete_popup called with prefix='{prefix}'")
+            
+            # Create popup lazily
+            if not self._autocomplete_popup:
+                print(f"[KiNotes Snippet] Creating new popup, SnippetAutocompletePopup={SnippetAutocompletePopup}")
+                self._autocomplete_popup = SnippetAutocompletePopup(
+                    self, dark_mode=self._dark_mode
+                )
+            
+            # Show popup - it calculates caret position internally from editor_ref
+            # This enables dynamic cursor tracking (popup moves as you type)
+            self._autocomplete_popup.show_for_prefix(
+                prefix, self._editor, self._on_snippet_selected
+            )
+        except Exception as e:
+            print(f"[KiNotes Snippet] Error showing popup: {e}")
+            import traceback
+            traceback.print_exc()
+            traceback.print_exc()
+    
+    def _calculate_screen_position(self, text_pos: int) -> wx.Point:
+        """
+        Calculate screen position for a text position.
+        
+        Uses multiple methods for reliability across wxPython versions.
+        VS Code style: anchors to the trigger position, not cursor.
+        """
+        # Method 1: Try PositionToCoords (most accurate when it works)
+        try:
+            point = self._editor.PositionToCoords(text_pos)
+            if point and point.x > 0 and point.y >= 0:
+                return self._editor.ClientToScreen(point)
+        except:
+            pass
+        
+        # Method 2: Calculate from text content (most reliable fallback)
+        try:
+            text = self._editor.GetValue()[:text_pos]
+            lines = text.split('\n')
+            line_num = len(lines) - 1
+            col = len(lines[-1]) if lines else 0
+            
+            # Get font metrics for accurate character width
+            dc = wx.ClientDC(self._editor)
+            font = self._editor.GetFont()
+            dc.SetFont(font)
+            char_width, line_height = dc.GetTextExtent('M')  # Use 'M' as reference
+            
+            # If line_height seems wrong, use default
+            if line_height < 10:
+                line_height = 20
+            if char_width < 4:
+                char_width = 8
+            
+            # Get editor margins/padding
+            editor_pos = self._editor.GetScreenPosition()
+            margins = self._editor.GetMargins()
+            left_margin = margins.x if hasattr(margins, 'x') else 12
+            top_margin = margins.y if hasattr(margins, 'y') else 4
+            
+            # Calculate position
+            x = editor_pos.x + left_margin + (col * char_width)
+            y = editor_pos.y + top_margin + (line_num * line_height)
+            
+            return wx.Point(x, y)
+        except Exception as e:
+            debug_print(f"[KiNotes Snippet] Position calc error: {e}")
+        
+        # Method 3: Last resort - use editor top-left corner
+        editor_pos = self._editor.GetScreenPosition()
+        return wx.Point(editor_pos.x + 20, editor_pos.y + 20)
+    
+    def _hide_autocomplete_popup(self):
+        """Hide the autocomplete popup."""
+        if self._autocomplete_popup and self._autocomplete_popup.IsShown():
+            self._autocomplete_popup.safe_dismiss()
+        self._snippet_start_pos = -1
+        self._snippet_prefix = ""
+    
+    def _on_snippet_selected(self, command: str, value: str):
+        """Handle selection of a snippet from autocomplete."""
+        try:
+            debug_print(f"[KiNotes Snippet] Selection callback: {command} → {value}")
+            debug_print(f"[KiNotes Snippet] Start pos: {self._snippet_start_pos}")
+            
+            # Get current text BEFORE any modifications
+            text = self._editor.GetValue()
+            current_pos = self._editor.GetInsertionPoint()
+            
+            if self._snippet_start_pos < 0:
+                # Fallback: just insert at cursor
+                if value:
+                    self._editor.WriteText(value)
+                return
+            
+            # Calculate what to remove: from start_pos to end of typed command
+            # The command might have more chars typed, find actual end
+            start = self._snippet_start_pos
+            
+            # Find end of the /command (next space, newline, or end of text)
+            end = start
+            while end < len(text) and text[end] not in ' \n\r\t':
+                end += 1
+            
+            # But don't go past current cursor
+            end = min(end, current_pos)
+            
+            debug_print(f"[KiNotes Snippet] Text at range [{start}:{end}]: '{text[start:end]}'")
+            debug_print(f"[KiNotes Snippet] Removing from {start} to {end}")
+            
+            # Determine what to insert
+            insert_text = value if value else command
+            
+            # Use SetValue with modified text for atomic replacement
+            # This avoids issues with Remove() + WriteText() causing position shifts
+            new_text = text[:start] + insert_text + text[end:]
+            
+            # Preserve cursor position after the inserted text
+            new_cursor_pos = start + len(insert_text)
+            
+            # Apply the change
+            self._editor.SetValue(new_text)
+            self._editor.SetInsertionPoint(new_cursor_pos)
+            
+            debug_print(f"[KiNotes Snippet] Inserted: {insert_text} at pos {start}")
+            
+            # Mark as modified
+            self._modified = True
+            
+            # Reset state
+            self._snippet_start_pos = -1
+            self._snippet_prefix = ""
+            
+        except Exception as e:
+            debug_print(f"[KiNotes Snippet] Error inserting snippet: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def insert_snippet_value(self, command: str):
+        """
+        Public method to insert a snippet at current cursor position.
+        
+        Used by Import button submenu.
+        
+        Args:
+            command: Snippet command (e.g., '/rev')
+        """
+        try:
+            value = resolve_snippet(command)
+            debug_print(f"[KiNotes Snippet] Menu insert called: {command}")
+            debug_print(f"[KiNotes Snippet] Resolved value: {value}")
+            
+            if value:
+                # Make sure editor has focus
+                self._editor.SetFocus()
+                self._editor.WriteText(value)
+                debug_print(f"[KiNotes Snippet] Written to editor: {value}")
+            else:
+                debug_print(f"[KiNotes Snippet] No value to insert for {command}")
+        except Exception as e:
+            debug_print(f"[KiNotes Snippet] Error in menu insert: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def is_modified(self) -> bool:
+        """Check if content has been modified since last save."""
+        return self._modified
+    
+    def clear_modified(self):
+        """Clear the modified flag after saving."""
+        self._modified = False
+    
     def _on_key_down(self, event):
-        """Handle keyboard shortcuts."""
+        """Handle keyboard shortcuts and slash commands."""
         key = event.GetKeyCode()
         ctrl = event.ControlDown()
         shift = event.ShiftDown()
         alt = event.AltDown()
         
-        # ESC key - clear formatting and reset to normal text
+        # PRIORITY: Handle autocomplete popup keys first
+        if self._autocomplete_popup and self._autocomplete_popup.IsShown():
+            if self._autocomplete_popup.handle_key(key):
+                return  # Key consumed by popup
+        
+        # ESC key - clear selection/formatting
         if key == wx.WXK_ESCAPE:
             # Clear any selection
             if self._editor.HasSelection():
@@ -1723,9 +1982,9 @@ class VisualNoteEditor(wx.Panel):
         """Lazy-load net linker from cache manager on demand (inside KiCad only)."""
         if self._net_linker:
             return  # Already have one
-        # Try to get linker from cache manager (use absolute import to avoid relative import issues)
+        # Try to get linker from cache manager (use relative import for PCM compatibility)
         try:
-            from KiNotes.core.net_cache_manager import get_net_cache_manager
+            from core.net_cache_manager import get_net_cache_manager
             cache_manager = get_net_cache_manager()
             self._net_linker = cache_manager.get_linker()
             if self._net_linker:

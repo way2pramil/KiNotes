@@ -102,6 +102,18 @@ import importlib
 def _force_reload_modules():
     """Force reload all UI modules to pick up latest changes."""
     try:
+        # Reload defaultsConfig FIRST (contains DEPLOY_BUILD and settings)
+        from core import defaultsConfig
+        importlib.reload(defaultsConfig)
+        print("[KiNotes] Reloaded defaultsConfig")
+        # Reload kicad_extractor (centralized extraction)
+        from core import kicad_extractor
+        importlib.reload(kicad_extractor)
+        print("[KiNotes] Reloaded kicad_extractor")
+        # Reload variable_snippets (/ command autocomplete)
+        from core import variable_snippets
+        importlib.reload(variable_snippets)
+        print("[KiNotes] Reloaded variable_snippets")
         # Reload in dependency order: visual_editor, markdown_converter, then main_panel
         from ui import visual_editor, markdown_converter, main_panel
         importlib.reload(visual_editor)
@@ -114,6 +126,9 @@ def _force_reload_modules():
         print(f"[KiNotes] Module reload warning: {e}")
 
 _force_reload_modules()
+
+# Re-import DEPLOY_BUILD after reload to get fresh value
+from core.defaultsConfig import DEPLOY_BUILD
 
 from core.notes_manager import NotesManager
 from core.designator_linker import DesignatorLinker

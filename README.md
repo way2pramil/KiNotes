@@ -4,10 +4,15 @@
   <img src="KiNotes/resources/icon.svg" alt="KiNotes" width="220"/>
 </p>
 
+<<<<<<< HEAD
 **Version 1.5.1** — Your design decisions shouldn't live in a separate notepad. KiNotes keeps engineering notes right inside KiCad—where they belong.
+=======
+**Version 1.5.2** — Your design decisions shouldn't live in a separate notepad. KiNotes keeps engineering notes right inside KiCad—where they belong.
+>>>>>>> dev
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![KiCad 9.0+](https://img.shields.io/badge/KiCad-9.0+-green.svg)](https://www.kicad.org/)
+[![Sponsor](https://img.shields.io/badge/Sponsor-💝-ff69b4.svg)](https://github.com/sponsors/way2pramil)
 
 > 🎯 **For KiCad 9.0+** — Built for modern KiCad with Python 3 and wxPython 4.
 
@@ -140,12 +145,13 @@ When your brain is juggling impedance calculations, component placement, thermal
 | **Debug Panel** | Event logging for troubleshooting | 🧪 Beta |
 | **Image Paste** | Ctrl+V to paste images → `.kinotes/images/` | 🧪 Beta |
 | **Fab Summary Import** | Import board fabrication info with selection | 🧪 Beta |
-|**Cross-Platform** |  macOS, Linux support | 🧪 Beta |
+
 
 ### Planned
 | Feature | Function | Status |
 |---------|----------|--------|
-| **KiCad Plugin Manager** | One-click install from PCM | 📋 Pending Submission |
+| **Slash Commands** | Type /rev, /date, /company for live KiCad data | ✅ v1.5.2 |
+| **KiCad Settings Sync** | Autosave interval syncs with KiCad preferences | ✅ v1.5.2 |
 | **Voice Input** | Add notes hands-free using local speech-to-text | 📋 Planned |
 
 ---
@@ -162,7 +168,7 @@ When your brain is juggling impedance calculations, component placement, thermal
    - **Linux:** `~/.config/kicad/9.0/scripting/plugins/`
 3. Restart KiCad
 
-> 📋 **KiCad Plugin Manager** — Submission approved, install directly from PCM.
+> ✅ **KiCad Plugin Manager** — Available now! Search "KiNotes" in KiCad's Plugin Manager (Tools → Plugin and Content Manager).
 
 ### First Use
 1. Open any PCB in pcbnew
@@ -210,6 +216,16 @@ Contributions welcome! The codebase is modular—small, focused files that are e
 1. Fork the repository
 2. Create a feature branch
 3. Submit a pull request
+
+---
+
+## 💝 Support This Project
+
+If KiNotes helps you ship better boards, consider supporting its development:
+
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor_on_GitHub-💝-ff69b4.svg?style=for-the-badge)](https://github.com/sponsors/way2pramil)
+
+Your sponsorship helps cover development time and keeps the project actively maintained. Every contribution—big or small—is deeply appreciated!
 
 ---
 
