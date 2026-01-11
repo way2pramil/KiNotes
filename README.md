@@ -4,8 +4,6 @@
   <img src="KiNotes/resources/icon.svg" alt="KiNotes" width="220"/>
 </p>
 
-<<<<<<< HEAD
-**Version 1.5.1** — Your design decisions shouldn't live in a separate notepad. KiNotes keeps engineering notes right inside KiCad—where they belong.
 =======
 **Version 1.5.2** — Your design decisions shouldn't live in a separate notepad. KiNotes keeps engineering notes right inside KiCad—where they belong.
 >>>>>>> dev
