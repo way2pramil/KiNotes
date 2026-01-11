@@ -145,7 +145,8 @@ When your brain is juggling impedance calculations, component placement, thermal
 ### Planned
 | Feature | Function | Status |
 |---------|----------|--------|
-| **KiCad Plugin Manager** | One-click install from PCM | 📋 Pending Submission |
+| **Slash Commands** | Type /rev, /date, /company for live KiCad data | ✅ v1.5.2 |
+| **KiCad Settings Sync** | Autosave interval syncs with KiCad preferences | ✅ v1.5.2 |
 | **Voice Input** | Add notes hands-free using local speech-to-text | 📋 Planned |
 
 ---
@@ -162,7 +163,7 @@ When your brain is juggling impedance calculations, component placement, thermal
    - **Linux:** `~/.config/kicad/9.0/scripting/plugins/`
 3. Restart KiCad
 
-> 📋 **KiCad Plugin Manager** — Submission pending. Once approved, install directly from PCM.
+> ✅ **KiCad Plugin Manager** — Available now! Search "KiNotes" in KiCad's Plugin Manager (Tools → Plugin and Content Manager).
 
 ### First Use
 1. Open any PCB in pcbnew
@@ -215,7 +216,7 @@ See `.github/copilot-instructions.md` for architecture details.
 
 ---
 
-## � Support This Project
+## 💝 Support This Project
 
 If KiNotes helps you ship better boards, consider supporting its development:
 
@@ -225,7 +226,7 @@ Your sponsorship helps cover development time and keeps the project actively mai
 
 ---
 
-## �📄 License
+## 📄 License
 
 **Apache License 2.0** — free for personal and commercial use.
 
