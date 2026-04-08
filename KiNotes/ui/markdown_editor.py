@@ -22,8 +22,20 @@ except Exception:
     _WX_HTML_AVAILABLE = False
 import re
 import html
+import os
 from datetime import datetime
 from typing import Optional, Callable
+
+try:
+    from ..core.kicad_extractor import get_project_dir, get_project_name
+except Exception:
+    try:
+        from core.kicad_extractor import get_project_dir, get_project_name
+    except Exception:
+        def get_project_dir():
+            return None
+        def get_project_name():
+            return None
 
 try:
     import markdown as _markdown
@@ -314,8 +326,14 @@ class MarkdownEditor(wx.Panel):
         """Render markdown to HTML for live preview."""
         if not self._preview or not self._preview_enabled:
             return
+        try:
+            self._preview.SetBackgroundColour(wx.Colour(30, 30, 30))
+        except Exception:
+            pass
+        processed = self._preprocess_markdown(text)
+        has_rtl = self._contains_rtl(processed)
         if not _MARKDOWN_AVAILABLE:
-            safe = html.escape(text)
+            safe = html.escape(processed)
             html = (
                 "<div style='font-size:12px;opacity:0.8;margin-bottom:8px;'>"
                 "Live preview requires the <b>Markdown</b> package. "
@@ -325,7 +343,7 @@ class MarkdownEditor(wx.Panel):
             )
         else:
             html = _markdown.markdown(
-                text,
+                processed,
                 extensions=[
                     "extra",
                     "tables",
@@ -335,6 +353,10 @@ class MarkdownEditor(wx.Panel):
                 ],
             )
 
+        html += self._build_links_html(processed)
+
+        body_dir = "rtl" if has_rtl else "ltr"
+        wrapped = f'<div class="md-root" dir="{body_dir}">{html}</div>'
         page = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -344,10 +366,139 @@ class MarkdownEditor(wx.Panel):
 </style>
 </head>
 <body>
-{html}
+{wrapped}
 </body>
 </html>"""
         self._preview.SetPage(page)
+
+    def _contains_rtl(self, text: str) -> bool:
+        rtl_pattern = re.compile(r'[\u0590-\u08FF\uFB1D-\uFDFD\uFE70-\uFEFC]')
+        return bool(rtl_pattern.search(text))
+
+    def _extract_wikilinks(self, text: str):
+        return re.findall(r'\[\[([^\]|]+)(?:\|([^\]]+))?\]\]', text)
+
+    def _preprocess_markdown(self, text: str) -> str:
+        """Handle Obsidian-style features in Markdown."""
+        lines = text.splitlines()
+        out = []
+        in_code = False
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                out.append(line)
+                i += 1
+                continue
+
+            if not in_code:
+                callout_match = re.match(r'^\s*>\s*\[!(\w+)\]\s*(.*)$', line)
+                if callout_match:
+                    callout_type = callout_match.group(1).lower()
+                    title = callout_match.group(1).capitalize()
+                    content_lines = [callout_match.group(2)]
+                    i += 1
+                    while i < len(lines):
+                        next_line = lines[i]
+                        if next_line.lstrip().startswith(">"):
+                            content_lines.append(next_line.lstrip()[1:].lstrip())
+                            i += 1
+                        else:
+                            break
+                    content = "\n".join(content_lines).strip()
+                    out.append(
+                        f"<div class=\"callout callout-{callout_type}\">"
+                        f"<div class=\"callout-title\">{html.escape(title)}</div>"
+                        f"<div class=\"callout-content\">\n{content}\n</div>"
+                        f"</div>"
+                    )
+                    continue
+
+                line = re.sub(
+                    r'(^|[\s\(])(#([A-Za-z0-9_-]+))',
+                    r'\1<span class="tag">#\3</span>',
+                    line,
+                )
+                line = re.sub(
+                    r'\[\[([^\]|]+)\|([^\]]+)\]\]',
+                    r'<span class="wikilink" data-target="\1">\2</span>',
+                    line,
+                )
+                line = re.sub(
+                    r'\[\[([^\]]+)\]\]',
+                    r'<span class="wikilink" data-target="\1">\1</span>',
+                    line,
+                )
+
+            out.append(line)
+            i += 1
+
+        return "\n".join(out)
+
+    def _build_links_html(self, text: str) -> str:
+        links = self._extract_wikilinks(text)
+        if not links:
+            return ""
+
+        unique = []
+        seen = set()
+        for target, alias in links:
+            label = alias or target
+            if (target, label) not in seen:
+                unique.append((target, label))
+                seen.add((target, label))
+
+        items = "".join(
+            f"<li><span class=\"wikilink\" data-target=\"{html.escape(t)}\">{html.escape(l)}</span></li>"
+            for t, l in unique
+        )
+
+        backlinks = self._find_backlinks()
+        backlinks_html = ""
+        if backlinks:
+            backlinks_items = "".join(
+                f"<li>{html.escape(name)}</li>" for name in backlinks
+            )
+            backlinks_html = (
+                "<div class=\"backlinks\">"
+                "<div class=\"backlinks-title\">Backlinks</div>"
+                f"<ul>{backlinks_items}</ul>"
+                "</div>"
+            )
+
+        return (
+            "<div class=\"links-panel\">"
+            "<div class=\"links-title\">Links</div>"
+            f"<ul>{items}</ul>"
+            "</div>"
+            f"{backlinks_html}"
+        )
+
+    def _find_backlinks(self):
+        project_dir = get_project_dir()
+        project_name = get_project_name()
+        if not project_dir or not project_name:
+            return []
+
+        target = f"[[{project_name}]]"
+        results = []
+        try:
+            for root, _, files in os.walk(project_dir):
+                for name in files:
+                    if not name.endswith(".md"):
+                        continue
+                    path = os.path.join(root, name)
+                    try:
+                        with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+                            if target in fh.read():
+                                results.append(name)
+                    except Exception:
+                        continue
+        except Exception:
+            return []
+
+        return sorted(set(results))
 
     def _get_preview_css(self) -> str:
         """Build CSS for preview pane (dark only)."""
@@ -365,6 +516,15 @@ body {{
   font-size: 13px;
   line-height: 1.6;
   padding: 12px;
+  direction: ltr;
+  unicode-bidi: plaintext;
+}}
+.md-root, html {{
+  background: {bg};
+}}
+.md-root[dir="rtl"] {{
+  direction: rtl;
+  text-align: right;
 }}
 h1, h2, h3, h4, h5, h6 {{
   margin: 16px 0 8px;
@@ -398,6 +558,43 @@ table {{
 th, td {{
   border: 1px solid {muted};
   padding: 6px 8px;
+}}
+.tag {{
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 0 2px;
+  border-radius: 6px;
+  background: #2A2A2A;
+  color: {fg};
+  font-size: 12px;
+}}
+.wikilink {{
+  color: {link};
+  cursor: pointer;
+  text-decoration: none;
+}}
+.callout {{
+  border: 1px solid {muted};
+  border-left: 4px solid {link};
+  padding: 8px 10px;
+  margin: 10px 0;
+  border-radius: 8px;
+  background: #232323;
+}}
+.callout-title {{
+  font-weight: bold;
+  margin-bottom: 4px;
+}}
+.links-panel, .backlinks {{
+  margin-top: 16px;
+  padding: 10px;
+  border: 1px solid {muted};
+  border-radius: 8px;
+  background: #232323;
+}}
+.links-title, .backlinks-title {{
+  font-weight: bold;
+  margin-bottom: 6px;
 }}
 """
     
