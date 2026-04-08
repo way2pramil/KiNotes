@@ -14,9 +14,35 @@ Author: KiNotes Team (pcbtools.xyz)
 License: Apache-2.0
 """
 import wx
+try:
+    import wx.html
+    _WX_HTML_AVAILABLE = True
+except Exception:
+    wx.html = None
+    _WX_HTML_AVAILABLE = False
 import re
+import html
+import os
 from datetime import datetime
 from typing import Optional, Callable
+
+try:
+    from ..core.kicad_extractor import get_project_dir, get_project_name
+except Exception:
+    try:
+        from core.kicad_extractor import get_project_dir, get_project_name
+    except Exception:
+        def get_project_dir():
+            return None
+        def get_project_name():
+            return None
+
+try:
+    import markdown as _markdown
+    _MARKDOWN_AVAILABLE = True
+except Exception:
+    _markdown = None
+    _MARKDOWN_AVAILABLE = False
 
 # Handle imports for both KiCad plugin context and standalone
 try:
@@ -85,6 +111,7 @@ class MarkdownEditor(wx.Panel):
         self._text_color = text_color or hex_to_colour(self._theme["text_primary"])
         self._designator_linker = designator_linker
         self._on_text_changed_callback = on_text_changed
+        self._preview_enabled = True
         
         self._init_ui()
     
@@ -95,32 +122,64 @@ class MarkdownEditor(wx.Panel):
         # Create formatting toolbar
         self._toolbar = self._create_toolbar()
         main_sizer.Add(self._toolbar, 0, wx.EXPAND)
-        
+
+        # Splitter for editor + live preview
+        self._splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE | wx.BORDER_NONE)
+        self._splitter.SetMinimumPaneSize(200)
+
+        editor_panel = wx.Panel(self._splitter)
+        preview_panel = wx.Panel(self._splitter)
+
         # Create text editor
         self._editor = wx.TextCtrl(
-            self,
+            editor_panel,
             style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.BORDER_NONE
         )
         self._editor.SetBackgroundColour(self._bg_color)
         self._editor.SetForegroundColour(self._text_color)
         self._editor.SetFont(wx.Font(12, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        
+
         # Set default text style
         font = self._editor.GetFont()
         text_attr = wx.TextAttr(self._text_color, self._bg_color, font)
         self._editor.SetDefaultStyle(text_attr)
-        
+
         # Bind events
         self._editor.Bind(wx.EVT_TEXT, self._on_text_changed)
         self._editor.Bind(wx.EVT_LEFT_DOWN, self._on_text_click)
         self._editor.Bind(wx.EVT_KEY_DOWN, self._on_key_down)
-        
-        # Add editor with padding from centralized EDITOR_LAYOUT config
-        main_sizer.Add(self._editor, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, EDITOR_LAYOUT['margin_left'])
-        main_sizer.Add((0, EDITOR_LAYOUT['padding_bottom']))  # Bottom padding
+
+        # Editor panel layout
+        editor_sizer = wx.BoxSizer(wx.VERTICAL)
+        editor_sizer.Add(self._editor, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, EDITOR_LAYOUT['margin_left'])
+        editor_sizer.Add((0, EDITOR_LAYOUT['padding_bottom']))
+        editor_panel.SetSizer(editor_sizer)
+        editor_panel.SetBackgroundColour(self._bg_color)
+
+        # Preview (HTML) panel
+        self._preview = None
+        if self._preview_enabled and _WX_HTML_AVAILABLE:
+            try:
+                self._preview = wx.html.HtmlWindow(preview_panel, style=wx.BORDER_NONE)
+                self._preview.SetBackgroundColour(self._bg_color)
+                preview_sizer = wx.BoxSizer(wx.VERTICAL)
+                preview_sizer.Add(self._preview, 1, wx.EXPAND | wx.ALL, EDITOR_LAYOUT['padding_horizontal'])
+                preview_panel.SetSizer(preview_sizer)
+                preview_panel.SetBackgroundColour(self._bg_color)
+                self._splitter.SplitVertically(editor_panel, preview_panel, sashPosition=600)
+            except Exception:
+                self._preview = None
+                self._splitter.Initialize(editor_panel)
+        else:
+            self._splitter.Initialize(editor_panel)
+
+        main_sizer.Add(self._splitter, 1, wx.EXPAND)
         
         self.SetSizer(main_sizer)
         self.SetBackgroundColour(self._bg_color)
+
+        # Initial preview render
+        self._render_preview(self._editor.GetValue())
     
     def _create_toolbar(self) -> wx.Panel:
         """Create formatting toolbar with all buttons."""
@@ -195,10 +254,12 @@ class MarkdownEditor(wx.Panel):
     def SetValue(self, content: str):
         """Set the editor content."""
         self._editor.SetValue(content)
+        self._render_preview(content)
     
     def WriteText(self, text: str):
         """Insert text at cursor position."""
         self._editor.WriteText(text)
+        self._render_preview(self._editor.GetValue())
     
     def SetBackgroundColour(self, colour: wx.Colour):
         """Set editor background color."""
@@ -237,12 +298,16 @@ class MarkdownEditor(wx.Panel):
         # Update editor
         self._editor.SetBackgroundColour(self._bg_color)
         self._editor.SetForegroundColour(self._text_color)
+        if hasattr(self, '_preview'):
+            self._preview.SetBackgroundColour(self._bg_color)
         
         # Update text style
         font = self._editor.GetFont()
         text_attr = wx.TextAttr(self._text_color, self._bg_color, font)
         self._editor.SetDefaultStyle(text_attr)
         self._editor.SetStyle(0, self._editor.GetLastPosition(), text_attr)
+
+        self._render_preview(self._editor.GetValue())
         
         self.Refresh()
     
@@ -254,7 +319,284 @@ class MarkdownEditor(wx.Panel):
         """Handle text change event."""
         if self._on_text_changed_callback:
             self._on_text_changed_callback(event)
+        self._render_preview(self._editor.GetValue())
         event.Skip()
+
+    def _render_preview(self, text: str):
+        """Render markdown to HTML for live preview."""
+        if not self._preview or not self._preview_enabled:
+            return
+        try:
+            self._preview.SetBackgroundColour(wx.Colour(30, 30, 30))
+        except Exception:
+            pass
+        processed = self._preprocess_markdown(text)
+        has_rtl = self._contains_rtl(processed)
+        if not _MARKDOWN_AVAILABLE:
+            safe = html.escape(processed)
+            html = (
+                "<div style='font-size:12px;opacity:0.8;margin-bottom:8px;'>"
+                "Live preview requires the <b>Markdown</b> package. "
+                "Install with: <code>pip install Markdown</code>"
+                "</div>"
+                f"<pre>{safe}</pre>"
+            )
+        else:
+            html = _markdown.markdown(
+                processed,
+                extensions=[
+                    "extra",
+                    "tables",
+                    "fenced_code",
+                    "sane_lists",
+                    "nl2br",
+                ],
+            )
+
+        html += self._build_links_html(processed)
+
+        body_dir = "rtl" if has_rtl else "ltr"
+        wrapped = f'<div class="md-root" dir="{body_dir}">{html}</div>'
+        page = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+{self._get_preview_css()}
+</style>
+</head>
+<body>
+{wrapped}
+</body>
+</html>"""
+        self._preview.SetPage(page)
+
+    def _contains_rtl(self, text: str) -> bool:
+        rtl_pattern = re.compile(r'[\u0590-\u08FF\uFB1D-\uFDFD\uFE70-\uFEFC]')
+        return bool(rtl_pattern.search(text))
+
+    def _extract_wikilinks(self, text: str):
+        return re.findall(r'\[\[([^\]|]+)(?:\|([^\]]+))?\]\]', text)
+
+    def _preprocess_markdown(self, text: str) -> str:
+        """Handle Obsidian-style features in Markdown."""
+        lines = text.splitlines()
+        out = []
+        in_code = False
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if line.strip().startswith("```"):
+                in_code = not in_code
+                out.append(line)
+                i += 1
+                continue
+
+            if not in_code:
+                callout_match = re.match(r'^\s*>\s*\[!(\w+)\]\s*(.*)$', line)
+                if callout_match:
+                    callout_type = callout_match.group(1).lower()
+                    title = callout_match.group(1).capitalize()
+                    content_lines = [callout_match.group(2)]
+                    i += 1
+                    while i < len(lines):
+                        next_line = lines[i]
+                        if next_line.lstrip().startswith(">"):
+                            content_lines.append(next_line.lstrip()[1:].lstrip())
+                            i += 1
+                        else:
+                            break
+                    content = "\n".join(content_lines).strip()
+                    out.append(
+                        f"<div class=\"callout callout-{callout_type}\">"
+                        f"<div class=\"callout-title\">{html.escape(title)}</div>"
+                        f"<div class=\"callout-content\">\n{content}\n</div>"
+                        f"</div>"
+                    )
+                    continue
+
+                line = re.sub(
+                    r'(^|[\s\(])(#([A-Za-z0-9_-]+))',
+                    r'\1<span class="tag">#\3</span>',
+                    line,
+                )
+                line = re.sub(
+                    r'\[\[([^\]|]+)\|([^\]]+)\]\]',
+                    r'<span class="wikilink" data-target="\1">\2</span>',
+                    line,
+                )
+                line = re.sub(
+                    r'\[\[([^\]]+)\]\]',
+                    r'<span class="wikilink" data-target="\1">\1</span>',
+                    line,
+                )
+
+            out.append(line)
+            i += 1
+
+        return "\n".join(out)
+
+    def _build_links_html(self, text: str) -> str:
+        links = self._extract_wikilinks(text)
+        if not links:
+            return ""
+
+        unique = []
+        seen = set()
+        for target, alias in links:
+            label = alias or target
+            if (target, label) not in seen:
+                unique.append((target, label))
+                seen.add((target, label))
+
+        items = "".join(
+            f"<li><span class=\"wikilink\" data-target=\"{html.escape(t)}\">{html.escape(l)}</span></li>"
+            for t, l in unique
+        )
+
+        backlinks = self._find_backlinks()
+        backlinks_html = ""
+        if backlinks:
+            backlinks_items = "".join(
+                f"<li>{html.escape(name)}</li>" for name in backlinks
+            )
+            backlinks_html = (
+                "<div class=\"backlinks\">"
+                "<div class=\"backlinks-title\">Backlinks</div>"
+                f"<ul>{backlinks_items}</ul>"
+                "</div>"
+            )
+
+        return (
+            "<div class=\"links-panel\">"
+            "<div class=\"links-title\">Links</div>"
+            f"<ul>{items}</ul>"
+            "</div>"
+            f"{backlinks_html}"
+        )
+
+    def _find_backlinks(self):
+        project_dir = get_project_dir()
+        project_name = get_project_name()
+        if not project_dir or not project_name:
+            return []
+
+        target = f"[[{project_name}]]"
+        results = []
+        try:
+            for root, _, files in os.walk(project_dir):
+                for name in files:
+                    if not name.endswith(".md"):
+                        continue
+                    path = os.path.join(root, name)
+                    try:
+                        with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+                            if target in fh.read():
+                                results.append(name)
+                    except Exception:
+                        continue
+        except Exception:
+            return []
+
+        return sorted(set(results))
+
+    def _get_preview_css(self) -> str:
+        """Build CSS for preview pane (dark only)."""
+        bg = "#1E1E1E"
+        fg = "#E6E6E6"
+        muted = "#9A9A9A"
+        code_bg = "#2A2A2A"
+        link = "#8AB4F8"
+
+        return f"""
+body {{
+  background: {bg};
+  color: {fg};
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 12px;
+  direction: ltr;
+  unicode-bidi: plaintext;
+}}
+.md-root, html {{
+  background: {bg};
+}}
+.md-root[dir="rtl"] {{
+  direction: rtl;
+  text-align: right;
+}}
+h1, h2, h3, h4, h5, h6 {{
+  margin: 16px 0 8px;
+  color: {fg};
+}}
+p {{ margin: 8px 0; }}
+code, pre {{
+  background: {code_bg};
+  color: {fg};
+  border-radius: 6px;
+  padding: 2px 4px;
+  font-family: Consolas, monospace;
+}}
+pre {{
+  padding: 10px;
+  overflow-x: auto;
+}}
+blockquote {{
+  border-left: 3px solid {muted};
+  padding-left: 10px;
+  color: {muted};
+  margin: 8px 0;
+}}
+a {{ color: {link}; text-decoration: none; }}
+ul, ol {{ margin: 8px 0 8px 20px; }}
+table {{
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+}}
+th, td {{
+  border: 1px solid {muted};
+  padding: 6px 8px;
+}}
+.tag {{
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 0 2px;
+  border-radius: 6px;
+  background: #2A2A2A;
+  color: {fg};
+  font-size: 12px;
+}}
+.wikilink {{
+  color: {link};
+  cursor: pointer;
+  text-decoration: none;
+}}
+.callout {{
+  border: 1px solid {muted};
+  border-left: 4px solid {link};
+  padding: 8px 10px;
+  margin: 10px 0;
+  border-radius: 8px;
+  background: #232323;
+}}
+.callout-title {{
+  font-weight: bold;
+  margin-bottom: 4px;
+}}
+.links-panel, .backlinks {{
+  margin-top: 16px;
+  padding: 10px;
+  border: 1px solid {muted};
+  border-radius: 8px;
+  background: #232323;
+}}
+.links-title, .backlinks-title {{
+  font-weight: bold;
+  margin-bottom: 6px;
+}}
+"""
     
     def _on_text_click(self, event):
         """Handle @REF clicks for designator highlighting."""

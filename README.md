@@ -206,6 +206,10 @@ KiNotes is open source because good tools should be shared. If it helps you ship
   pip install reportlab
   ```
   Without it, PDF export falls back to plain text format.
+ - **Optional:** `Markdown` — for live Markdown preview in the Markdown editor
+  ```bash
+  pip install Markdown
+  ```
 
 ## 🤝 Contributing
 
