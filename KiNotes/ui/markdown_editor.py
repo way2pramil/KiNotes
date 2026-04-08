@@ -14,9 +14,23 @@ Author: KiNotes Team (pcbtools.xyz)
 License: Apache-2.0
 """
 import wx
+try:
+    import wx.html
+    _WX_HTML_AVAILABLE = True
+except Exception:
+    wx.html = None
+    _WX_HTML_AVAILABLE = False
 import re
+import html
 from datetime import datetime
 from typing import Optional, Callable
+
+try:
+    import markdown as _markdown
+    _MARKDOWN_AVAILABLE = True
+except Exception:
+    _markdown = None
+    _MARKDOWN_AVAILABLE = False
 
 # Handle imports for both KiCad plugin context and standalone
 try:
@@ -85,6 +99,7 @@ class MarkdownEditor(wx.Panel):
         self._text_color = text_color or hex_to_colour(self._theme["text_primary"])
         self._designator_linker = designator_linker
         self._on_text_changed_callback = on_text_changed
+        self._preview_enabled = True
         
         self._init_ui()
     
@@ -95,32 +110,64 @@ class MarkdownEditor(wx.Panel):
         # Create formatting toolbar
         self._toolbar = self._create_toolbar()
         main_sizer.Add(self._toolbar, 0, wx.EXPAND)
-        
+
+        # Splitter for editor + live preview
+        self._splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE | wx.BORDER_NONE)
+        self._splitter.SetMinimumPaneSize(200)
+
+        editor_panel = wx.Panel(self._splitter)
+        preview_panel = wx.Panel(self._splitter)
+
         # Create text editor
         self._editor = wx.TextCtrl(
-            self,
+            editor_panel,
             style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.BORDER_NONE
         )
         self._editor.SetBackgroundColour(self._bg_color)
         self._editor.SetForegroundColour(self._text_color)
         self._editor.SetFont(wx.Font(12, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        
+
         # Set default text style
         font = self._editor.GetFont()
         text_attr = wx.TextAttr(self._text_color, self._bg_color, font)
         self._editor.SetDefaultStyle(text_attr)
-        
+
         # Bind events
         self._editor.Bind(wx.EVT_TEXT, self._on_text_changed)
         self._editor.Bind(wx.EVT_LEFT_DOWN, self._on_text_click)
         self._editor.Bind(wx.EVT_KEY_DOWN, self._on_key_down)
-        
-        # Add editor with padding from centralized EDITOR_LAYOUT config
-        main_sizer.Add(self._editor, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, EDITOR_LAYOUT['margin_left'])
-        main_sizer.Add((0, EDITOR_LAYOUT['padding_bottom']))  # Bottom padding
+
+        # Editor panel layout
+        editor_sizer = wx.BoxSizer(wx.VERTICAL)
+        editor_sizer.Add(self._editor, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, EDITOR_LAYOUT['margin_left'])
+        editor_sizer.Add((0, EDITOR_LAYOUT['padding_bottom']))
+        editor_panel.SetSizer(editor_sizer)
+        editor_panel.SetBackgroundColour(self._bg_color)
+
+        # Preview (HTML) panel
+        self._preview = None
+        if self._preview_enabled and _WX_HTML_AVAILABLE:
+            try:
+                self._preview = wx.html.HtmlWindow(preview_panel, style=wx.BORDER_NONE)
+                self._preview.SetBackgroundColour(self._bg_color)
+                preview_sizer = wx.BoxSizer(wx.VERTICAL)
+                preview_sizer.Add(self._preview, 1, wx.EXPAND | wx.ALL, EDITOR_LAYOUT['padding_horizontal'])
+                preview_panel.SetSizer(preview_sizer)
+                preview_panel.SetBackgroundColour(self._bg_color)
+                self._splitter.SplitVertically(editor_panel, preview_panel, sashPosition=600)
+            except Exception:
+                self._preview = None
+                self._splitter.Initialize(editor_panel)
+        else:
+            self._splitter.Initialize(editor_panel)
+
+        main_sizer.Add(self._splitter, 1, wx.EXPAND)
         
         self.SetSizer(main_sizer)
         self.SetBackgroundColour(self._bg_color)
+
+        # Initial preview render
+        self._render_preview(self._editor.GetValue())
     
     def _create_toolbar(self) -> wx.Panel:
         """Create formatting toolbar with all buttons."""
@@ -195,10 +242,12 @@ class MarkdownEditor(wx.Panel):
     def SetValue(self, content: str):
         """Set the editor content."""
         self._editor.SetValue(content)
+        self._render_preview(content)
     
     def WriteText(self, text: str):
         """Insert text at cursor position."""
         self._editor.WriteText(text)
+        self._render_preview(self._editor.GetValue())
     
     def SetBackgroundColour(self, colour: wx.Colour):
         """Set editor background color."""
@@ -237,12 +286,16 @@ class MarkdownEditor(wx.Panel):
         # Update editor
         self._editor.SetBackgroundColour(self._bg_color)
         self._editor.SetForegroundColour(self._text_color)
+        if hasattr(self, '_preview'):
+            self._preview.SetBackgroundColour(self._bg_color)
         
         # Update text style
         font = self._editor.GetFont()
         text_attr = wx.TextAttr(self._text_color, self._bg_color, font)
         self._editor.SetDefaultStyle(text_attr)
         self._editor.SetStyle(0, self._editor.GetLastPosition(), text_attr)
+
+        self._render_preview(self._editor.GetValue())
         
         self.Refresh()
     
@@ -254,7 +307,99 @@ class MarkdownEditor(wx.Panel):
         """Handle text change event."""
         if self._on_text_changed_callback:
             self._on_text_changed_callback(event)
+        self._render_preview(self._editor.GetValue())
         event.Skip()
+
+    def _render_preview(self, text: str):
+        """Render markdown to HTML for live preview."""
+        if not self._preview or not self._preview_enabled:
+            return
+        if not _MARKDOWN_AVAILABLE:
+            safe = html.escape(text)
+            html = (
+                "<div style='font-size:12px;opacity:0.8;margin-bottom:8px;'>"
+                "Live preview requires the <b>Markdown</b> package. "
+                "Install with: <code>pip install Markdown</code>"
+                "</div>"
+                f"<pre>{safe}</pre>"
+            )
+        else:
+            html = _markdown.markdown(
+                text,
+                extensions=[
+                    "extra",
+                    "tables",
+                    "fenced_code",
+                    "sane_lists",
+                    "nl2br",
+                ],
+            )
+
+        page = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+{self._get_preview_css()}
+</style>
+</head>
+<body>
+{html}
+</body>
+</html>"""
+        self._preview.SetPage(page)
+
+    def _get_preview_css(self) -> str:
+        """Build CSS for preview pane (dark only)."""
+        bg = "#1E1E1E"
+        fg = "#E6E6E6"
+        muted = "#9A9A9A"
+        code_bg = "#2A2A2A"
+        link = "#8AB4F8"
+
+        return f"""
+body {{
+  background: {bg};
+  color: {fg};
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 12px;
+}}
+h1, h2, h3, h4, h5, h6 {{
+  margin: 16px 0 8px;
+  color: {fg};
+}}
+p {{ margin: 8px 0; }}
+code, pre {{
+  background: {code_bg};
+  color: {fg};
+  border-radius: 6px;
+  padding: 2px 4px;
+  font-family: Consolas, monospace;
+}}
+pre {{
+  padding: 10px;
+  overflow-x: auto;
+}}
+blockquote {{
+  border-left: 3px solid {muted};
+  padding-left: 10px;
+  color: {muted};
+  margin: 8px 0;
+}}
+a {{ color: {link}; text-decoration: none; }}
+ul, ol {{ margin: 8px 0 8px 20px; }}
+table {{
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+}}
+th, td {{
+  border: 1px solid {muted};
+  padding: 6px 8px;
+}}
+"""
     
     def _on_text_click(self, event):
         """Handle @REF clicks for designator highlighting."""
