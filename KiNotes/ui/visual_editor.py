@@ -474,7 +474,7 @@ class VisualNoteEditor(wx.Panel):
         """Create the formatting toolbar with all buttons."""
         toolbar = wx.Panel(self)
         toolbar.SetBackgroundColour(self._toolbar_bg)
-        toolbar.SetMinSize((-1, scale_size(44, self)))
+        toolbar.SetMinSize((-1, scale_size(32, self)))
         
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.AddSpacer(scale_size(8, self))
@@ -524,7 +524,7 @@ class VisualNoteEditor(wx.Panel):
             if group_idx > 0:
                 # Add separator
                 sep = wx.StaticLine(toolbar, style=wx.LI_VERTICAL)
-                sep.SetMinSize((1, scale_size(28, self)))
+                sep.SetMinSize((1, scale_size(16, self)))
                 sizer.Add(sep, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT | wx.RIGHT, scale_size(6, self))
             
             for label, tooltip, callback, is_toggle in group:
@@ -543,7 +543,7 @@ class VisualNoteEditor(wx.Panel):
     
     def _create_toolbar_button(self, parent, label: str, tooltip: str, callback) -> wx.Button:
         """Create a toolbar button with consistent styling."""
-        btn_size = scale_size((36, 32), self)
+        btn_size = scale_size((28, 24), self)
         btn = wx.Button(parent, label=label, size=btn_size, style=wx.BORDER_NONE)
         btn.SetBackgroundColour(self._toolbar_bg)
         btn.SetForegroundColour(self._text_color)
@@ -557,14 +557,14 @@ class VisualNoteEditor(wx.Panel):
         if label in ("B", "I", "U"):
             # Bold/Italic/Underline with appropriate style
             style = wx.FONTSTYLE_ITALIC if label == "I" else wx.FONTSTYLE_NORMAL
-            btn.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, style, wx.FONTWEIGHT_BOLD))
+            btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, style, wx.FONTWEIGHT_BOLD))
         elif label == "ab":
             # Strikethrough - smaller font
-            btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            btn.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         elif len(label) <= 2:
-            btn.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+            btn.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         else:
-            btn.SetFont(wx.Font(11, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+            btn.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         
         btn.Bind(wx.EVT_BUTTON, callback)
         btn.SetCursor(wx.Cursor(wx.CURSOR_HAND))
@@ -1475,6 +1475,9 @@ class VisualNoteEditor(wx.Panel):
             if key == ord('T'):
                 self._on_timestamp(None)
                 return
+            elif key == wx.WXK_BACK:
+                self._delete_word_backwards()
+                return
         
         # Handle Enter key for list continuation
         if key == wx.WXK_RETURN:
@@ -1483,6 +1486,46 @@ class VisualNoteEditor(wx.Panel):
         
         event.Skip()
     
+    
+    def _delete_word_backwards(self):
+        """Implement macOS-style Option+Delete word deletion."""
+        if self._editor.HasSelection():
+            self._editor.DeleteSelection()
+            return
+
+        pos = self._editor.GetInsertionPoint()
+        if pos <= 0:
+            return
+
+        text = self._editor.GetValue()
+        if not text:
+            return
+
+        # Ensure pos is within bounds for safety
+        pos = min(pos, len(text))
+        
+        # macOS Option+Delete behavior:
+        # 1. Skip trailing whitespace/punctuation
+        # 2. Skip word characters
+        
+        new_pos = pos
+        
+        # Scan backward to skip immediate whitespace/non-alphanumeric if any
+        while new_pos > 0 and not text[new_pos-1].isalnum():
+            new_pos -= 1
+            
+        # If we skipped something and hit start, just delete that range
+        if new_pos == 0:
+            self._editor.Remove(0, pos)
+            return
+            
+        # Now we are at the end of a word (alphanumeric). Scan backward to find word start.
+        while new_pos > 0 and text[new_pos-1].isalnum():
+            new_pos -= 1
+            
+        # Delete the range from detected start to original position
+        self._editor.Remove(new_pos, pos)
+
     def _handle_enter_key(self):
         """Handle Enter key - new line with normal text style."""
         pos = self._editor.GetInsertionPoint()
